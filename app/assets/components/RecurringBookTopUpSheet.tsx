@@ -10,6 +10,7 @@
 
 import { useEffect, useState, type CSSProperties } from 'react'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
+import DialogShell from '@/components/ui/DialogShell'
 import { fmtCompact } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
 
@@ -24,10 +25,12 @@ export interface BookTopUpTarget {
 }
 
 const field: CSSProperties = {
-  width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 15, fontWeight: 600,
+  width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 16, fontWeight: 600,
   background: 'var(--c-canvas,#faf9f7)', border: '1.5px solid var(--c-line)', borderRadius: 10,
   color: 'var(--c-ink)', outline: 'none', fontVariantNumeric: 'tabular-nums',
 }
+// The visible title is the dialog's accessible name, so the two cannot drift.
+const TITLE_ID = 'recurring-topup-title'
 const lbl: CSSProperties = { fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 6, display: 'block' }
 
 export default function RecurringBookTopUpSheet({
@@ -79,10 +82,18 @@ export default function RecurringBookTopUpSheet({
   }
 
   return (
-    <div onClick={() => !saving && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 340, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} data-testid="recurring-topup-modal" style={{ width: 380, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, display: 'grid', gap: 12, boxShadow: '0 20px 50px rgba(15,23,42,0.25)' }}>
+    <DialogShell
+      onClose={onClose}
+      // A save in flight owns the sheet: a stray click outside must not discard
+      // a form that is already writing.
+      dismissOnClickAway={!saving}
+      labelledBy={TITLE_ID}
+      overlayStyle={{ zIndex: 340, padding: 24 }}
+      panelStyle={{ width: 380, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, display: 'grid', gap: 12, boxShadow: '0 20px 50px rgba(15,23,42,0.25)' }}
+      panelProps={{ 'data-testid': 'recurring-topup-modal' }}
+    >
         <div>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>{isVi ? 'Nạp vào sổ tích luỹ' : 'Top up accumulating book'}</div>
+          <div id={TITLE_ID} style={{ fontSize: 15, fontWeight: 700 }}>{isVi ? 'Nạp vào sổ tích luỹ' : 'Top up accumulating book'}</div>
           <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {target.bookName} · {isVi ? 'định kỳ tháng này' : "this month's recurring"}
           </div>
@@ -112,7 +123,6 @@ export default function RecurringBookTopUpSheet({
           <button type="button" onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
           <button type="button" data-testid="recurring-topup-submit" onClick={submit} disabled={saving || !(amt > 0)} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) ? 0.6 : 1 }}>{isVi ? 'Nạp & ghi nhận' : 'Top up & record'}</button>
         </div>
-      </div>
-    </div>
+    </DialogShell>
   )
 }

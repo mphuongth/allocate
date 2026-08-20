@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FixedExpenseManager from '../FixedExpenseManager'
 
@@ -215,4 +215,50 @@ describe('FixedExpenseManager — delete', () => {
       ).toBeTruthy()
     })
   })
+})
+
+// Guard for #688. The delete confirmation — the one overlay in Planning where a
+// misfire destroys data — had no dialog semantics, no Escape, and left focus on
+// the row behind it, so the very next Tab or Enter landed somewhere the user
+// could not see.
+describe('FixedExpenseManager — delete confirmation dialog contract (#688)', () => {
+  for (const variant of ['modal', 'sheet'] as const) {
+    describe(variant, () => {
+      async function openConfirm() {
+        mockFetch()
+        render(<FixedExpenseManager onChange={vi.fn()} variant={variant} />)
+        const row = await screen.findByTestId('fe-row-fe1')
+        await userEvent.click(within(row).getByTestId('fe-delete'))
+        return screen.getByTestId('fe-delete-overlay')
+      }
+
+      it('is a modal dialog with an accessible name', async () => {
+        await openConfirm()
+
+        const dialog = screen.getByRole('dialog', { name: 'deleteModal' })
+        expect(dialog).toHaveAttribute('aria-modal', 'true')
+      })
+
+      it('closes on Escape without deleting anything', async () => {
+        await openConfirm()
+
+        fireEvent.keyDown(document, { key: 'Escape' })
+
+        await waitFor(() => expect(screen.queryByTestId('fe-delete-overlay')).not.toBeInTheDocument())
+        expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')).toBe(false)
+      })
+
+      it('moves focus into the confirmation and keeps Tab inside it', async () => {
+        await openConfirm()
+        const dialog = screen.getByRole('dialog')
+        expect(dialog).toContainElement(document.activeElement as HTMLElement)
+
+        const buttons = dialog.querySelectorAll<HTMLElement>('button:not([disabled])')
+        buttons[buttons.length - 1].focus()
+        await userEvent.tab()
+
+        expect(dialog).toContainElement(document.activeElement as HTMLElement)
+      })
+    })
+  }
 })

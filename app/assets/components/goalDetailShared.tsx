@@ -8,6 +8,7 @@ import { TrendingUp, Building, Coins, BarChart2, Target, RefreshCw, Plus } from 
 import { fmtCompact } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
 import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
+import DialogShell from '@/components/ui/DialogShell'
 import SuccessorBookSheet, { type SuccessorTarget } from './SuccessorBookSheet'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtTxDate } from './transactionUtils'
@@ -324,6 +325,9 @@ export function BankInfoStrip({ inv, isVi }: { inv: InvRow; isVi: boolean }) {
 // a small modal to add a tranche (amount + this slice's rate + date). Posts a new
 // investment_transactions row linked to the book via tops_up_deposit_id; the
 // route inherits the book's goal + maturity. Renders nothing for non-books.
+// The visible title is the dialog's accessible name, so the two cannot drift.
+const TOP_UP_TITLE_ID = 'top-up-title'
+
 export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean; onDone: () => void }) {
   const [open, setOpen] = useState(false)
   const [amount, setAmount] = useState('')
@@ -383,7 +387,7 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
     } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
   }
 
-  const field: CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 15, fontWeight: 600, background: 'var(--c-canvas,#faf9f7)', border: '1.5px solid var(--c-line)', borderRadius: 10, color: 'var(--c-ink)', outline: 'none', fontVariantNumeric: 'tabular-nums' }
+  const field: CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 16, fontWeight: 600, background: 'var(--c-canvas,#faf9f7)', border: '1.5px solid var(--c-line)', borderRadius: 10, color: 'var(--c-ink)', outline: 'none', fontVariantNumeric: 'tabular-nums' }
   const lbl: CSSProperties = { fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 6, display: 'block' }
 
   return (
@@ -393,9 +397,15 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
         <Plus size={14} strokeWidth={2.4} />{isVi ? 'Nạp thêm' : 'Top up'}
       </button>
       {open && (
-        <div onClick={() => !saving && setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 320, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div onClick={(e) => e.stopPropagation()} data-testid="top-up-modal" style={{ width: 380, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, display: 'grid', gap: 12, boxShadow: '0 20px 50px rgba(15,23,42,0.25)' }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{isVi ? 'Nạp thêm vào sổ' : 'Top up deposit'}</div>
+        <DialogShell
+          onClose={() => setOpen(false)}
+          dismissOnClickAway={!saving}
+          labelledBy={TOP_UP_TITLE_ID}
+          overlayStyle={{ zIndex: 320, padding: 24 }}
+          panelStyle={{ width: 380, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, display: 'grid', gap: 12, boxShadow: '0 20px 50px rgba(15,23,42,0.25)' }}
+          panelProps={{ 'data-testid': 'top-up-modal' }}
+        >
+            <div id={TOP_UP_TITLE_ID} style={{ fontSize: 15, fontWeight: 700 }}>{isVi ? 'Nạp thêm vào sổ' : 'Top up deposit'}</div>
             <div>
               <label style={lbl}>{isVi ? 'Số tiền nạp (₫)' : 'Top-up amount (₫)'}</label>
               <input data-testid="top-up-amount" type="text" inputMode="numeric" value={formatIntVN(amount)} onChange={(e) => setAmount(parseIntVN(e.target.value))} placeholder="2.000.000" style={field} />
@@ -427,8 +437,7 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
               <button type="button" data-testid="top-up-submit" onClick={submit} disabled={saving || !(amt > 0) || eligibility.status !== 'allowed'} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) || eligibility.status !== 'allowed' ? 0.6 : 1 }}>{isVi ? 'Nạp thêm' : 'Top up'}</button>
               )}
             </div>
-          </div>
-        </div>
+        </DialogShell>
       )}
       <SuccessorBookSheet target={successor} isVi={isVi} onClose={() => setSuccessor(null)} onDone={() => { setOpen(false); setAmount(''); onDone() }} />
     </>

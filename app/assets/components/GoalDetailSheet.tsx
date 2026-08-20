@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   ChevronLeft, MoreHorizontal,
   Target, PiggyBank, Plus,
 } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { useLocale, useTranslations } from 'next-intl'
+
+// The goal name already on screen is the dialog's accessible name (#688).
+const TITLE_ID = 'goal-detail-title'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
@@ -21,6 +24,7 @@ import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
 import { useGoalDetailData } from './useGoalDetailData'
+import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import { deleteGoal, reopenGoal, unholdTransaction, unassignInvestment } from './goalActions'
 import { FinishGoalSheet } from './FinishGoalSheet'
 import { goalCompletion } from '@/lib/finishGoal'
@@ -45,6 +49,7 @@ interface Props {
 }
 
 export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, refreshKey, onAddToGoal }: Props) {
+  const panelRef = useRef<HTMLDivElement>(null)
   const isVI = useLocale() === 'vi'
   const td = useTranslations('deleteTransaction')
   const [mounted, setMounted] = useState(false)
@@ -175,6 +180,11 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
     setHistoryLoading(false)
   }
 
+  // Applied directly rather than through DialogShell: this sheet IS the fixed
+  // element — full-screen, its own scroll container, no scrim and so no
+  // click-away. The contract it owes a keyboard user is the same (#688).
+  useDialogA11y(panelRef, open && mounted, onClose)
+
   if (!mounted || !goal) return null
 
   // A finished goal reads off its snapshot, not off holdings that are now zero
@@ -212,6 +222,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   return (
     <>
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={TITLE_ID}
         style={{
           position: 'fixed', inset: 0, zIndex: 40,
           background: 'var(--c-canvas,#faf9f7)',
@@ -240,7 +254,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               <div style={{ fontSize: 11, color: 'var(--c-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
                 {isVI ? 'Mục tiêu' : 'Goal'}
               </div>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: '-0.015em', color: 'var(--c-ink)' }}>
+              <h1 id={TITLE_ID} style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: '-0.015em', color: 'var(--c-ink)' }}>
                 {goal.goalName}
               </h1>
             </div>

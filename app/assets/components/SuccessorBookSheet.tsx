@@ -13,6 +13,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtCompact } from '@/lib/formatters'
+import DialogShell from '@/components/ui/DialogShell'
 import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 
 export interface SuccessorTarget {
@@ -32,10 +33,12 @@ export interface SuccessorTarget {
 }
 
 const field: CSSProperties = {
-  width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 15, fontWeight: 600,
+  width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 16, fontWeight: 600,
   background: 'var(--c-canvas,#faf9f7)', border: '1.5px solid var(--c-line)', borderRadius: 10,
   color: 'var(--c-ink)', outline: 'none', fontVariantNumeric: 'tabular-nums',
 }
+// The visible title is the dialog's accessible name, so the two cannot drift.
+const TITLE_ID = 'successor-book-title'
 const lbl: CSSProperties = { fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--c-muted)', marginBottom: 6, display: 'block' }
 
 export default function SuccessorBookSheet({
@@ -127,10 +130,18 @@ export default function SuccessorBookSheet({
   }
 
   return (
-    <div onClick={() => !saving && onClose()} style={{ position: 'fixed', inset: 0, zIndex: 330, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={(e) => e.stopPropagation()} data-testid="successor-modal" style={{ width: 400, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, display: 'grid', gap: 12, boxShadow: '0 20px 50px rgba(15,23,42,0.25)' }}>
+    <DialogShell
+      onClose={onClose}
+      // A save in flight owns the sheet: a stray click outside must not discard
+      // a form that is already writing.
+      dismissOnClickAway={!saving}
+      labelledBy={TITLE_ID}
+      overlayStyle={{ zIndex: 330, padding: 24 }}
+      panelStyle={{ width: 400, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, display: 'grid', gap: 12, boxShadow: '0 20px 50px rgba(15,23,42,0.25)' }}
+      panelProps={{ 'data-testid': 'successor-modal' }}
+    >
         <div>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>{isVi ? 'Mở sổ kế nhiệm' : 'Open successor book'}</div>
+          <div id={TITLE_ID} style={{ fontSize: 15, fontWeight: 700 }}>{isVi ? 'Mở sổ kế nhiệm' : 'Open successor book'}</div>
           <p style={{ margin: '6px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--c-muted)' }}>
             {isVi
               ? `${target.bookName} không nhận nạp thêm nữa. Khoản ${fmtCompact(target.amount)} này sẽ vào sổ mới, và sổ cũ được ghi nhận sẽ gộp vào đây khi đáo hạn.`
@@ -180,7 +191,6 @@ export default function SuccessorBookSheet({
             {isVi ? 'Mở sổ mới' : 'Open the new book'}
           </button>
         </div>
-      </div>
-    </div>
+    </DialogShell>
   )
 }

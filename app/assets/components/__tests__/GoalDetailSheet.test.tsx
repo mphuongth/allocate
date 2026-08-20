@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GoalDetailSheet from '../GoalDetailSheet'
 import type { GoalData } from '@/features/dashboard/contracts'
@@ -877,5 +877,39 @@ describe('GoalDetailSheet — merge provenance on a renewed row (#656)', () => {
     await userEvent.click(await screen.findByRole('button', { name: /history/i }))
     const row = await screen.findByTestId('history-renewed-row')
     expect(row).toHaveTextContent('Merged from PVcomBank A')
+  })
+})
+
+// Guard for #688. A full-screen sheet with no dialog semantics at all: nothing
+// announced it as a modal, Escape did nothing, and focus stayed on the goal card
+// behind it, so Tab walked the dashboard underneath.
+describe('GoalDetailSheet — dialog contract (#688)', () => {
+  it('is a modal dialog named by the goal heading it already shows', async () => {
+    render(<GoalDetailSheet {...baseProps} />)
+
+    const dialog = await screen.findByRole('dialog', { name: mockGoal.goalName })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+  })
+
+  it('closes on Escape', async () => {
+    const onClose = vi.fn()
+    render(<GoalDetailSheet {...baseProps} onClose={onClose} />)
+    await screen.findByRole('dialog')
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('moves focus into the sheet and keeps Tab inside it', async () => {
+    render(<GoalDetailSheet {...baseProps} />)
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toContainElement(document.activeElement as HTMLElement)
+
+    const focusables = dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])')
+    focusables[focusables.length - 1].focus()
+    await userEvent.tab()
+
+    expect(dialog).toContainElement(document.activeElement as HTMLElement)
   })
 })

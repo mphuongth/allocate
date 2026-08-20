@@ -6,6 +6,10 @@ import { toast } from 'sonner'
 import { Plus, ChevronLeft } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
+import DialogShell from '@/components/ui/DialogShell'
+
+// The confirmation's visible title is its accessible name (#688).
+const DELETE_TITLE_ID = 'fixed-expense-delete-title'
 
 // Master fixed-expense definitions. Categories mirror the Settings tab and the
 // API's accepted values; labels are localised for display only.
@@ -360,36 +364,37 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
           // Bottom-anchored sheet so it sits on the phone frame (mirrors the
           // mobile plan's bottom sheets) instead of floating mid-screen.
           return (
-            <div
-              data-testid="fe-delete-overlay"
-              style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'flex-end' }}
-              onClick={() => !deleting && setConfirmDelete(null)}
+            <DialogShell
+              onClose={() => setConfirmDelete(null)}
+              // A delete in flight owns the sheet: clicking away mid-request
+              // would hide the confirmation while the row is still going.
+              dismissOnClickAway={!deleting}
+              labelledBy={DELETE_TITLE_ID}
+              overlayStyle={{ zIndex: 300, alignItems: 'flex-end' }}
+              overlayProps={{ 'data-testid': 'fe-delete-overlay' }}
+              panelStyle={{ width: '100%', background: 'var(--c-card)', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom,0)', animation: 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' }}
             >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                style={{ width: '100%', background: 'var(--c-card)', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom,0)', animation: 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' }}
-              >
                 <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '8px auto 0' }} />
                 <div style={{ padding: '14px 16px 0' }}>
-                  <p style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-ink)', margin: '0 0 16px' }}>{t('deleteModal')}</p>
+                  <p id={DELETE_TITLE_ID} style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-ink)', margin: '0 0 16px' }}>{t('deleteModal')}</p>
                 </div>
                 <div style={{ padding: '0 16px 24px', display: 'grid', gap: 16 }}>{body}</div>
-              </div>
-            </div>
+            </DialogShell>
           )
         }
 
         return (
-          <div
-            data-testid="fe-delete-overlay"
-            style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-            onClick={() => !deleting && setConfirmDelete(null)}
+          <DialogShell
+            onClose={() => setConfirmDelete(null)}
+            dismissOnClickAway={!deleting}
+            labelledBy={DELETE_TITLE_ID}
+            overlayStyle={{ zIndex: 300, padding: 24 }}
+            overlayProps={{ 'data-testid': 'fe-delete-overlay' }}
+            panelStyle={{ width: 360, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, boxShadow: '0 20px 50px rgba(15,23,42,0.25)', display: 'grid', gap: 16 }}
           >
-            <div onClick={(e) => e.stopPropagation()} style={{ width: 360, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, boxShadow: '0 20px 50px rgba(15,23,42,0.25)', display: 'grid', gap: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-ink)' }}>{t('deleteModal')}</div>
+              <div id={DELETE_TITLE_ID} style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-ink)' }}>{t('deleteModal')}</div>
               {body}
-            </div>
-          </div>
+          </DialogShell>
         )
       })()}
     </div>
