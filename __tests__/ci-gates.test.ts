@@ -247,12 +247,35 @@ describe('Playwright browser install (#696)', () => {
     // never starts, which is the failure mode this whole step exists to survive.
     // Each attempt has to carry its own bound so the first one hands control back.
     const step = stepContaining(e2e, 'playwright install')
-    const attempts = [...step.matchAll(/timeout (\d+)m\b/g)].map((m) => Number(m[1]))
-    expect(attempts.length, 'each install attempt needs its own timeout').toBeGreaterThan(0)
-
-    // And the step's own bound has to leave room for both attempts, or the
-    // backstop fires during the retry and the retry was decoration.
-    const stepBound = Number(step.match(/timeout-minutes:\s*(\d+)/)![1])
-    expect(stepBound).toBeGreaterThan(2 * Math.max(...attempts))
+    expect(attemptBounds(step).length, 'each install attempt needs its own timeout').toBeGreaterThan(0)
   })
+
+  it('escalates to KILL, because TERM can be ignored', () => {
+    // `timeout` sends TERM and then WAITS. Measured on ubuntu:24.04: against a
+    // child that traps TERM, `timeout 3` never returns, while `timeout -k 2s 3`
+    // returns 137 after 5s. Without the escalation a hung install outlives its
+    // own bound, the step-level backstop kills the shell instead, and the retry
+    // is skipped again — the same hole one layer down.
+    const step = stepContaining(e2e, 'playwright install')
+    for (const attempt of attemptBounds(step)) {
+      expect(attempt.killAfterSeconds, 'every attempt needs --kill-after').toBeGreaterThan(0)
+    }
+  })
+
+  it('leaves the step backstop room for two whole attempts', () => {
+    // Or the backstop fires during the retry and the retry was decoration. The
+    // worst case per attempt is its bound PLUS the grace before the KILL.
+    const step = stepContaining(e2e, 'playwright install')
+    const worst = Math.max(...attemptBounds(step).map((a) => a.minutes + a.killAfterSeconds / 60))
+    const stepBound = Number(step.match(/timeout-minutes:\s*(\d+)/)![1])
+    expect(stepBound).toBeGreaterThan(2 * worst)
+  })
+
+  /** Every `timeout -k <n>s <m>m` in a step: what each attempt is allowed. */
+  function attemptBounds(step: string): { minutes: number; killAfterSeconds: number }[] {
+    return [...step.matchAll(/timeout(?:\s+-k\s+(\d+)s)?\s+(\d+)m\b/g)].map((m) => ({
+      killAfterSeconds: Number(m[1] ?? 0),
+      minutes: Number(m[2]),
+    }))
+  }
 })

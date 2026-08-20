@@ -118,17 +118,23 @@ jobs:
         # A backstop, not the mechanism. `timeout-minutes` kills the step's
         # PROCESS, so a stall on the first attempt would take the shell down and
         # the retry below would never start — the bound has to be around each
-        # attempt. Set above two full attempts so this never fires during a retry.
-        timeout-minutes: 10
+        # attempt. Set above two whole attempts (2 × 4m30s) so this never fires
+        # during a retry.
+        timeout-minutes: 12
         run: |
           # The cache holds the browsers, not the apt libraries they link
           # against, so the system deps are installed either way — restoring the
           # cache and skipping them gives a browser that cannot start.
+          # -k, because `timeout` sends TERM and then waits: a child that traps
+          # or blocks it outlives the bound entirely (measured on ubuntu:24.04 —
+          # `timeout 3` against a TERM-ignoring child never returns, `timeout -k
+          # 2s 3` returns 137 after 5s). Without the escalation the step-level
+          # backstop kills the shell instead and the retry is skipped again.
           install_browsers() {
             if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-              timeout 4m npx playwright install-deps chromium
+              timeout -k 30s 4m npx playwright install-deps chromium
             else
-              timeout 4m npx playwright install --with-deps chromium
+              timeout -k 30s 4m npx playwright install --with-deps chromium
             fi
           }
           # `timeout` exits 124 when it kills the attempt, which is a failure like
