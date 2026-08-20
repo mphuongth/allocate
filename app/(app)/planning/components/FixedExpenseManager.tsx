@@ -6,10 +6,9 @@ import { toast } from 'sonner'
 import { Plus, ChevronLeft } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
-import DialogShell from '@/components/ui/DialogShell'
-
-// The confirmation's visible title is its accessible name (#688).
-const DELETE_TITLE_ID = 'fixed-expense-delete-title'
+import EffectiveMonthFields from './EffectiveMonthFields'
+import PlanningDeleteConfirm from './PlanningDeleteConfirm'
+import { ghostBtn, inputStyle, labelStyle, monthRangeLabel, primaryBtn, toMonthInput } from './planningManagerShell'
 
 // Master fixed-expense definitions. Categories mirror the Settings tab and the
 // API's accepted values; labels are localised for display only.
@@ -33,44 +32,10 @@ interface Expense {
 }
 
 // "2026-04-01" → "2026-04" for <input type="month">
-function toMonthInput(date: string | null): string {
-  return date ? date.slice(0, 7) : ''
-}
 
-const SHORT_MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const SHORT_MONTHS_VI = ['Th1', 'Th2', 'Th3', 'Th4', 'Th5', 'Th6', 'Th7', 'Th8', 'Th9', 'Th10', 'Th11', 'Th12']
-
-function periodLabel(e: Expense, isVI: boolean): string {
-  if (!e.effective_from && !e.effective_to) return isVI ? 'Luôn áp dụng' : 'Always'
-  const months = isVI ? SHORT_MONTHS_VI : SHORT_MONTHS_EN
-  const fmtMonth = (d: string | null) => {
-    if (!d) return null
-    const [y, m] = d.split('-').map(Number)
-    return `${months[m - 1]} ${y}`
-  }
-  return `${fmtMonth(e.effective_from) || '…'} → ${fmtMonth(e.effective_to) || '∞'}`
-}
 
 const emptyForm = { expense_name: '', amount_vnd: '', category: '', effective_from: '', effective_to: '' }
 
-// ─── Inline style tokens (work in both the desktop modal and mobile sheet) ──────
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '10px 12px', fontSize: 16,
-  border: '1px solid var(--c-line)', borderRadius: 10,
-  background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box',
-}
-const labelStyle: React.CSSProperties = { fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 4 }
-const ghostBtn: React.CSSProperties = {
-  flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)',
-  background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500,
-  cursor: 'pointer', fontFamily: 'inherit',
-}
-const primaryBtn: React.CSSProperties = {
-  flex: 2, padding: '10px 0', borderRadius: 10, border: 'none',
-  background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600,
-  cursor: 'pointer', fontFamily: 'inherit',
-}
 
 interface Props {
   onChange: () => void
@@ -235,30 +200,15 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
           />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 10 }}>
-          <div>
-            <label htmlFor="fe-from" style={labelStyle}>{t('effectiveFromLabel')}</label>
-            <input
-              id="fe-from"
-              data-testid="fe-from"
-              type="month"
-              value={form.effective_from}
-              onChange={(e) => setForm({ ...form, effective_from: e.target.value })}
-              style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums', minWidth: 0 }}
-            />
-          </div>
-          <div>
-            <label htmlFor="fe-to" style={labelStyle}>{t('effectiveToLabel')}</label>
-            <input
-              id="fe-to"
-              data-testid="fe-to"
-              type="month"
-              value={form.effective_to}
-              onChange={(e) => setForm({ ...form, effective_to: e.target.value })}
-              style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums', minWidth: 0 }}
-            />
-          </div>
-        </div>
+        <EffectiveMonthFields
+          idPrefix="fe"
+          fromLabel={t('effectiveFromLabel')}
+          toLabel={t('effectiveToLabel')}
+          from={form.effective_from}
+          to={form.effective_to}
+          onFromChange={(v) => setForm({ ...form, effective_from: v })}
+          onToChange={(v) => setForm({ ...form, effective_to: v })}
+        />
 
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button type="button" onClick={() => setMode('list')} style={ghostBtn}>{tc('cancel')}</button>
@@ -304,7 +254,7 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
                   </span>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-                  {fmt(e.amount_vnd)} · {periodLabel(e, isVI)}
+                  {fmt(e.amount_vnd)} · {monthRangeLabel(e.effective_from, e.effective_to, isVI, isVI ? 'Luôn áp dụng' : 'Always')}
                 </div>
               </div>
               <button
@@ -339,64 +289,19 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
         <Plus size={15} strokeWidth={2.4} />{t('create')}
       </button>
 
-      {confirmDelete && (() => {
-        const body = (
-          <>
-            <div style={{ fontSize: 13, color: 'var(--c-muted)' }}>
-              {confirmDelete.expense_name} — {fmtCompact(confirmDelete.amount_vnd)}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" onClick={() => setConfirmDelete(null)} style={ghostBtn}>{tc('cancel')}</button>
-              <button
-                type="button"
-                data-testid="fe-delete-confirm"
-                onClick={() => handleDelete(confirmDelete)}
-                disabled={deleting}
-                style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-neg)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: deleting ? 0.7 : 1 }}
-              >
-                {isVI ? 'Xoá' : 'Delete'}
-              </button>
-            </div>
-          </>
-        )
-
-        if (variant === 'sheet') {
-          // Bottom-anchored sheet so it sits on the phone frame (mirrors the
-          // mobile plan's bottom sheets) instead of floating mid-screen.
-          return (
-            <DialogShell
-              onClose={() => setConfirmDelete(null)}
-              // A delete in flight owns the sheet: clicking away mid-request
-              // would hide the confirmation while the row is still going.
-              dismissOnClickAway={!deleting}
-              labelledBy={DELETE_TITLE_ID}
-              overlayStyle={{ zIndex: 300, alignItems: 'flex-end' }}
-              overlayProps={{ 'data-testid': 'fe-delete-overlay' }}
-              panelStyle={{ width: '100%', background: 'var(--c-card)', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom,0)', animation: 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' }}
-            >
-                <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '8px auto 0' }} />
-                <div style={{ padding: '14px 16px 0' }}>
-                  <p id={DELETE_TITLE_ID} style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-ink)', margin: '0 0 16px' }}>{t('deleteModal')}</p>
-                </div>
-                <div style={{ padding: '0 16px 24px', display: 'grid', gap: 16 }}>{body}</div>
-            </DialogShell>
-          )
-        }
-
-        return (
-          <DialogShell
-            onClose={() => setConfirmDelete(null)}
-            dismissOnClickAway={!deleting}
-            labelledBy={DELETE_TITLE_ID}
-            overlayStyle={{ zIndex: 300, padding: 24 }}
-            overlayProps={{ 'data-testid': 'fe-delete-overlay' }}
-            panelStyle={{ width: 360, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, boxShadow: '0 20px 50px rgba(15,23,42,0.25)', display: 'grid', gap: 16 }}
-          >
-              <div id={DELETE_TITLE_ID} style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-ink)' }}>{t('deleteModal')}</div>
-              {body}
-          </DialogShell>
-        )
-      })()}
+      {confirmDelete && (
+        <PlanningDeleteConfirm
+          variant={variant}
+          testIdPrefix="fe"
+          title={t('deleteModal')}
+          description={`${confirmDelete.expense_name} — ${fmtCompact(confirmDelete.amount_vnd)}`}
+          cancelLabel={tc('cancel')}
+          confirmLabel={isVI ? 'Xoá' : 'Delete'}
+          deleting={deleting}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => handleDelete(confirmDelete)}
+        />
+      )}
     </div>
   )
 }
