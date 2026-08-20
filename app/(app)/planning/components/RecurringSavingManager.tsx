@@ -6,10 +6,9 @@ import { toast } from 'sonner'
 import { Plus, ChevronLeft } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
-import DialogShell from '@/components/ui/DialogShell'
-
-// The confirmation's visible title is its accessible name (#688).
-const DELETE_TITLE_ID = 'recurring-saving-delete-title'
+import EffectiveMonthFields from './EffectiveMonthFields'
+import PlanningDeleteConfirm from './PlanningDeleteConfirm'
+import { ghostBtn, inputStyle, labelStyle, monthRangeLabel, primaryBtn, toMonthInput } from './planningManagerShell'
 import type { Goal } from '@/features/planning/contracts'
 
 interface Saving {
@@ -36,42 +35,10 @@ interface LinkTarget {
 }
 
 // "2026-04-01" → "2026-04" for <input type="month">
-function toMonthInput(date: string | null): string {
-  return date ? date.slice(0, 7) : ''
-}
 
-const SHORT_MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const SHORT_MONTHS_VI = ['Th1', 'Th2', 'Th3', 'Th4', 'Th5', 'Th6', 'Th7', 'Th8', 'Th9', 'Th10', 'Th11', 'Th12']
-
-function periodLabel(s: Saving, isVI: boolean): string {
-  if (!s.effective_from && !s.effective_to) return isVI ? 'Hàng tháng' : 'Every month'
-  const months = isVI ? SHORT_MONTHS_VI : SHORT_MONTHS_EN
-  const fmtMonth = (d: string | null) => {
-    if (!d) return null
-    const [y, m] = d.split('-').map(Number)
-    return `${months[m - 1]} ${y}`
-  }
-  return `${fmtMonth(s.effective_from) || '…'} → ${fmtMonth(s.effective_to) || '∞'}`
-}
 
 const emptyForm = { name: '', goal_id: '', amount_vnd: '', effective_from: '', effective_to: '', linked_deposit_tx_id: '' }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '10px 12px', fontSize: 16,
-  border: '1px solid var(--c-line)', borderRadius: 10,
-  background: 'var(--c-card-2)', color: 'var(--c-ink)', boxSizing: 'border-box',
-}
-const labelStyle: React.CSSProperties = { fontSize: 13, color: 'var(--c-muted)', display: 'block', marginBottom: 4 }
-const ghostBtn: React.CSSProperties = {
-  flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)',
-  background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500,
-  cursor: 'pointer', fontFamily: 'inherit',
-}
-const primaryBtn: React.CSSProperties = {
-  flex: 2, padding: '10px 0', borderRadius: 10, border: 'none',
-  background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600,
-  cursor: 'pointer', fontFamily: 'inherit',
-}
 
 interface Props {
   goals: Goal[]
@@ -320,30 +287,15 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
           />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 10 }}>
-          <div>
-            <label htmlFor="rs-from" style={labelStyle}>{isVI ? 'Bắt đầu từ' : 'Effective from'}</label>
-            <input
-              id="rs-from"
-              data-testid="rs-from"
-              type="month"
-              value={form.effective_from}
-              onChange={(e) => setForm({ ...form, effective_from: e.target.value })}
-              style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums', minWidth: 0 }}
-            />
-          </div>
-          <div>
-            <label htmlFor="rs-to" style={labelStyle}>{isVI ? 'Kết thúc' : 'Effective to'}</label>
-            <input
-              id="rs-to"
-              data-testid="rs-to"
-              type="month"
-              value={form.effective_to}
-              onChange={(e) => setForm({ ...form, effective_to: e.target.value })}
-              style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums', minWidth: 0 }}
-            />
-          </div>
-        </div>
+        <EffectiveMonthFields
+          idPrefix="rs"
+          fromLabel={isVI ? 'Bắt đầu từ' : 'Effective from'}
+          toLabel={isVI ? 'Kết thúc' : 'Effective to'}
+          from={form.effective_from}
+          to={form.effective_to}
+          onFromChange={(v) => setForm({ ...form, effective_from: v })}
+          onToChange={(v) => setForm({ ...form, effective_to: v })}
+        />
 
         <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: -4 }}>
           {isVI ? 'Tự động lặp lại mỗi tháng. Bỏ trống ngày kết thúc để áp dụng vô thời hạn.' : 'Auto-repeats every month. Leave end blank to apply indefinitely.'}
@@ -393,7 +345,7 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
                   </span>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-                  {fmt(s.amount_vnd)} · {periodLabel(s, isVI)}
+                  {fmt(s.amount_vnd)} · {monthRangeLabel(s.effective_from, s.effective_to, isVI, isVI ? 'Hàng tháng' : 'Every month')}
                 </div>
               </div>
               <button
@@ -428,63 +380,19 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
         <Plus size={15} strokeWidth={2.4} />{isVI ? 'Thêm khoản định kỳ' : 'Add recurring saving'}
       </button>
 
-      {confirmDelete && (() => {
-        const title = isVI ? 'Xoá khoản định kỳ?' : 'Delete recurring saving?'
-        const body = (
-          <>
-            <div style={{ fontSize: 13, color: 'var(--c-muted)' }}>
-              {confirmDelete.name} — {fmtCompact(confirmDelete.amount_vnd)}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" onClick={() => setConfirmDelete(null)} style={ghostBtn}>{tc('cancel')}</button>
-              <button
-                type="button"
-                data-testid="rs-delete-confirm"
-                onClick={() => handleDelete(confirmDelete)}
-                disabled={deleting}
-                style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-neg)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: deleting ? 0.7 : 1 }}
-              >
-                {isVI ? 'Xoá' : 'Delete'}
-              </button>
-            </div>
-          </>
-        )
-
-        if (variant === 'sheet') {
-          return (
-            <DialogShell
-              onClose={() => setConfirmDelete(null)}
-              // A delete in flight owns the sheet: clicking away mid-request
-              // would hide the confirmation while the row is still going.
-              dismissOnClickAway={!deleting}
-              labelledBy={DELETE_TITLE_ID}
-              overlayStyle={{ zIndex: 300, alignItems: 'flex-end' }}
-              overlayProps={{ 'data-testid': 'rs-delete-overlay' }}
-              panelStyle={{ width: '100%', background: 'var(--c-card)', borderRadius: '16px 16px 0 0', paddingBottom: 'env(safe-area-inset-bottom,0)', animation: 'slide-up 220ms cubic-bezier(0.2,0.8,0.2,1)' }}
-            >
-                <div style={{ width: 36, height: 4, background: 'var(--c-line-strong)', borderRadius: 999, margin: '8px auto 0' }} />
-                <div style={{ padding: '14px 16px 0' }}>
-                  <p id={DELETE_TITLE_ID} style={{ fontWeight: 700, fontSize: 16, color: 'var(--c-ink)', margin: '0 0 16px' }}>{title}</p>
-                </div>
-                <div style={{ padding: '0 16px 24px', display: 'grid', gap: 16 }}>{body}</div>
-            </DialogShell>
-          )
-        }
-
-        return (
-          <DialogShell
-            onClose={() => setConfirmDelete(null)}
-            dismissOnClickAway={!deleting}
-            labelledBy={DELETE_TITLE_ID}
-            overlayStyle={{ zIndex: 300, padding: 24 }}
-            overlayProps={{ 'data-testid': 'rs-delete-overlay' }}
-            panelStyle={{ width: 360, maxWidth: '100%', background: 'var(--c-card)', borderRadius: 14, padding: 20, boxShadow: '0 20px 50px rgba(15,23,42,0.25)', display: 'grid', gap: 16 }}
-          >
-              <div id={DELETE_TITLE_ID} style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-ink)' }}>{title}</div>
-              {body}
-          </DialogShell>
-        )
-      })()}
+      {confirmDelete && (
+        <PlanningDeleteConfirm
+          variant={variant}
+          testIdPrefix="rs"
+          title={isVI ? 'Xoá khoản định kỳ?' : 'Delete recurring saving?'}
+          description={`${confirmDelete.name} — ${fmtCompact(confirmDelete.amount_vnd)}`}
+          cancelLabel={tc('cancel')}
+          confirmLabel={isVI ? 'Xoá' : 'Delete'}
+          deleting={deleting}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => handleDelete(confirmDelete)}
+        />
+      )}
     </div>
   )
 }
