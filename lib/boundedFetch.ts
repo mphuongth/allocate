@@ -3,8 +3,8 @@ import { Semaphore } from './concurrency'
 // Every outbound scrape is bounded so a slow, oversized or broken upstream can't
 // hang a serverless function, exhaust its memory, or feed an error page to a
 // price parser (#515, #530).
-export const SCRAPE_TIMEOUT_MS = 10_000
-export const SCRAPE_MAX_BYTES = 2 * 1024 * 1024 // 2 MB — the pages we scrape are tens of KB
+const SCRAPE_TIMEOUT_MS = 10_000
+const SCRAPE_MAX_BYTES = 2 * 1024 * 1024 // 2 MB — the pages we scrape are tens of KB
 
 // Process-wide cap on concurrent outbound provider requests. This bounds the
 // TRUE fan-out regardless of how it nests, so no route can open an unbounded

@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 
 // The shell the two planning managers share (#689).
 //
@@ -68,4 +68,3 @@ export function monthRangeLabel(
 
 export type PlanningVariant = 'modal' | 'sheet'
 
-export type { ReactNode }

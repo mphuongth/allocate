@@ -68,7 +68,7 @@ export function goalProgress(entry: Pick<GoalRow, 'totalAllocated' | 'contribute
 
 // ─── Fixed expense / insurance rows ──────────────────────────────────────────
 
-export interface PlanLineState {
+interface PlanLineState {
   /** An override is stored *and* it changes the amount, so it's worth announcing. */
   overridden: boolean
   /** An override row exists at all — what "Restore default" is offered for. */

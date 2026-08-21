@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 // The transaction shape both goal-detail surfaces render. Superset of what each
 // used locally (the mobile sheet also reads fund_code / unit_price); the desktop
 // panel simply ignores the extra fields.
-export interface InvestmentTx {
+interface InvestmentTx {
   transaction_id: string
   transaction_type: string
   asset_type: string

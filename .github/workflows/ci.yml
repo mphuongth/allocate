@@ -71,6 +71,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Dead-code / dependency drift. Knip walks the import graph from the entry
+      # points named in knip.jsonc and fails on unused files, exports, types and
+      # dependencies — the drift `eslint` can't see because each file is legal on
+      # its own (#691). It runs in the Lint job rather than a sixth one: it needs
+      # the same install and finishes in seconds.
+      - name: Check for dead code and dependency drift
+        run: npm run knip
+
   build:
     name: Production Build
     runs-on: ubuntu-latest

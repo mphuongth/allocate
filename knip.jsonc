@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Files nothing imports on purpose. Knip walks the import graph from the
+  // entry points below; anything it can't reach is reported as dead, so a file
+  // the *platform* or a human invokes has to be named here or it looks unused.
+  "entry": [
+    // Next.js pages/layouts/routes, vitest specs and the Playwright specs are
+    // picked up by knip's framework plugins — these are the ones nothing but a
+    // browser, a CI step or a shell invocation reaches.
+    "public/sw.js", // registered by the browser, never imported
+    "e2e/global.setup.ts", // Playwright project dependency (playwright.config.ts)
+    "scripts/*.mjs" // run by hand or via npm scripts (icons, screenshots, seed)
+  ],
+  // `psql` comes from the Postgres client the DB lanes assume is installed; it
+  // is not, and shouldn't be, an npm dependency.
+  "ignoreBinaries": ["psql"]
+}

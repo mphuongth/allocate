@@ -417,4 +417,3 @@ function HoldingRow({ holding, value, onChange, isVI, labels }: {
   )
 }
 
-export default FinishGoalSheet

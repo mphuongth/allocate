@@ -36,7 +36,7 @@ const OG_LOCALE: Record<Locale, string> = { vi: 'vi_VN', en: 'en_US' }
 /** BCP 47, which is what schema.org's inLanguage expects (OG uses underscores instead). */
 const BCP47: Record<Locale, string> = { vi: 'vi-VN', en: 'en-US' }
 
-export function normalizeLocale(locale: string): Locale {
+function normalizeLocale(locale: string): Locale {
   return (LOCALES as readonly string[]).includes(locale) ? (locale as Locale) : 'vi'
 }
 

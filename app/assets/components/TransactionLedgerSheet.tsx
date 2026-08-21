@@ -289,9 +289,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   // the trigger for the request, and the result can't be derived from anything
   // already rendered, so an effect is the right home even though the rule can't
   // tell this from a state sync.
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- data load; see above
   useEffect(() => { if (open) { fetchGoals(); fetchFunds() } }, [open, fetchGoals, fetchFunds])
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- data load; see above
   useEffect(() => { if (open) fetchTransactions() }, [open, fetchTransactions])
 
   // Lock background scroll while the ledger is open. Re-assert when a nested
