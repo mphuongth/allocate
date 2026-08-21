@@ -25,7 +25,7 @@ export type ParentWdMap = Map<string, { principal: number; units: number }>
 export type FundWdMap = Map<string, { units: number; cost: number }>
 
 /** The (goal, fund) bucket key the dashboard accumulates a fund holding under. */
-export function fundBucketKey(goalId: string | null, fundId: string): string {
+function fundBucketKey(goalId: string | null, fundId: string): string {
   return `${goalId ?? 'unallocated'}::${fundId}`
 }
 

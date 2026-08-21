@@ -17,7 +17,7 @@ import type { Fund, FundsBusy } from './useFundsData'
 // editor and persists nothing until an amount is entered.
 
 /** Outcome of a delete, so a view can dismiss its own confirmation dialog. */
-export type DeleteOutcome = 'deleted' | 'in-use' | 'failed'
+type DeleteOutcome = 'deleted' | 'in-use' | 'failed'
 
 export interface FundMutations {
   /**

@@ -14,7 +14,7 @@ export function setLocaleCookie(next: string): void {
  * The two locales the app ships messages for. The default is Vietnamese —
  * an unrecognised value falls back to it rather than 404-ing a translation.
  */
-export const APP_LOCALES = ['vi', 'en'] as const
+const APP_LOCALES = ['vi', 'en'] as const
 export type AppLocale = (typeof APP_LOCALES)[number]
 export const DEFAULT_LOCALE: AppLocale = 'vi'
 

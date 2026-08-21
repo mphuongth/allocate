@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react'
 
 /** One purchase of a fund, as the detail modal lists it. */
-export interface PurchaseHistoryItem {
+interface PurchaseHistoryItem {
   purchase_date: string
   units: number
   nav_at_purchase: number

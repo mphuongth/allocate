@@ -29,7 +29,7 @@ export interface RecurringLinkCandidate {
   linkedDepositKey?: string | null
 }
 
-export type RecurringLinkReason = 'explicit' | 'name' | 'sole' | 'ambiguous'
+type RecurringLinkReason = 'explicit' | 'name' | 'sole' | 'ambiguous'
 
 export interface RecurringLinkResult {
   match: RecurringLinkCandidate | null

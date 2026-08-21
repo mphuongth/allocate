@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-export type CairnLoaderVariant = '' | 'on-dark' | 'muted' | 'pos'
+type CairnLoaderVariant = '' | 'on-dark' | 'muted' | 'pos'
 
 interface CairnLoaderProps {
   /** Root size token in px. XS≈14, S≈20, M≈32, L≈56. Defaults to 24. */

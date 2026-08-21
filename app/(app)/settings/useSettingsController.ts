@@ -32,13 +32,13 @@ import {
  * 'partial' means something synced but not everything — it still advances the
  * last-sync timestamp, because prices did move.
  */
-export type SyncStatus = 'idle' | 'syncing' | 'done' | 'partial' | 'limited' | 'failed'
+type SyncStatus = 'idle' | 'syncing' | 'done' | 'partial' | 'limited' | 'failed'
 
 /** How long a sync outcome stays on screen before the card returns to idle. */
 const SYNC_FLASH_MS = 3000
 
 /** What the download sheet needs — the four headline numbers, nothing else. */
-export interface ReportSummary {
+interface ReportSummary {
   netWorth: number
   currentValue: number
   totalPL: number

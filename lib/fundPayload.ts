@@ -12,8 +12,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ValidationError, validateAmount } from '@/lib/validation'
 import { isFundCodePriceable, normalizeFundCode } from '@/lib/fmarket-nav'
 
-export const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
-export type FundType = (typeof FUND_TYPES)[number]
+const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
+type FundType = (typeof FUND_TYPES)[number]
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

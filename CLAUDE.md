@@ -93,6 +93,15 @@ runs locally and nightly, never on the PR path. Scale the checks to the change:
   handler with a signature it no longer has passes locally and fails CI. CI runs
   `typecheck` inside the "Unit Tests" job, so a red X there is often `tsc`, not a
   failing assertion (#614).
+- **Dead code** (`npm run knip`) — runs inside the CI "Lint" job, so run it with the
+  other always-checks when you delete a consumer, rename an export, or add a
+  dependency. It fails on unused files, exports, exported types and dependencies —
+  the drift eslint can't see, because each file is still legal on its own (#691).
+  Keep an export only when something imports it: a value used solely inside its own
+  module is a plain `const`/`function`, not an `export`. Files nothing imports on
+  purpose (the service worker, Playwright's global setup, the `scripts/*.mjs` run by
+  hand) are declared as entry points in `knip.jsonc` — add to that list rather than
+  silencing the rule.
 - **Coverage** (`npm run test:coverage`) — when you delete or rewrite tests, or add a
   server route. Thresholds live in `vitest.config.ts`: a repo-wide floor set just
   under today's numbers, `lines: 100` on the money modules in `lib/`, and per-file
