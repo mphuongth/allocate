@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
+import { expectRenewalCommitted } from './helpers/maturity'
 
 // All tests run on Desktop Chrome (1280×800) by default from playwright config.
 // These verify the two-column desktop layout for the Overview page.
@@ -203,7 +204,7 @@ test.describe('Desktop overview layout', () => {
       // Renew via the card → desktop resolve modal → confirm the default renewal.
       await card.getByRole('button', { name: /Handle|Xử lý/i }).first().click()
       await page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click()
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      await expectRenewalCommitted(page)
 
       // After it rolls forward (future maturity), the deposit leaves the card.
       await expect(card.getByText('E2E Maturing Deposit')).toHaveCount(0, { timeout: 30_000 })

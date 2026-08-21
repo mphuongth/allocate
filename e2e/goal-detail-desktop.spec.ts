@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
+import { expectRenewalCommitted } from './helpers/maturity'
 
 // Desktop viewport (Desktop Chrome default) — all tests run in 1280×800+
 
@@ -247,8 +248,8 @@ test.describe('Desktop goal detail panel', () => {
       await page.getByText(/^(Handle maturity|Xử lý đáo hạn)$/).click()
       await page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click()
 
-      // Success confirmation proves the PUT landed.
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      // The sheet closing proves the PUT landed.
+      await expectRenewalCommitted(page)
 
       // Close the loop: the stored deposit must now have a future maturity, a
       // larger principal (interest rolled in) and an accrual date anchored to the
@@ -355,7 +356,7 @@ test.describe('Desktop goal detail panel', () => {
       await panel.getByRole('button', { name: 'Options', exact: true }).first().click()
       await page.getByText(/^(Handle maturity|Xử lý đáo hạn)$/).click()
       await page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click()
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      await expectRenewalCommitted(page)
 
       // The active row rolled forward to a fresh principal (net + interest).
       await expect.poll(async () => {

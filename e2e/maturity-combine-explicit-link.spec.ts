@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
+import { expectRenewalCommitted } from './helpers/maturity'
 
 // Explicit deposit↔recurring link. When a goal funds several recurring bank
 // savings, name/sole matching can't tell which one belongs to a maturing
@@ -65,7 +66,7 @@ test.describe('Term-deposit maturity — explicit deposit↔recurring link', () 
       // Combine is offered and (via the explicit link) pre-selected.
       await expect(page.getByTestId('maturity-combine')).toBeVisible({ timeout: 10_000 })
       await page.getByRole('button', { name: /Save new deposit|Lưu sổ mới/i }).click()
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      await expectRenewalCommitted(page)
 
       // The LINKED recurring is fulfilled; the sibling is untouched.
       const fulfilled = await fulfilledMap(page)

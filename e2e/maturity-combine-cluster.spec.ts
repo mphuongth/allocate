@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
+import { expectRenewalCommitted } from './helpers/maturity'
 
 // PR3 — cluster auto-detection on the dashboard "Cần xử lý" card. When a goal has
 // two (or more) bank deposits maturing close together, the card surfaces a one-tap
@@ -73,11 +74,10 @@ test.describe('Maturity card — merge-cluster auto-detection', () => {
         page.getByRole('button', { name: /Save new deposit|Lưu sổ mới/i }).click(),
       ])
       expect(res.ok()).toBeTruthy()
-      // NOT the `maturity-renewed` flash: it shows for SUCCESS_FLASH_MS and then the
-      // sheet closes itself, so racing it made this test fail ~1 run in 3 (on main
-      // too). The durable outcomes — the sheet closing, and the sibling leaving the
-      // goal's holdings — are what the merge actually promises.
-      await expect(page.getByRole('button', { name: /Save new deposit|Lưu sổ mới/i })).toBeHidden({ timeout: 20_000 })
+      // The durable outcomes — the sheet closing, and the sibling leaving the
+      // goal's holdings — are what the merge actually promises; the success flash
+      // is a timer, not an outcome (see the helper).
+      await expectRenewalCommitted(page)
 
       await gotoFreshDashboard(page)
       const after = await goalHoldingIds(page, goal.goal_id)
