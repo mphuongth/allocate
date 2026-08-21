@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
+import { expectRenewalCommitted } from './helpers/maturity'
 
 // Book-level renewal for accumulating ("Loại 2") deposits: at maturity the whole
 // book COLLAPSES into one fresh plain term deposit. This closes the loop on the
@@ -82,7 +83,7 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
         page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click(),
       ])
       expect(resp.status()).toBe(200)
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      await expectRenewalCommitted(page)
 
       // ── Assert the persisted outcome ──────────────────────────────────────────
       const all = await (await page.request.get('/api/v1/investment-transactions?include_history=true&limit=1000')).json()
@@ -143,7 +144,7 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
         page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click(),
       ])
       expect(resp.status()).toBe(200)
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      await expectRenewalCommitted(page)
 
       // Collapsed → a plain term deposit with a future maturity, so it drops off
       // the card. (No deposit_group_id; sibling tranche folded in.)

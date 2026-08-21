@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
+import { expectRenewalCommitted } from './helpers/maturity'
 
 // Term-deposit maturity "combine" flow (Tất toán & gửi lại / settle & re-deposit,
 // merging this month's recurring saving). The correctness risk is a DOUBLE-COUNT:
@@ -71,7 +72,7 @@ test.describe('Term-deposit maturity — combine (merge recurring into re-deposi
       // Confirm with defaults: interest pre-filled, re-deposit = principal +
       // interest + recurring, recurring marked deposited.
       await page.getByRole('button', { name: /Save new deposit|Lưu sổ mới/i }).click()
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      await expectRenewalCommitted(page)
 
       // After: the recurring now lives inside the deposit principal and is
       // suppressed as a standalone contribution — progress must NOT have jumped by

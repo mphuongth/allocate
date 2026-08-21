@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
+import { expectRenewalCommitted } from './helpers/maturity'
 
 // Term-deposit maturity "combine" — folding a SIBLING bank deposit into the
 // re-deposit (merge-on-renew). The bug this guards: a user settles a sibling S
@@ -90,7 +91,7 @@ test.describe('Term-deposit maturity — merge a sibling deposit into the re-dep
         page.waitForRequest((r) => r.url().endsWith(`/${D.transaction_id}/renew`) && r.method() === 'POST'),
         page.getByRole('button', { name: /Save new deposit|Lưu sổ mới/i }).click(),
       ])
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      await expectRenewalCommitted(page)
 
       const body = renewReq.postDataJSON()
       const base: number = body.amount_vnd
@@ -240,7 +241,7 @@ test.describe('Term-deposit maturity — merge a sibling deposit into the re-dep
         page.getByRole('button', { name: /Save new deposit|Lưu sổ mới/i }).click(),
       ])
       expect(renewReq.postDataJSON().bank_code).toBe('TCB')
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      await expectRenewalCommitted(page)
 
       const { createClient } = await import('@supabase/supabase-js')
       const supabase = createClient(process.env.E2E_SUPABASE_URL!, process.env.E2E_SUPABASE_SERVICE_ROLE_KEY!)

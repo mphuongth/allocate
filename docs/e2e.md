@@ -73,6 +73,28 @@ statement timeout, or the status phrase itself.
 A run whose failures are *all* infra prints an explicit note. Re-run it against
 a healthy stack before chasing the app.
 
+## Never assert on a transient element
+
+A locator assertion is a *poll*, not a subscription. Playwright widens the gap
+between attempts as it waits — 100 ms, 250 ms, 500 ms, then 1 s from there on —
+so an element that lives for less than a second can appear and disappear
+entirely between two samples, and the assertion then burns its whole timeout on
+something that did happen.
+
+That is #701: the maturity sheet's `maturity-renewed` checkmark renders for
+`SUCCESS_FLASH_MS` (800 ms) and then the sheet closes itself. Whenever the
+renew POST took ~1 s or more — the assertion starts polling when the *request*
+goes out, not when the response lands — the flash fell in a 1 s gap and the test
+failed at 20 s on an element that had been in the DOM from 1074 ms to 1895 ms.
+Roughly 1 run in 4, on `main` as much as on any branch, and in the smoke lane
+that gates the production migration push.
+
+So assert the **durable** outcome — the state the page settles into and stays
+in: the sheet closed, the row gone from the list, the value the API now returns.
+For the maturity sheet that is `expectRenewalCommitted(page)` in
+`e2e/helpers/maturity.ts`. What the transient thing *said* belongs in a
+component test, which renders the state directly and never has to race it.
+
 ## Running locally
 
 Both lanes need a Supabase stack and the app. Keep a local stack running for the

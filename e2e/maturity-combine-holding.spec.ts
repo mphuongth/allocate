@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import * as api from './helpers/api'
+import { expectRenewalCommitted } from './helpers/maturity'
 
 // "Ví chờ gộp" (merge holding pool) — PR4 of "Gộp nhiều nguồn". An earlier-
 // maturing deposit can be settled with "Để dành gộp": it is closed by a held
@@ -122,7 +123,7 @@ test.describe('Term-deposit maturity — "Ví chờ gộp" holding pool', () => 
         page.getByRole('button', { name: /Save new deposit|Lưu sổ mới/i }).click(),
       ])
       expect(renewReq.postDataJSON().held_sources).toEqual([heldId])
-      await expect(page.getByTestId('maturity-renewed')).toBeVisible({ timeout: 20_000 })
+      await expectRenewalCommitted(page)
 
       // Consumed: the pool is empty and the goal value STILL matches the start —
       // the held cash moved into A's principal, never counted twice.
