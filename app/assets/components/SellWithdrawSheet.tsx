@@ -31,6 +31,12 @@ interface Props {
   goalTargetAmount?: number | null
   onClose: () => void
   onSuccess: () => void
+  // Cash the user already stated at the maturity sheet ("Tổng nhận về", #705).
+  // Present only when this sheet was opened by closing a matured deposit, and it
+  // means the whole book goes: the amount opens at the full principal and the
+  // received field at their figure, instead of the estimate this sheet computes.
+  // They can still change both here — it is a starting point, not a lock.
+  receivedPrefill?: number | null
   // Desktop renders a centered modal dialog; mobile keeps the bottom sheet.
   desktop?: boolean
 }
@@ -49,7 +55,15 @@ const TYPE_COLOR = {
   stock: '#7c3aed',
 } as const
 
-export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValue, goalTargetAmount, onClose, onSuccess, desktop }: Props) {
+// A maturity close is a FULL close, so the amount it opens with is the whole
+// remaining principal — the payout the user carried over says what the bank paid
+// for it, not how much of the book is leaving.
+function maturityCloseAmount(item: SellItem | null, receivedPrefill?: number | null): string {
+  if (item?.type !== 'bank' || receivedPrefill == null) return ''
+  return String(Math.round(item.purchasePrice ?? item.currentValue ?? 0))
+}
+
+export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValue, goalTargetAmount, onClose, onSuccess, receivedPrefill, desktop }: Props) {
   const locale = useLocale()
   // Generic fallback shown when the API fails without a message. Inline-localized
   // to match the rest of this file (no next-intl t() here).
@@ -57,9 +71,14 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
     ? 'Đã xảy ra lỗi. Vui lòng thử lại.'
     : 'An error occurred. Please try again.'
 
-  const [amount, setAmount] = useState('')
+  // Seeded lazily for the same reason the gold price below is: this sheet is
+  // often rendered by a parent that mounts it ALREADY open (the maturity
+  // hand-off does exactly that), and useResetOnOpen only fires on a transition.
+  const [amount, setAmount] = useState(() => maturityCloseAmount(item, receivedPrefill))
   const [units, setUnits] = useState('')
-  const [received, setReceived] = useState('') // bank: cash actually received
+  const [received, setReceived] = useState(
+    () => (item?.type === 'bank' && receivedPrefill != null ? String(Math.round(receivedPrefill)) : ''),
+  ) // bank: cash actually received
   // Seeded lazily as well as synced below: useResetOnOpen fires on a *transition*
   // into open, so a sheet that mounts already open — which is how it renders when
   // the parent shows it in the same commit — would otherwise never get its gold
@@ -172,6 +191,17 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   useResetOnOpen(open, () => {
     if (isGold && navPerUnit) setSalePrice(String(Math.round(navPerUnit)))
   }, navPerUnit)
+
+  // A maturity close arrives with its payout already stated (#705). Seeded the
+  // same way as the gold price and for the same reason: the reset above runs on
+  // the way in, so this has to land after it. The amount is the full principal
+  // because "Không tái tục — rút" is a full close, and the received field takes
+  // the user's figure rather than estimateReceivedForPrincipal's.
+  useResetOnOpen(open, () => {
+    if (item?.type !== 'bank' || receivedPrefill == null) return
+    setAmount(maturityCloseAmount(item, receivedPrefill))
+    setReceived(String(Math.round(receivedPrefill)))
+  }, receivedPrefill)
 
   function handleAmountChange(val: string) {
     const raw = parseIntVN(val)

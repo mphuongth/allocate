@@ -82,7 +82,8 @@ export function MaturityResolveBody({
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
-  onWithdraw: () => void
+  // Receives the payout the user stated here, so the withdraw sheet opens on it.
+  onWithdraw: (received?: number) => void
 }) {
   // An accumulating ("Loại 2") book: `inv` is the rolled-up book row (principal =
   // Σ tranche principals, value = Σ tranche valuations). It renews by COLLAPSING
@@ -193,6 +194,10 @@ export function MaturityResolveBody({
   // user edits it down if early settlement is penalised).
   const [holdChoice, setHoldChoice] = useState<'hold' | 'cash'>('hold')
   const [holdReceived, setHoldReceived] = useState(String(Math.round(inv.value ?? principal)))
+  // The payout the user states for a straight withdrawal (#705). null until they
+  // touch it, so the field keeps tracking the computed estimate while the rate or
+  // the interest below it still moves; once typed, their figure stands.
+  const [payoutOverride, setPayoutOverride] = useState<string | null>(null)
   // ── Held-pool consume (when THIS deposit is the anchor) ───────────────────────
   // The goal's pooled holdings, all preselected to fold in. heldSel records only
   // explicit deselects (a deselected holding is unheld → restored to a deposit).
@@ -317,6 +322,8 @@ export function MaturityResolveBody({
   const newMaturity = dateTouched ? maturityOverride : derivedMaturity
   const newMaturityFmt = fmtMaturity(newMaturity, isVi)?.formatted ?? newMaturity
   const payout = principal + iNum
+  const payoutValue = payoutOverride ?? String(Math.round(payout))
+  const payoutNum = payoutValue.trim() === '' ? 0 : Number(payoutValue)
 
   const t = maturityResolveStrings(isVi, matured)
 
@@ -479,7 +486,9 @@ export function MaturityResolveBody({
     if (mode === 'withdraw') {
       // The hold fork only exists when there's an eligible anchor; default is hold.
       if (canHold && holdChoice === 'hold') { await handleHold(); return }
-      onClose(); setTimeout(onWithdraw, 60); return
+      // The payout goes with it: the withdraw sheet would otherwise re-estimate
+      // the cash and quietly discard what the user just typed here (#705).
+      onClose(); setTimeout(() => onWithdraw(payoutNum), 60); return
     }
     if (!canRenew) return
     setSaving(true); setError('')
@@ -844,7 +853,7 @@ export function MaturityResolveBody({
           canHold={canHold} holdAnchor={holdAnchor}
           holdChoice={holdChoice} setHoldChoice={setHoldChoice}
           holdReceived={holdReceived} setHoldReceived={setHoldReceived}
-          payout={payout}
+          payout={payoutValue} setPayout={setPayoutOverride}
         />
       )}
 
@@ -895,7 +904,7 @@ export function MaturityResolveBody({
           // Holding posts instead of withdrawing — navy CTA + piggy icon, never the
           // red withdraw button (the money is staying in the goal).
           const holding = mode === 'withdraw' && canHold && holdChoice === 'hold'
-          const disabled = saving || (mode !== 'withdraw' && !canRenew) || (holding && !(holdReceivedNum > 0))
+          const disabled = saving || (mode !== 'withdraw' && !canRenew) || (holding && !(holdReceivedNum > 0)) || (mode === 'withdraw' && !holding && !(payoutNum > 0))
           return (
             <button type="button" onClick={handleConfirm} disabled={disabled} style={{
               flex: 2, justifyContent: 'center', gap: 7, padding: '10px 14px', borderRadius: 10, border: 'none',
@@ -926,7 +935,7 @@ export function MaturityResolveSheet({
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
-  onWithdraw: () => void
+  onWithdraw: (received?: number) => void
 }) {
   useEffect(() => {
     if (!open) return
@@ -973,7 +982,7 @@ export function MaturityResolveModal({
   isVi: boolean
   onClose: () => void
   onRenewed: () => void
-  onWithdraw: () => void
+  onWithdraw: (received?: number) => void
 }) {
   return (
     <div

@@ -1152,3 +1152,32 @@ describe('MaturityResolveBody', () => {
     await waitFor(() => expect(previews).toBe(2))
   })
 })
+
+// #705: on "Xử lý đáo hạn" → "Không tái tục — rút", the payout was a read-only
+// row. It is an ESTIMATE (principal + accrued interest); the bank's slip says
+// something else whenever the close is early or a fee lands, and the user was
+// reading the real figure off that slip with nowhere to type it. The row is now
+// the field, and the number it holds is what the withdraw sheet opens with —
+// otherwise editing it here would be theatre.
+describe('MaturityResolveBody — the maturity payout is the user’s to correct (#705)', () => {
+  it('hands the edited payout to the withdraw flow', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }))
+    const onWithdraw = vi.fn()
+
+    render(
+      <MaturityResolveBody inv={maturedDeposit} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={onWithdraw} />,
+    )
+    await user.click(screen.getByText(/Don.t renew — withdraw/i))
+
+    // Prefilled with the estimate the sheet computes: 35,000,000 + 2,030,000.
+    const payout = await screen.findByTestId('maturity-payout-input') as HTMLInputElement
+    expect(payout.value).toBe(formatIntVN('37030000'))
+
+    // The bank actually paid 36,800,000 (early-close penalty).
+    fireEvent.change(payout, { target: { value: formatIntVN('36800000') } })
+    await user.click(screen.getByRole('button', { name: /Mark for withdrawal/i }))
+
+    await waitFor(() => expect(onWithdraw).toHaveBeenCalledWith(36_800_000))
+  })
+})
