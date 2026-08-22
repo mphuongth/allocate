@@ -170,6 +170,15 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
   const [formMode, setFormMode] = useState<'edit' | null>(null)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  // Correcting a recorded withdrawal (#705). Its own dialog rather than the
+  // generic form above: a withdrawal owns only the cash it paid out, the date and
+  // the notes. The principal it withdrew, its parent holding and the asset type
+  // are the claim the DB invariants measure against that holding, so editing them
+  // here would offer a change the table refuses.
+  const [wdTx, setWdTx] = useState<LedgerTransaction | null>(null)
+  const [wdForm, setWdForm] = useState({ amount_vnd: '', investment_date: '', notes: '' })
+  const [wdError, setWdError] = useState('')
+  const [wdSaving, setWdSaving] = useState(false)
   // Where a transaction can be MOVED to, which is not the same list as the one
   // you can filter history by: a completed goal is an archive (#650). The one
   // exception is the goal this very transaction is already filed under — a
@@ -298,7 +307,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
     if (!open) return
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
-  }, [open, showAdd, editExisting, showImport, formMode])
+  }, [open, showAdd, editExisting, showImport, formMode, wdTx])
 
   function setSelectFilter(key: 'asset_type' | 'goal_id', value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }))
@@ -338,6 +347,46 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
     setEditTx(tx)
     setFormError('')
     setFormMode('edit')
+  }
+
+  function openWithdrawEdit(tx: LedgerTransaction) {
+    setWdForm({
+      amount_vnd: String(tx.amount_vnd),
+      investment_date: tx.investment_date,
+      notes: tx.notes ?? '',
+    })
+    setWdError('')
+    setWdTx(tx)
+  }
+
+  async function handleWithdrawSave() {
+    if (!wdTx) return
+    setWdError('')
+    if (!wdForm.amount_vnd || Number(wdForm.amount_vnd) <= 0) { setWdError(t('amountRequired')); return }
+    if (!wdForm.investment_date) { setWdError(t('dateRequired')); return }
+
+    setWdSaving(true)
+    // Only the three fields the dialog shows. The PUT applies exactly what the
+    // body names, so omitting the rest leaves the claim columns
+    // (principal_withdrawn, units_withdrawn, parent_transaction_id) untouched.
+    const res = await fetch(`/api/v1/investment-transactions/${wdTx.transaction_id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount_vnd: Number(wdForm.amount_vnd),
+        investment_date: wdForm.investment_date,
+        notes: wdForm.notes || null,
+      }),
+    })
+    if (!res.ok) {
+      const { error } = await res.json()
+      setWdError(error ?? tc('error'))
+    } else {
+      setWdTx(null)
+      await fetchTransactions()
+      notifyChanged()
+    }
+    setWdSaving(false)
   }
 
   function notifyChanged() {
@@ -492,6 +541,12 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
     <span style={{ display: 'inline-flex', gap: 2, whiteSpace: 'nowrap' }}>
       {!isWithdrawal(tx) && (
         <button onClick={() => (tx.asset_type === 'stock' ? openEdit(tx) : setEditExisting(tx))} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('edit')}><Edit2 size={14} color="var(--c-muted)" /></button>
+      )}
+      {/* A plain withdrawal gets the narrow received-amount form (#705). A held
+          settlement and a consumed one do not: their cash is a claim on a merge
+          pool that other rows are already measured against. */}
+      {txKind(tx) === 'withdrawal' && (
+        <button data-testid="tx-ledger-withdraw-edit" onClick={() => openWithdrawEdit(tx)} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('edit')}><Edit2 size={14} color="var(--c-muted)" /></button>
       )}
       <button data-testid="tx-ledger-delete" onClick={() => askDelete(tx)} className="cn-btn ghost" style={{ ...iconHit }} aria-label={tc('delete')}><Trash size={14} color="var(--c-neg)" /></button>
     </span>
@@ -761,6 +816,29 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
           <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
             <button type="button" onClick={() => setFormMode(null)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
             <button type="submit" className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={saving}>{saving ? tc('saving') : tc('save')}</button>
+          </div>
+        </form>
+      </Shell>
+
+      {/* Correct a recorded withdrawal (#705) */}
+      <Shell open={!!wdTx} onClose={() => setWdTx(null)} title={t('editWithdrawTitle')} desktop={desktop} width={420} testId="tx-ledger-withdraw-edit-form">
+        <form onSubmit={(e) => { e.preventDefault(); handleWithdrawSave() }} style={{ display: 'grid', gap: 14 }}>
+          <Field label={t('receivedAmount')}>
+            <AmountInput data-testid="withdraw-received-input" value={wdForm.amount_vnd} onChange={(raw) => setWdForm((f) => ({ ...f, amount_vnd: raw }))} placeholder="10,000,000" className="cn-input tabular" />
+          </Field>
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('editWithdrawHint')}</p>
+          <Field label={t('colDate')}>
+            <input type="date" value={wdForm.investment_date} onChange={(e) => setWdForm((f) => ({ ...f, investment_date: e.target.value }))} className="cn-input tabular" />
+          </Field>
+          <Field label={tc('notes')}>
+            <textarea value={wdForm.notes} onChange={(e) => setWdForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="cn-input" style={{ resize: 'none' }} />
+          </Field>
+
+          {wdError && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{wdError}</p>}
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+            <button type="button" onClick={() => setWdTx(null)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
+            <button data-testid="withdraw-edit-save" type="submit" className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={wdSaving}>{wdSaving ? tc('saving') : tc('save')}</button>
           </div>
         </form>
       </Shell>

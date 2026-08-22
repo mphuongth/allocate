@@ -326,6 +326,9 @@
   },
   "transactions": {
     "title": "Giao dịch Đầu tư",
+    "editWithdrawTitle": "Sửa Giao dịch Rút",
+    "receivedAmount": "Số tiền thực nhận (VND)",
+    "editWithdrawHint": "Chỉ sửa số tiền ngân hàng thực trả. Tiền gốc đã rút khỏi khoản này giữ nguyên.",
     "ledgerTitle": "Giao dịch",
     "addTitle": "Thêm giao dịch",
     "editTitle": "Sửa giao dịch",

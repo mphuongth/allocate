@@ -326,6 +326,9 @@
   },
   "transactions": {
     "title": "Investment Transactions",
+    "editWithdrawTitle": "Edit Withdrawal",
+    "receivedAmount": "Amount received (VND)",
+    "editWithdrawHint": "Corrects the cash actually paid out. The principal this withdrawal took out of the holding is unchanged.",
     "ledgerTitle": "Transactions",
     "addTitle": "Add transaction",
     "editTitle": "Edit transaction",
