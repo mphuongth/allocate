@@ -68,6 +68,8 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const [showInvOptions, setShowInvOptions] = useState(false)
   const [showResolve, setShowResolve] = useState(false)
   const [showSell, setShowSell] = useState(false)
+  // The payout stated at the maturity sheet, carried into the withdraw sheet (#705).
+  const [sellPayout, setSellPayout] = useState<number | null>(null)
   const [showUnassignConfirm, setShowUnassignConfirm] = useState(false)
   const [unassigning, setUnassigning] = useState(false)
   const [unassignedIds, setUnassignedIds] = useState<string[]>([])
@@ -643,7 +645,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           isVi={isVi}
           onClose={() => setShowResolve(false)}
           onRenewed={() => { setShowResolve(false); (onRenewed ?? onDataChanged)() }}
-          onWithdraw={() => { setShowResolve(false); setTimeout(() => setShowSell(true), 80) }}
+          onWithdraw={(received) => { setShowResolve(false); setSellPayout(received ?? null); setTimeout(() => setShowSell(true), 80) }}
         />
       )}
 
@@ -663,6 +665,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
         <SellWithdrawSheet
           desktop
           open
+          receivedPrefill={sellPayout}
           item={invToSellItem(actionInv)}
           context="goal"
           goalId={goal.goalId}

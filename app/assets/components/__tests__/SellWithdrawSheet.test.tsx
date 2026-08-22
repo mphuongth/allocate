@@ -393,3 +393,30 @@ describe('SellWithdrawSheet — responsive presentation (#248)', () => {
     expect(screen.getByTestId('sell-body').style.paddingTop).toBe('16px')
   })
 })
+
+// #705: the maturity sheet's "Tổng nhận về" is now editable, and this is where
+// that number has to land. Opening the withdraw sheet from a maturity close means
+// the whole book goes: the amount is the full principal, and the cash is whatever
+// the user already told the maturity sheet the bank paid — not the estimate this
+// sheet would compute for itself.
+describe('SellWithdrawSheet — a payout carried over from the maturity sheet (#705)', () => {
+  const book = {
+    type: 'bank' as const, name: 'Vikki',
+    currentValue: 54_890_294, interestRate: 4.7,
+    transactionId: 't9', purchasePrice: 52_400_000,
+  }
+
+  it('opens on the full principal with the carried payout as the cash received', () => {
+    render(
+      <SellWithdrawSheet item={book} open context="unallocated" receivedPrefill={54_500_000} onClose={vi.fn()} onSuccess={vi.fn()} />,
+    )
+    expect((screen.getByTestId('sell-amount-input') as HTMLInputElement).value).toBe('52.400.000')
+    expect((screen.getByTestId('sell-received-input') as HTMLInputElement).value).toBe('54.500.000')
+  })
+
+  it('leaves the sheet blank when no payout was carried over', () => {
+    render(<SellWithdrawSheet item={book} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    expect((screen.getByTestId('sell-amount-input') as HTMLInputElement).value).toBe('')
+    expect((screen.getByTestId('sell-received-input') as HTMLInputElement).value).toBe('')
+  })
+})

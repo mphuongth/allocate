@@ -97,8 +97,10 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // SellWithdrawSheet so a goal-assigned deposit withdraws in one tap (linked to
   // its goal, issue #261) instead of bouncing through the goal detail panel.
   const [maturityWithdraw, setMaturityWithdraw] = useState<
-    { item: SellItem; goalId: string; goalCurrentValue: number; goalTargetAmount: number | null } | null
+    { item: SellItem; goalId: string; goalCurrentValue: number; goalTargetAmount: number | null; received: number | null } | null
   >(null)
+  // Same figure for the unallocated fork, which reuses the plain sell sheet (#705).
+  const [sellPayout, setSellPayout] = useState<number | null>(null)
   const [showReportSheet, setShowReportSheet] = useState(false)
   const [selectedInsuranceId, setSelectedInsuranceId] = useState<string | null>(null)
   const [desktopAddTxOpen, setDesktopAddTxOpen] = useState(false)
@@ -247,7 +249,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // the withdrawal links to the goal (issue #261); an unassigned one uses the
   // unallocated sell flow. Takes the dep explicitly because the resolve sheet
   // clears `resolveDep` before invoking onWithdraw.
-  function withdrawMaturingDeposit(dep: MaturingDep | null) {
+  // `received` is the payout the user stated at the maturity sheet (#705); it
+  // opens the withdraw sheet on their figure instead of a fresh estimate.
+  function withdrawMaturingDeposit(dep: MaturingDep | null, received?: number) {
     if (!dep) return
     const item = sellItemForMaturingDeposit(dep, isVi)
     if (dep.goalId) {
@@ -257,9 +261,11 @@ export default function DashboardClient({ userId }: { userId: string }) {
         goalId: dep.goalId,
         goalCurrentValue: goal?.currentValue ?? dep.raw.currentValue,
         goalTargetAmount: goal?.targetAmount ?? null,
+        received: received ?? null,
       })
     } else {
       setSellItem(item)
+      setSellPayout(received ?? null)
       setSellSheetOpen(true)
     }
   }
@@ -752,8 +758,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
         item={sellItem}
         open={sellSheetOpen}
         context="unallocated"
+        receivedPrefill={sellPayout}
         desktop={isDesktop}
-        onClose={() => setSellSheetOpen(false)}
+        onClose={() => { setSellSheetOpen(false); setSellPayout(null) }}
         onSuccess={() => fetchData({ force: true })}
       />
 
@@ -766,6 +773,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           goalId={maturityWithdraw.goalId}
           goalCurrentValue={maturityWithdraw.goalCurrentValue}
           goalTargetAmount={maturityWithdraw.goalTargetAmount}
+          receivedPrefill={maturityWithdraw.received}
           desktop={isDesktop}
           onClose={() => setMaturityWithdraw(null)}
           onSuccess={() => { setMaturityWithdraw(null); fetchData({ force: true }) }}
@@ -783,7 +791,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           isVi={isVi}
           onClose={() => setResolveDep(null)}
           onRenewed={() => { setResolveDep(null); fetchData({ force: true }) }}
-          onWithdraw={() => withdrawMaturingDeposit(resolveDep)}
+          onWithdraw={(received) => withdrawMaturingDeposit(resolveDep, received)}
         />
       )}
       {isDesktop && resolveDep && (
@@ -795,7 +803,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           isVi={isVi}
           onClose={() => setResolveDep(null)}
           onRenewed={() => { setResolveDep(null); fetchData({ force: true }) }}
-          onWithdraw={() => withdrawMaturingDeposit(resolveDep)}
+          onWithdraw={(received) => withdrawMaturingDeposit(resolveDep, received)}
         />
       )}
 

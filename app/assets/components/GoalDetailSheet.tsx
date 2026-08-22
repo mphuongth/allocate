@@ -66,6 +66,9 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [investActionOpen, setInvestActionOpen] = useState(false)
   const [resolveOpen, setResolveOpen] = useState(false)
   const [sellOpen, setSellOpen] = useState(false)
+  // The payout stated at the maturity sheet, carried into the withdraw sheet
+  // (#705). Null for every other way of opening it.
+  const [sellPayout, setSellPayout] = useState<number | null>(null)
   const [unassignConfirmOpen, setUnassignConfirmOpen] = useState(false)
   const [unassigning, setUnassigning] = useState(false)
   const [unassignedIds, setUnassignedIds] = useState<string[]>([])
@@ -812,11 +815,12 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
         isVi={isVI}
         onClose={() => setResolveOpen(false)}
         onRenewed={() => { setResolveOpen(false); onDataChanged() }}
-        onWithdraw={() => { setResolveOpen(false); setSellOpen(true) }}
+        onWithdraw={(received) => { setResolveOpen(false); setSellPayout(received ?? null); setSellOpen(true) }}
       />
 
       <SellWithdrawSheet
         open={sellOpen}
+        receivedPrefill={sellPayout}
         item={actionInv ? invToSellItem(actionInv) : null}
         context="goal"
         goalId={goal.goalId}

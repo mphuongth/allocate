@@ -6,7 +6,7 @@
 // state and passes it in. The renew/combine sections still live in the sheet and
 // import the field primitives from here.
 import { PiggyBank, ArrowDownToLine, Check, GitMerge } from 'lucide-react'
-import { fmt, fmtCompact } from '@/lib/formatters'
+import { fmtCompact } from '@/lib/formatters'
 import AmountInput from '@/components/ui/AmountInput'
 
 export const fieldLabel: React.CSSProperties = {
@@ -88,7 +88,7 @@ export function MoneyField({ label, value, onChange, testId }: { label: string; 
 // eligible anchor exists) plus the total payout. The sheet routes hold → the
 // held-settlement write and cash → its existing Sell/Withdraw flow.
 export function WithdrawSection({
-  t, canHold, holdAnchor, holdChoice, setHoldChoice, holdReceived, setHoldReceived, payout,
+  t, canHold, holdAnchor, holdChoice, setHoldChoice, holdReceived, setHoldReceived, payout, setPayout,
 }: {
   t: {
     holdForkPrompt: string
@@ -105,7 +105,8 @@ export function WithdrawSection({
   setHoldChoice: (v: 'hold' | 'cash') => void
   holdReceived: string
   setHoldReceived: (v: string) => void
-  payout: number
+  payout: string
+  setPayout: (v: string) => void
 }) {
   return (
         <div style={{ display: 'grid', gap: 12 }}>
@@ -148,10 +149,15 @@ export function WithdrawSection({
             </div>
           )}
 
-          <div style={{ border: '1px solid var(--c-line)', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--c-card-2)' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-muted)' }}>{t.totalPayout}</span>
-            <span style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmt(payout)}</span>
-          </div>
+          {/* The payout is an ESTIMATE — principal plus the interest accrued to
+              today. Closing early, a fee, or a bank that rounds its own way all
+              make the slip say something else, and this used to be a read-only
+              row with nowhere to put the real figure (#705). It is the field the
+              withdraw sheet then opens with. Hidden while holding: that fork has
+              its own received field just above. */}
+          {!(canHold && holdChoice === 'hold') && (
+            <MoneyField label={t.totalPayout} value={payout} onChange={setPayout} testId="maturity-payout-input" />
+          )}
         </div>
   )
 }
