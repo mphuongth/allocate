@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import TransactionLedgerSheet from '../TransactionLedgerSheet'
 
 // Keys pass through, but interpolated values come with them — a message whose
@@ -399,3 +399,67 @@ describe('TransactionLedgerSheet — editing a transaction under a finished goal
   })
 })
 
+
+// #705: a recorded withdrawal had NO edit affordance at all — the row offered
+// only delete — so a mistyped "số tiền nhận được" (the cash the bank actually
+// paid, stored as the withdrawal's amount_vnd) could only be fixed by deleting
+// the withdrawal and recording it again. The edit is deliberately narrow: the
+// cash received, the date and the notes. Principal withdrawn, the parent holding
+// and the asset type are what the withdrawal *claims* against its source — the
+// DB invariants measure those — so they stay out of this form.
+describe('TransactionLedgerSheet — a recorded withdrawal can have its received amount corrected (#705)', () => {
+  const base = {
+    asset_type: 'bank', investment_date: '2026-06-01', amount_vnd: 10_000_000,
+    savings_goals: { goal_name: 'House' },
+  }
+  const withdrawTx = { ...base, transaction_id: 'w1', transaction_type: 'withdrawal', notes: 'early close' }
+  const heldTx = { ...base, transaction_id: 'h1', transaction_type: 'withdrawal', held_for_merge: true }
+
+  let putCalls: { url: string; body: Record<string, unknown> }[]
+
+  function mockTxs(list: unknown[]) {
+    putCalls = []
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        putCalls.push({ url, body: JSON.parse(String(init.body)) })
+        return Promise.resolve({ ok: true, json: async () => ({}) })
+      }
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: list, total: list.length }) })
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  }
+
+  const props = { open: true, desktop: true, locale: 'en', onClose: vi.fn() }
+
+  it('opens a received-amount form prefilled from the row and PUTs only the fields it owns', async () => {
+    mockTxs([withdrawTx])
+    render(<TransactionLedgerSheet {...props} />)
+
+    const edit = await screen.findByTestId('tx-ledger-withdraw-edit')
+    edit.click()
+
+    const received = await screen.findByTestId('withdraw-received-input') as HTMLInputElement
+    expect(received.value).toBe('10.000.000')
+
+    fireEvent.change(received, { target: { value: '9.750.000' } })
+    screen.getByTestId('withdraw-edit-save').click()
+
+    await vi.waitFor(() => expect(putCalls).toHaveLength(1))
+    expect(putCalls[0].url).toBe('/api/v1/investment-transactions/w1')
+    expect(putCalls[0].body).toEqual({
+      amount_vnd: 9_750_000,
+      investment_date: '2026-06-01',
+      notes: 'early close',
+    })
+  })
+
+  it('leaves a held-for-merge settlement uneditable — its cash is a claim on the merge pool', async () => {
+    mockTxs([heldTx])
+    render(<TransactionLedgerSheet {...props} />)
+
+    await screen.findByTestId('tx-ledger-row')
+    expect(screen.queryByTestId('tx-ledger-withdraw-edit')).toBeNull()
+  })
+})
