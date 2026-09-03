@@ -67,9 +67,14 @@ export function buildRenewBody(args: {
   // maturing deposit no way to change bank at all (#640). Sent only when it
   // actually moves: the RPC reads null as "leave the bank as is", so an empty
   // pick can't clear one, and an unchanged pick would needlessly route a plain
-  // renewal through the merge function. A book collapses via a route that takes
-  // no bank, and a withdrawal opens no new cycle to place.
-  const movesBank = !isBook && mode !== 'withdraw' && !!destBank && destBank !== currentBank
+  // renewal through the merge function.
+  //
+  // Books included. They were excluded only because collapse_accumulating_book
+  // took no bank_code — an RPC signature deciding what the user was allowed to
+  // ask for. It takes one now, on identical coalesce semantics, so the rule here
+  // is about the ACT rather than the shape of the holding: a withdrawal opens no
+  // new cycle to place, and everything that re-deposits gets the choice.
+  const movesBank = mode !== 'withdraw' && !!destBank && destBank !== currentBank
   return {
     amount_vnd: isCombine ? Math.round(redepositNum) : Math.round(newPrincipal),
     interest_rate: Number(rate),

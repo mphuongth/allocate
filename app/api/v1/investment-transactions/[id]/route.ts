@@ -370,6 +370,23 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         { status: 409 },
       )
     }
+    // A renewal — and a book collapse — rolls the SAME row forward and appends a
+    // history snapshot pointing back at it, so the row Recent Activity shows
+    // dated "the day I renewed" IS the deposit, not a record of the renewal.
+    // Deleting it removes the holding and, because the link is ON DELETE SET
+    // NULL, hands every closed cycle back as a live holding at its old principal
+    // and old maturity. 20260903000001 refuses that; this says so in terms the
+    // user can act on, because a 500 would call an ordinary ledger click a server
+    // fault. The prefix marks a rule this codebase authored.
+    if (error.message?.startsWith('renewal history: ')) {
+      return NextResponse.json(
+        {
+          error: 'This deposit has been renewed, so its past cycles are recorded against it. Delete those cycles from the goal history first if you really mean to remove it.',
+          code: 'renewal_history',
+        },
+        { status: 409 },
+      )
+    }
     // The mirror image of the guard above. Two columns reference this table with
     // no ON DELETE action, so deleting a deposit that either one points at raises
     // a foreign-key violation — a conflict the user can resolve, not a server

@@ -94,13 +94,22 @@ describe('buildRenewBody', () => {
     expect(b.merge_sources).toBeUndefined()
   })
 
-  it('omits bank_code when the bank is unchanged, or unset, or the holding is a book', () => {
+  // A book re-deposits at maturity exactly as a lone deposit does, and had no way
+  // to change bank purely because collapse_accumulating_book took no bank_code.
+  // It does now, so the book path sends it on the same terms as every other.
+  it('a book collapse can move to another bank too', () => {
+    const b = buildRenewBody({ mode: 'principal_interest', ...bodyBase, isBook: true, currentBank: 'PVCB', destBank: 'MB' })
+    expect(b.bank_code).toBe('MB')
+    // Still no client-side interest: the collapse route derives it per tranche.
+    expect(b.interest_earned_vnd).toBeUndefined()
+  })
+
+  it('omits bank_code when the bank is unchanged, or unset, or the deposit is being withdrawn', () => {
     // Unchanged: nothing to move, so the request stays a plain renewal.
     expect(buildRenewBody({ mode: 'principal_interest', ...bodyBase, currentBank: 'PVCB', destBank: 'PVCB' }).bank_code).toBeUndefined()
     // "Không đặt" can't clear a bank (the RPC reads null as "leave as is").
     expect(buildRenewBody({ mode: 'principal_interest', ...bodyBase, currentBank: 'PVCB', destBank: '' }).bank_code).toBeUndefined()
-    // A book collapses through a route that takes no bank.
-    expect(buildRenewBody({ mode: 'principal_interest', ...bodyBase, isBook: true, currentBank: 'PVCB', destBank: 'MB' }).bank_code).toBeUndefined()
+    expect(buildRenewBody({ mode: 'principal_interest', ...bodyBase, isBook: true, currentBank: 'PVCB', destBank: 'PVCB' }).bank_code).toBeUndefined()
     // Withdrawing opens no new cycle to place at a bank.
     expect(buildRenewBody({ mode: 'withdraw', ...bodyBase, currentBank: 'PVCB', destBank: 'MB' }).bank_code).toBeUndefined()
   })

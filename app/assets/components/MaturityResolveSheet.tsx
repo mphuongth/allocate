@@ -235,12 +235,11 @@ export function MaturityResolveBody({
     mergeProvenance(inv, selectedSources)
 
   // Load the bank reference list once for the destination picker. Every renewal
-  // of a single deposit offers it now — moving the money to another bank is the
-  // ordinary reason to re-deposit (#640) — so this no longer waits for a sibling
-  // to merge. A book keeps its own bank (collapse takes none), so it still skips
-  // the request. Failure is non-fatal: the picker simply doesn't render.
+  // offers it now — moving the money to another bank is the ordinary reason to
+  // re-deposit (#640) — so this waits neither for a sibling to merge nor, since
+  // the collapse RPC takes a destination bank, for the holding to be a single
+  // deposit. Failure is non-fatal: the picker simply doesn't render.
   useEffect(() => {
-    if (isBook) return
     let cancelled = false
     fetch('/api/v1/banks')
       .then((r) => (r.ok ? r.json() : []))
@@ -249,7 +248,9 @@ export function MaturityResolveBody({
       .then((d: unknown) => { if (!cancelled) setBanks(Array.isArray(d) ? d as { code: string; name: string }[] : []) })
       .catch(() => {})
     return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Genuinely once, on mount: the reference list is the same whatever the
+    // holding is. Dropping the isBook early-return took the last dependency out
+    // of this effect with it, so the disable it used to need is gone too.
   }, [])
 
   useEffect(() => {
@@ -877,9 +878,10 @@ export function MaturityResolveBody({
 
       {/* Where the new cycle is deposited. Shown for every renewal — a matured
           deposit moving to another bank is the ordinary case, and it used to be
-          reachable only after picking a sibling to merge (#640). A book collapses
-          through a route that takes no bank, so it keeps its own. */}
-      {!hasSuccessor && mode !== 'withdraw' && !isBook && banks.length > 0 && (
+          reachable only after picking a sibling to merge (#640). A book gets the
+          same choice: it was hidden here purely because the collapse RPC took no
+          bank, which made a missing argument look like a decision. */}
+      {!hasSuccessor && mode !== 'withdraw' && banks.length > 0 && (
         <DestinationBankField
           banks={banks} value={destBank} onChange={setDestBank}
           label={t.destBankLabel} noneLabel={t.destBankNone}

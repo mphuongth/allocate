@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { ValidationError, validateAmount, validateDate, validateRate, validateUUID } from '@/lib/validation'
+import { ValidationError, validateAmount, validateBankCode, validateDate, validateRate, validateUUID } from '@/lib/validation'
 import { isFutureInvestmentDate, MATURITY_ANCHOR_GRACE_DAYS } from '@/lib/dates'
 import { buildCollapsePlan, type CollapseTrancheInput } from '@/lib/accumulating'
 import { readJsonBody } from '@/lib/apiBody'
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
   const body = parsed.body
-  const { amount_vnd, interest_rate, expiry_date, investment_date, fulfill_recurring } = body
+  const { amount_vnd, interest_rate, expiry_date, investment_date, fulfill_recurring, bank_code } = body
 
   let groupId: string
   let cleanAmount: number
@@ -37,6 +37,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let cleanFulfillSavingId: string | null = null
   let cleanFulfillYm: string | null = null
   let cleanFulfillAmount: number | null = null
+  // Destination bank for the collapsed deposit. null (or omitted) leaves the
+  // book's own bank untouched — the RPC coalesces, exactly as the renew path does.
+  let cleanBankCode: string | null = null
   try {
     groupId = validateUUID(id, 'group_id')
     cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
@@ -54,6 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (!Number.isFinite(a) || a < 0) throw new ValidationError('fulfill_recurring.amount must be a non-negative number')
       cleanFulfillAmount = Math.round(a)
     }
+    if (bank_code != null && bank_code !== '') cleanBankCode = validateBankCode(bank_code, 'bank_code')
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -140,6 +144,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       p_fulfill_ym: cleanFulfillYm,
       p_fulfill_amount: cleanFulfillAmount,
       p_fulfill_source: cleanFulfillSavingId ? 'maturity-collapse' : null,
+      // Where the collapsed deposit lands; null leaves the book's bank as is.
+      p_bank_code: cleanBankCode,
     })
     .single()
   if (rpcErr || !collapsed) {

@@ -195,6 +195,26 @@ describe('DELETE /api/v1/investment-transactions/[id]', () => {
     expect(body.error).toMatch(/settlement/i)
   })
 
+  // A renewal — and a book collapse — rolls the SAME row forward and appends a
+  // history snapshot pointing back at it, so the row Recent Activity shows dated
+  // "the day I renewed" IS the deposit. Deleting it removes the holding and, via
+  // ON DELETE SET NULL, hands every snapshot back as a live holding of a closed
+  // cycle. The database refuses it; this maps the refusal to something the user
+  // can act on, because 500 would call an ordinary ledger click a server fault.
+  it('returns 409 when the deposit still carries renewal history', async () => {
+    h.deleteResult = {
+      data: null,
+      error: { code: '23514', message: 'renewal history: deposit has 5 closed cycle(s) recorded against it' },
+    }
+
+    const res = await call()
+
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.code).toBe('renewal_history')
+    expect(body.error).toMatch(/history/i)
+  })
+
   // Deleting a holding that a withdrawal still draws on is refused by the source
   // side of the withdrawal invariant (#608): the cash would be left filed under no
   // holding, which is silent and permanent. Like the settlement above it arrives as
