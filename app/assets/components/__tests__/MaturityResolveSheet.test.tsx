@@ -466,6 +466,33 @@ describe('MaturityResolveBody', () => {
       expect(JSON.parse(renewCall[1].body).bank_code).toBe('VCB')
     })
 
+    // An accumulating book re-deposits at maturity exactly as a lone deposit does,
+    // so it needs the same choice of where the money lands. The picker was hidden
+    // for books purely because collapse_accumulating_book took no bank_code — a
+    // gap in the RPC surfacing as a missing control, which left "move my matured
+    // savings book to another bank" with no route through the app at all.
+    it('offers the destination bank for an accumulating book and collapses into it', async () => {
+      const user = userEvent.setup()
+      const fetchMock = stubBanksAndRecurring()
+      const book: InvRow = { ...maturedDeposit, bankCode: 'TCB', depositGroupId: maturedDeposit.id }
+      render(
+        <MaturityResolveBody inv={book} goalId="goal-1" siblingDeposits={[book]}
+          isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+      )
+
+      const sel = (await screen.findByTestId('dest-bank')) as HTMLSelectElement
+      expect(sel.value).toBe('TCB')
+      fireEvent.change(sel, { target: { value: 'VCB' } })
+      await user.click(screen.getByRole('button', { name: /Confirm renewal/i }))
+
+      await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith('/collapse'))).toBe(true))
+      const call = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/collapse'))!
+      const body = JSON.parse(call[1].body)
+      expect(body.bank_code).toBe('VCB')
+      // The collapse route still derives realized interest per tranche.
+      expect(body.interest_earned_vnd).toBeUndefined()
+    })
+
     it('leaves bank_code out when the bank is not changed', async () => {
       const user = userEvent.setup()
       const fetchMock = stubBanksAndRecurring()

@@ -7,6 +7,7 @@ export type DeleteFailureCode =
   | 'settlement_pending'    // a settlement is held, waiting to merge into this one
   | 'referenced'            // some other record still points at this row
   | 'withdrawal_invariant'  // a withdrawal still draws on this holding (#608)
+  | 'renewal_history'       // this deposit's closed cycles still point at it
   | 'not_found'             // already gone
   | 'delete_failed'         // the server tried and failed
   | 'network'               // the request never got an answer
@@ -50,7 +51,7 @@ export async function deleteTransaction(txId: string): Promise<DeleteResult> {
 // the client did not, and the actionable half of the change was invisible.
 export const DELETE_FAILURE_CODES: readonly DeleteFailureCode[] = [
   'settlement_consumed', 'merge_target', 'settlement_pending',
-  'referenced', 'withdrawal_invariant', 'not_found', 'delete_failed', 'network', 'unknown',
+  'referenced', 'withdrawal_invariant', 'renewal_history', 'not_found', 'delete_failed', 'network', 'unknown',
 ]
 
 function isFailureCode(v: unknown): v is DeleteFailureCode {

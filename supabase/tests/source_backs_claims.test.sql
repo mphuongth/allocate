@@ -506,8 +506,17 @@ begin
    where parent_transaction_id = v_bank and transaction_type = 'withdrawal';
   delete from public.investment_transactions where transaction_id = v_bank;
 
-  -- Renewal and collapse re-parent partial withdrawals onto the history snapshot
-  -- BEFORE removing the row they came from (#585). That order still deletes.
+  -- A collapse re-parents a tranche's partial withdrawals onto the history
+  -- snapshot BEFORE deleting the tranche they came from (#585). That order still
+  -- deletes: the moved withdrawal no longer names the row going away.
+  --
+  -- The snapshot names the SURVIVING anchor, not the tranche being deleted, which
+  -- is what the collapse loop actually writes (renewed_from = p_group_id). Built
+  -- the other way round this fixture asserted that a row could be deleted while
+  -- its own renewal history pointed at it — a shape no flow produces, and the one
+  -- 20260903000001 exists to refuse.
+  insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 40000000) returning transaction_id into v_other;
   insert into public.investment_transactions (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd)
   values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000) returning transaction_id into v_bank;
   insert into public.investment_transactions
@@ -515,7 +524,7 @@ begin
   values (v_user, v_goal, 'bank', 'withdrawal', '2026-02-01', 60000000, v_bank, 60000000);
   insert into public.investment_transactions
     (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, renewed_from_transaction_id)
-  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000, v_bank) returning transaction_id into v_snap;
+  values (v_user, v_goal, 'bank', 'investment', '2026-01-01', 100000000, v_other) returning transaction_id into v_snap;
   update public.investment_transactions
      set parent_transaction_id = v_snap
    where parent_transaction_id = v_bank and transaction_type = 'withdrawal';
