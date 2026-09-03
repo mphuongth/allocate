@@ -195,6 +195,24 @@ describe('DELETE /api/v1/investment-transactions/[id]', () => {
     expect(body.error).toMatch(/settlement/i)
   })
 
+  // deposit_group_id carries no foreign key, so deleting a book's anchor used to
+  // go through and leave its top-ups naming a row that is gone. Nothing looks
+  // wrong until maturity, when the book can no longer be collapsed at all — so
+  // the refusal has to arrive as something the user can act on now.
+  it('returns 409 when the row anchors a book that still holds top-ups', async () => {
+    h.deleteResult = {
+      data: null,
+      error: { code: '23514', message: 'deposit book: this deposit anchors an accumulating book that still holds top-ups, so it cannot be removed on its own' },
+    }
+
+    const res = await call()
+
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.code).toBe('book_anchor')
+    expect(body.error).toMatch(/instalment/i)
+  })
+
   // A renewal — and a book collapse — rolls the SAME row forward and appends a
   // history snapshot pointing back at it, so the row Recent Activity shows dated
   // "the day I renewed" IS the deposit. Deleting it removes the holding and, via

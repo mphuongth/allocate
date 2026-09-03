@@ -898,6 +898,7 @@
     "referenced": "Bản ghi khác vẫn tham chiếu tới giao dịch này. Hãy gỡ tham chiếu đó trước khi xoá.",
     "withdrawal_invariant": "Có khoản rút/bán ghi nhận trên khoản này. Hãy xoá khoản rút/bán đó trước khi xoá.",
     "renewal_history": "Sổ này đã được tái tục — các kỳ đã đóng vẫn ghi nhận vào nó, và xoá dòng này là xoá chính sổ tiết kiệm. Nếu thật sự muốn xoá, hãy xoá các kỳ đó trong lịch sử của mục tiêu trước.",
+    "book_anchor": "Sổ này là lần gửi đầu tiên của một sổ tiết kiệm tích luỹ, và các lần gửi góp sau đang được ghi nhận vào nó. Hãy xoá các lần gửi góp đó trước, hoặc xoá cả sổ.",
     "not_found": "Giao dịch này không còn tồn tại.",
     "delete_failed": "Không xoá được giao dịch. Vui lòng thử lại.",
     "network": "Lỗi kết nối — giao dịch chưa được xoá.",
