@@ -18,6 +18,7 @@ import { FundNavAge } from './FundNavAge'
 import type { Fund, Goal, FundType, FundsData, FundsBusy } from './useFundsData'
 import { useFundMutations } from './useFundMutations'
 import { useDialogMount } from '@/components/ui/useDialogMount'
+import { clickAway } from '@/components/ui/clickAway'
 
 // Matches the design's exact icon paths (stroke-based, strokeWidth 1.75)
 const IconEdit = ({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) => (
@@ -164,7 +165,9 @@ function Sheet({ open, onClose, testId, ariaLabel, dismissOnBackdrop = true, chi
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.3)', zIndex: 200, pointerEvents: open ? 'auto' : 'none', display: 'flex', alignItems: 'flex-end' }}
       // Form sheets opt out of backdrop dismissal so a stray tap doesn't discard
       // typed input; they're closed via the Cancel button (#2 P2).
-      onClick={dismissOnBackdrop ? onClose : undefined}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(dismissOnBackdrop ? onClose : undefined)}
     >
       <div
         ref={sheetRef}

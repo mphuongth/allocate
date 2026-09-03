@@ -7,6 +7,7 @@ import { useLocale } from 'next-intl'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import LoadError from './LoadError'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
+import { clickAway } from '@/components/ui/clickAway'
 
 interface GoalOption {
   id: string
@@ -268,7 +269,9 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
   if (desktop) {
     return (
       <div
-        onClick={onClose}
+        // A selection dragged out of the panel releases here; that is not a
+        // click-away, and it used to close the sheet mid-edit.
+        {...clickAway(onClose)}
         style={{
           position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
@@ -305,7 +308,9 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
         position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
         zIndex: 100, pointerEvents: open ? 'auto' : 'none',
       }}
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
     >
       <div
         role="dialog"

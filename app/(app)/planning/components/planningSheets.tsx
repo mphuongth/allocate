@@ -13,6 +13,7 @@ import { TrashIcon } from './planningIcons'
 import { saveIncome, deletePlan, saveOtherExpense } from '../planActions'
 import type { MonthlyPlan, OtherExpense } from '@/features/planning/contracts'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
+import { clickAway } from '@/components/ui/clickAway'
 
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   const mounted = useDialogMount(open)
@@ -27,7 +28,9 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
         zIndex: 200, pointerEvents: open ? 'auto' : 'none',
         display: 'flex', alignItems: 'flex-end',
       }}
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
     >
       <div
         ref={dialogRef}

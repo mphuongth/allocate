@@ -11,6 +11,7 @@ import type { InsuranceData } from '@/features/dashboard/contracts'
 import LogInsurancePaymentModal from './LogInsurancePaymentModal'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
+import { clickAway } from '@/components/ui/clickAway'
 
 interface Props {
   ins: InsuranceData
@@ -532,7 +533,9 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
 
       {showDeleteConfirm && (
         <div
-          onClick={() => !deleting && setShowDeleteConfirm(false)}
+          // A selection dragged out of the panel releases here; that is not a
+          // click-away, and it used to close the sheet mid-edit.
+          {...clickAway(() => !deleting && setShowDeleteConfirm(false))}
           style={{
             position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)',
             zIndex: 210, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -600,7 +603,9 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
 
       {deleteEntryId && (
         <div
-          onClick={() => !deletingEntry && setDeleteEntryId(null)}
+          // A selection dragged out of the panel releases here; that is not a
+          // click-away, and it used to close the sheet mid-edit.
+          {...clickAway(() => !deletingEntry && setDeleteEntryId(null))}
           style={{
             position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)',
             zIndex: 210, display: 'flex', alignItems: 'center', justifyContent: 'center',

@@ -9,6 +9,7 @@ import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { CairnLoader } from '@/components/ui/CairnLoader'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 import { monthsUntilYm } from '@/lib/dates'
+import { clickAway } from '@/components/ui/clickAway'
 
 interface Props {
   open: boolean
@@ -287,7 +288,9 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
   if (desktop) {
     return (
       <div
-        onClick={onClose}
+        // A selection dragged out of the panel releases here; that is not a
+        // click-away, and it used to close the sheet mid-edit.
+        {...clickAway(onClose)}
         style={{
           position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
@@ -320,7 +323,9 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
 
   return (
     <div
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
       style={{
         position: 'fixed', inset: 0,
         background: 'rgba(15, 23, 42, 0.45)',

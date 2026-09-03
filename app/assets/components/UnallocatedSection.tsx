@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl'
 import { useLocale } from 'next-intl'
 import type { FundBreakdownItem, NonFundUnallocatedItem } from '@/features/dashboard/contracts'
 import { fmtCompact, fmtNav, fmtPct } from '@/lib/formatters'
+import { clickAway } from '@/components/ui/clickAway'
 
 function DesktopAssignPicker({
   goals, loading, selected, onSelect, confirming, error, success, successName,
@@ -581,7 +582,9 @@ export default function UnallocatedSection({
         {actionTarget && (
           <div
             data-testid="action-sheet"
-            onClick={closeAction}
+            // A selection dragged out of the panel releases here; that is not a
+            // click-away, and it used to close the sheet mid-edit.
+            {...clickAway(closeAction)}
             style={{
               position: 'fixed', inset: 0,
               background: 'rgba(15, 23, 42, 0.4)',
@@ -700,7 +703,9 @@ export default function UnallocatedSection({
       {actionTarget && (
         <div
           data-testid="action-sheet"
-          onClick={closeAction}
+          // A selection dragged out of the panel releases here; that is not a
+          // click-away, and it used to close the sheet mid-edit.
+          {...clickAway(closeAction)}
           style={{
             position: 'fixed', inset: 0,
             background: 'rgba(15, 23, 42, 0.2)',

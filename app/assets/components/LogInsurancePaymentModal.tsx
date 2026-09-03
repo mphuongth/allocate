@@ -6,6 +6,7 @@ import { fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { todayIso } from '@/lib/dates'
 import type { InsuranceData } from '@/features/dashboard/contracts'
+import { clickAway } from '@/components/ui/clickAway'
 
 interface Props {
   open: boolean
@@ -98,7 +99,9 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
   return (
     <div
       data-testid="log-payment-modal"
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)',
         zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',

@@ -9,6 +9,7 @@ import { CairnLoader } from '@/components/ui/CairnLoader'
 import { formatBusinessDate } from '@/lib/dates'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
+import { clickAway } from '@/components/ui/clickAway'
 
 interface Props {
   open: boolean
@@ -219,7 +220,9 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
   if (desktop) {
     return (
       <div
-        onClick={onClose}
+        // A selection dragged out of the panel releases here; that is not a
+        // click-away, and it used to close the sheet mid-edit.
+        {...clickAway(onClose)}
         style={{
           position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
@@ -259,7 +262,9 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
         position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
         zIndex: 100, pointerEvents: open ? 'auto' : 'none',
       }}
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
     >
       <div
         ref={dialogRef}

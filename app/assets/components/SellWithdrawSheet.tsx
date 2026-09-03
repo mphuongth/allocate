@@ -15,6 +15,7 @@ export type { SellItem } from '@/features/dashboard/contracts'
 import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
 import { goldCostBasis, goldUnitCost } from '@/lib/goldWithdrawal'
 import { fundCostBasis } from '@/lib/fundWithdrawal'
+import { clickAway } from '@/components/ui/clickAway'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
 
 interface Props {
@@ -381,7 +382,9 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
   return (
     <div
       data-testid="sell-sheet"
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
       style={{
         position: 'fixed', inset: 0,
         background: desktop ? 'rgba(15, 23, 42, 0.4)' : 'rgba(15, 23, 42, 0.2)',
