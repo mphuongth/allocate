@@ -898,6 +898,7 @@
     "referenced": "Another record still references this transaction. Remove that reference before deleting it.",
     "withdrawal_invariant": "A withdrawal or sale is recorded against this holding. Remove it before deleting the holding.",
     "renewal_history": "This deposit has been renewed — its past cycles are recorded against it, and deleting it would remove the deposit itself. Delete those cycles from the goal’s history first if you really mean to.",
+    "book_anchor": "This deposit is the first instalment of an accumulating savings book, and the later instalments are filed under it. Remove those first, or delete the whole book.",
     "not_found": "This transaction no longer exists.",
     "delete_failed": "Couldn’t delete this transaction. Please try again.",
     "network": "Connection problem — the transaction wasn’t deleted.",

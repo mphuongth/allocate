@@ -370,6 +370,21 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         { status: 409 },
       )
     }
+    // The anchor of an accumulating book that still holds top-ups (20260903000003).
+    // deposit_group_id has no foreign key, so nothing else would have stopped it,
+    // and the damage only surfaces at maturity when the book can no longer be
+    // collapsed. A conflict with a remedy — remove the top-ups, or dissolve the
+    // book — not a fault. This is the only 'deposit book: ' refusal a DELETE can
+    // reach: the other two in that family are both UPDATE-side (20260802000002).
+    if (error.message?.startsWith('deposit book: ')) {
+      return NextResponse.json(
+        {
+          error: 'This deposit is the first instalment of an accumulating book, and the later instalments are filed under it. Remove them first, or delete the whole book.',
+          code: 'book_anchor',
+        },
+        { status: 409 },
+      )
+    }
     // A renewal — and a book collapse — rolls the SAME row forward and appends a
     // history snapshot pointing back at it, so the row Recent Activity shows
     // dated "the day I renewed" IS the deposit, not a record of the renewal.
