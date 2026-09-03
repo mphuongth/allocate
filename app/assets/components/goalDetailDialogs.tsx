@@ -15,6 +15,7 @@ import { needsMaturityAction, needsBookMaturityAction } from './goalDetailMaturi
 import { buildRenewalSummary } from './goalDetailRows'
 import { updateGoal } from './goalActions'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
+import { clickAway } from '@/components/ui/clickAway'
 
 export function GoalActionsSheet({
   open,
@@ -73,7 +74,9 @@ export function GoalActionsSheet({
         position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
         zIndex: 150, pointerEvents: open ? 'auto' : 'none',
       }}
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
     >
       <div
         style={{
@@ -226,7 +229,9 @@ export function DeleteGoalConfirmSheet({
         position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
         zIndex: 170, pointerEvents: open ? 'auto' : 'none',
       }}
-      onClick={() => { if (!isDeleting) onCancel() }}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(() => { if (!isDeleting) onCancel() })}
     >
       <div
         role="dialog"
@@ -334,7 +339,9 @@ export function EditGoalSheet({
         position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
         zIndex: 160, pointerEvents: open ? 'auto' : 'none',
       }}
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
     >
       <div
         style={{
@@ -479,7 +486,9 @@ export function InvestmentActionSheet({
         position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
         zIndex: 150, pointerEvents: open ? 'auto' : 'none',
       }}
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
     >
       <div
         style={{
@@ -667,7 +676,9 @@ export function UnassignConfirmSheet({
         position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)',
         zIndex: 160, pointerEvents: open ? 'auto' : 'none',
       }}
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
     >
       <div
         style={{

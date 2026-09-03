@@ -14,6 +14,7 @@ import {
   type SettingsViewProps,
 } from '@/features/settings/settingsOptions'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
+import { clickAway } from '@/components/ui/clickAway'
 
 // ─── Bottom sheet wrapper ──────────────────────────────────────────────────────
 
@@ -41,7 +42,9 @@ function BottomSheet({ open, onClose, title, dismissOnBackdrop = true, children 
       }}
       // Form sheets (the profile editor) opt out of backdrop dismissal so a
       // stray tap doesn't discard a half-typed name. Esc + Cancel still close.
-      onClick={dismissOnBackdrop ? onClose : undefined}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(dismissOnBackdrop ? onClose : undefined)}
     >
       <div
         ref={dialogRef}

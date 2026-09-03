@@ -43,6 +43,7 @@ import { computeNewPrincipal, renewEndpoint, buildRenewBody } from '@/features/d
 import { linkedSavingFor, type RecurringLinkCandidate, type RecurringLinkResult } from '@/lib/recurringLink'
 import { classifyMergeSources, type MergeBlockReason } from '@/lib/mergeEligibility'
 import { todayIso } from '@/lib/dates'
+import { clickAway } from '@/components/ui/clickAway'
 
 type Mode = RenewMode | 'withdraw' | 'combine'
 
@@ -950,7 +951,9 @@ export function MaturityResolveSheet({
   return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.2)', zIndex: 170 }}
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -988,7 +991,9 @@ export function MaturityResolveModal({
 }) {
   return (
     <div
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,

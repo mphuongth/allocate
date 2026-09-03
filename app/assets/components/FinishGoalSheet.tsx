@@ -20,6 +20,7 @@ import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 import { useManagedTimeout } from '@/components/ui/useManagedTimeout'
 import { TypeIcon } from './goalDetailShared'
 import type { InvRow } from '@/features/dashboard/contracts'
+import { clickAway } from '@/components/ui/clickAway'
 import {
   buildFinishHoldings, finishPlanFrom, isFinishPlanComplete, realizedFor, totalRealized,
   type FinishHolding, type FinishInput, type ServerHolding,
@@ -224,7 +225,9 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
   return (
     <div
       data-testid="finish-goal-sheet"
-      onClick={handleClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(handleClose)}
       style={{
         position: 'fixed', inset: 0,
         background: desktop ? 'rgba(15, 23, 42, 0.4)' : 'rgba(15, 23, 42, 0.2)',

@@ -6,6 +6,7 @@ import { fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { COVERAGE_OPTIONS } from './insuranceShared'
 import { todayIso } from '@/lib/dates'
+import { clickAway } from '@/components/ui/clickAway'
 
 interface Props {
   open: boolean
@@ -212,7 +213,9 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
     return (
       <div
         data-testid="add-insurance-modal"
-        onClick={onClose}
+        // A selection dragged out of the panel releases here; that is not a
+        // click-away, and it used to close the sheet mid-edit.
+        {...clickAway(onClose)}
         style={{
           position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)',
           zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -262,7 +265,9 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
   return (
     <div
       data-testid="add-insurance-modal"
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)',
         zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',

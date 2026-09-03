@@ -24,6 +24,7 @@ import { invToSellItem } from './invToSellItem'
 import { useTranslations } from 'next-intl'
 import { useResetOnOpen, useResetOnChange } from '@/components/ui/useDialogMount'
 import { monthsUntilYm } from '@/lib/dates'
+import { clickAway } from '@/components/ui/clickAway'
 
 interface Props {
   goal: GoalData
@@ -841,7 +842,9 @@ function DModal({ onClose, title, width = 380, children }: {
 }) {
   return (
     <div
-      onClick={onClose}
+      // A selection dragged out of the panel releases here; that is not a
+      // click-away, and it used to close the sheet mid-edit.
+      {...clickAway(onClose)}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200,
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,

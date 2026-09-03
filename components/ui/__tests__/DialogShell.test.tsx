@@ -121,6 +121,49 @@ describe('DialogShell — dismissal (#688)', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
+  // Selecting the text in a field by dragging — press inside the input, sweep
+  // past the panel edge, release — closed the dialog and threw the form away.
+  // The panel's onClick stopPropagation cannot catch it: a press and a release in
+  // different elements fire the click on their nearest COMMON ancestor, which is
+  // the overlay, so the panel is not on the event path at all. Nothing about the
+  // gesture is a click-away, and the user loses what they typed.
+  it('does not close when a selection drag starts in the panel and ends on the overlay', () => {
+    const onClose = vi.fn()
+    render(
+      <DialogShell onClose={onClose} label="d" panelProps={{ 'data-testid': 'panel' }}>
+        <input data-testid="field" defaultValue="55000000" />
+      </DialogShell>,
+    )
+    const overlay = screen.getByTestId('dialog-overlay')
+
+    fireEvent.pointerDown(screen.getByTestId('field'))
+    fireEvent.pointerUp(overlay)
+    fireEvent.click(overlay)
+
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  // The suppression above lasts exactly one gesture. A dialog that stopped
+  // answering the backdrop after any drag would be a worse bug than the one fixed.
+  it('still closes on the next genuine backdrop click after such a drag', async () => {
+    const onClose = vi.fn()
+    render(
+      <DialogShell onClose={onClose} label="d" panelProps={{ 'data-testid': 'panel' }}>
+        <input data-testid="field" defaultValue="55000000" />
+      </DialogShell>,
+    )
+    const overlay = screen.getByTestId('dialog-overlay')
+
+    fireEvent.pointerDown(screen.getByTestId('field'))
+    fireEvent.pointerUp(overlay)
+    fireEvent.click(overlay)
+    expect(onClose).not.toHaveBeenCalled()
+
+    await userEvent.click(overlay)
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('holds the overlay shut while a save is in flight', async () => {
     // Clicking away mid-save used to discard a form that was already writing.
     const onClose = vi.fn()

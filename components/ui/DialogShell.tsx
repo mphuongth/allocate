@@ -2,6 +2,7 @@
 
 import { useRef, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { useDialogA11y } from './useDialogA11y'
+import { clickAway } from './clickAway'
 
 // The dialog contract as a component, not as a checklist (#688).
 //
@@ -61,7 +62,9 @@ export default function DialogShell({
   return (
     <div
       data-testid="dialog-overlay"
-      onClick={() => dismissOnClickAway && onClose()}
+      // clickAway, not a bare onClick: a selection dragged out of the panel
+      // releases on this element and would otherwise read as a click-away.
+      {...clickAway(dismissOnClickAway ? onClose : undefined)}
       style={{ ...OVERLAY, ...overlayStyle }}
       {...overlayProps}
     >
