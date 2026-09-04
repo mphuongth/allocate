@@ -540,6 +540,36 @@ describe('describeHistoryRow', () => {
     expect(describeHistoryRow({ transaction_type: 'investment' }, false, false).name).toBe('Investment')
     expect(describeHistoryRow({ transaction_type: 'investment' }, false, true).name).toBe('Khoản đầu tư')
   })
+
+  // #713 taught the ledger's txPrimaryName that a withdrawal's source name
+  // outranks its own free-text action note ("Rút để gộp gửi" describes the
+  // action, not the source). This goal-detail row descriptor is a SEPARATE copy
+  // of the naming logic and did not call that function, so the History tab kept
+  // showing the action note after the ledger had already been fixed — reported
+  // live against the "Thuế và Thầu" goal.
+  it('a withdrawal prefers the source name (parentNotes) over its own action note', () => {
+    const d = describeHistoryRow(
+      { transaction_type: 'withdrawal', notes: 'Rút để gộp gửi', parentNotes: 'PVcombank' },
+      false, false,
+    )
+    expect(d.name).toBe('PVcombank')
+  })
+
+  it('falls back to its own note when the source has no name', () => {
+    const d = describeHistoryRow(
+      { transaction_type: 'withdrawal', notes: 'Rút để gộp gửi', parentNotes: null },
+      false, false,
+    )
+    expect(d.name).toBe('Rút để gộp gửi')
+  })
+
+  it('a fund name still wins over everything on a withdrawal, unaffected by the swap', () => {
+    const d = describeHistoryRow(
+      { transaction_type: 'withdrawal', fund_name: 'VESAF', notes: 'Rút để gộp gửi', parentNotes: 'PVcombank' },
+      false, false,
+    )
+    expect(d.name).toBe('VESAF')
+  })
 })
 
 // #656: a credited tranche's "Gộp từ <A>" used to die with the successor's first

@@ -76,7 +76,43 @@ export async function GET(request: NextRequest) {
   const { data: transactions, error, count } = await query
 
   if (error) return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 })
-  return NextResponse.json({ transactions, total: count ?? 0, page, limit })
+
+  // A withdrawal carries no notes of its own (SellWithdrawSheet posts only
+  // parent_transaction_id, amount and principal), so without this it named
+  // nothing more specific than its asset type. The name that answers "withdrawn
+  // from where" already lives on the row `parent_transaction_id` points at — a
+  // renewal re-parents a closed cycle's withdrawal rows onto that cycle's
+  // history SNAPSHOT (20260815000001, 20260904000001), so this is the source's
+  // name at withdrawal time, read once in a single batched query rather than
+  // guessed at or copied onto the withdrawal row when it was written.
+  const parentIds = Array.from(new Set(
+    (transactions ?? [])
+      .filter((t) => t.transaction_type === 'withdrawal' && t.parent_transaction_id)
+      .map((t) => t.parent_transaction_id as string),
+  ))
+  let withParentNotes = transactions
+  if (parentIds.length > 0) {
+    const { data: parents, error: parentErr } = await supabase
+      .from('investment_transactions')
+      .select('transaction_id, notes')
+      .eq('user_id', user.id)
+      .in('transaction_id', parentIds)
+    // Cosmetic fallback, not a correctness path: a failed lookup here means a
+    // withdrawal row falls back to its asset-type label, same as it always
+    // did — it must not turn an otherwise-successful list into a 500.
+    if (parentErr) {
+      console.error('investment-transactions: failed to read parent notes —', parentErr.message)
+    } else {
+      const notesById = new Map((parents ?? []).map((p) => [p.transaction_id, p.notes]))
+      withParentNotes = (transactions ?? []).map((t) =>
+        t.transaction_type === 'withdrawal' && t.parent_transaction_id
+          ? { ...t, parentNotes: notesById.get(t.parent_transaction_id) ?? null }
+          : t,
+      )
+    }
+  }
+
+  return NextResponse.json({ transactions: withParentNotes, total: count ?? 0, page, limit })
 }
 
 export async function POST(request: NextRequest) {

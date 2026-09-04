@@ -25,6 +25,15 @@ export interface LedgerTransaction {
   merge_anchor_inv_id?: string | null
   savings_goals?: { goal_name: string } | null
   funds?: { id: string; name: string; nav: number } | { id: string; name: string; nav: number }[] | null
+  // The `notes` of the row `parent_transaction_id` points at — the deposit this
+  // withdrawal drew from. A withdrawal itself carries no notes (SellWithdrawSheet
+  // posts only parent_transaction_id, amount and principal), so without this it
+  // named nothing more specific than its asset type ("Ngân hàng"). The API
+  // attaches it with one batched lookup; a renewal re-parents a closed cycle's
+  // withdrawal rows onto that cycle's history SNAPSHOT (20260815000001,
+  // 20260904000001), so this is the name the source had at withdrawal time, not
+  // necessarily the live deposit's name today.
+  parentNotes?: string | null
 }
 
 export const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
@@ -102,11 +111,44 @@ export function txDir(tx: TxKindFields): TxDir {
 }
 
 
-// Primary label shown in a row: the fund name for funds, otherwise the notes,
+// A withdrawal's name once any asset-specific name (a fund) is ruled out: the
+// source it drew from outranks its own free-text note. SellWithdrawSheet never
+// posts `notes` for ANY withdrawal at creation — fund, bank, or gold — so a
+// note on a withdrawal only ever arrives via a later manual edit describing
+// the ACTION being taken ("Rút để gộp gửi", "Bán vàng trả nợ"), never the
+// source. The source's name is what every other row in the ledger identifies
+// itself by, so it wins whenever there is one; a withdrawal with no named
+// source (or none at all) falls back to its own note.
+//
+// Deliberately NOT gated on the withdrawal's own asset_type: an earlier
+// version of this rule was `assetType === 'bank' && parent`, and it silently
+// never fired on a real production row whose asset_type was null (a legacy
+// gap on an old withdrawal) even though its parent — the actual deposit the
+// money came from — was a perfectly good bank name. Whether a parent name
+// EXISTS is the reliable signal; the withdrawal's own asset_type is not.
+//
+// Shared by txPrimaryName (Recent activity / the ledger) and describeHistoryRow
+// (the goal-detail History tab) so a withdrawal reads the same name on every
+// surface — the two used to diverge because only txPrimaryName knew this rule
+// (#712/#713's own history: the goal-detail tab kept reading "Rút để gộp gửi"
+// after the ledger had already been fixed, because it never called this).
+export function withdrawalSourceName(
+  notes: string | null | undefined,
+  parentNotes: string | null | undefined,
+): string {
+  const parent = parentNotes?.trim() || ''
+  return parent || (notes?.trim() || '')
+}
+
+// Primary label shown in a row: the fund name for funds, otherwise — for a
+// withdrawal — withdrawalSourceName's precedence, otherwise the notes,
 // falling back to the asset-type label provided by the caller (i18n lives in
 // the component).
 export function txPrimaryName(tx: LedgerTransaction, assetLabel: string): string {
-  return fundNameOf(tx) || (tx.notes?.trim() || '') || assetLabel
+  const fund = fundNameOf(tx)
+  if (fund) return fund
+  if (isWithdrawal(tx)) return withdrawalSourceName(tx.notes, tx.parentNotes) || assetLabel
+  return (tx.notes?.trim() || '') || assetLabel
 }
 
 export function fmtTxDate(d: string, locale: string): string {

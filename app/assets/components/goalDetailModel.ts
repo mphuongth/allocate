@@ -3,7 +3,7 @@
 // shared UI file stays presentational and this pure logic can be tested/reused on
 // its own.
 import { RefreshCw, PiggyBank, GitMerge, ArrowDownRight, ArrowUpRight, type LucideIcon } from 'lucide-react'
-import { txKind, type TxKind, type TxKindFields } from './transactionUtils'
+import { txKind, withdrawalSourceName, type TxKind, type TxKindFields } from './transactionUtils'
 import { monthsUntilYm, businessYearMonth } from '@/lib/dates'
 
 export interface HistoryRowDescriptor {
@@ -21,7 +21,13 @@ export interface HistoryRowDescriptor {
 // spent. Byte-identical inline in both goal-detail surfaces before this; each now
 // calls it and only maps the icon size + chrome in its own JSX.
 export function describeHistoryRow(
-  tx: TxKindFields & { fund_name?: string | null; notes?: string | null },
+  tx: TxKindFields & {
+    fund_name?: string | null
+    notes?: string | null
+    // The name of the row `parent_transaction_id` points at — the deposit a
+    // withdrawal drew from. See withdrawalSourceName's doc.
+    parentNotes?: string | null
+  },
   isRenewed: boolean,
   isVi: boolean,
 ): HistoryRowDescriptor {
@@ -32,7 +38,9 @@ export function describeHistoryRow(
   const fill = neutral ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)'
   const Icon = isRenewed ? RefreshCw : kind === 'held' ? PiggyBank : kind === 'consumed' ? GitMerge : isWithdraw ? ArrowDownRight : ArrowUpRight
   const sign = isWithdraw ? '-' : kind === 'investment' ? '+' : ''
-  const name = tx.fund_name ?? tx.notes ?? (isVi ? 'Khoản đầu tư' : 'Investment')
+  const name = tx.fund_name
+    ?? (isWithdraw ? withdrawalSourceName(tx.notes, tx.parentNotes) || null : tx.notes)
+    ?? (isVi ? 'Khoản đầu tư' : 'Investment')
   return { kind, ink, fill, Icon, sign, name }
 }
 

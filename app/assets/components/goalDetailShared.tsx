@@ -239,6 +239,9 @@ export interface GoalDetailTx {
   // them — `transaction_id` is a `recurring:<savingId>:<date>` label, not an id
   // anything may be posted against (#640).
   is_recurring?: boolean
+  // The name of the row parent_transaction_id points at — the deposit a
+  // withdrawal drew from. Attached by the API for withdrawal rows (#713).
+  parentNotes?: string | null
 }
 
 // Roll up a deposit's renewal history from the snapshot rows that point at it.
