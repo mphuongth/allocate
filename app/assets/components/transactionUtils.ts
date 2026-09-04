@@ -25,6 +25,15 @@ export interface LedgerTransaction {
   merge_anchor_inv_id?: string | null
   savings_goals?: { goal_name: string } | null
   funds?: { id: string; name: string; nav: number } | { id: string; name: string; nav: number }[] | null
+  // The `notes` of the row `parent_transaction_id` points at — the deposit this
+  // withdrawal drew from. A withdrawal itself carries no notes (SellWithdrawSheet
+  // posts only parent_transaction_id, amount and principal), so without this it
+  // named nothing more specific than its asset type ("Ngân hàng"). The API
+  // attaches it with one batched lookup; a renewal re-parents a closed cycle's
+  // withdrawal rows onto that cycle's history SNAPSHOT (20260815000001,
+  // 20260904000001), so this is the name the source had at withdrawal time, not
+  // necessarily the live deposit's name today.
+  parentNotes?: string | null
 }
 
 export const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
@@ -103,10 +112,12 @@ export function txDir(tx: TxKindFields): TxDir {
 
 
 // Primary label shown in a row: the fund name for funds, otherwise the notes,
+// otherwise — for a withdrawal only — the name of the source it drew from,
 // falling back to the asset-type label provided by the caller (i18n lives in
 // the component).
 export function txPrimaryName(tx: LedgerTransaction, assetLabel: string): string {
-  return fundNameOf(tx) || (tx.notes?.trim() || '') || assetLabel
+  const parentName = isWithdrawal(tx) ? tx.parentNotes?.trim() || '' : ''
+  return fundNameOf(tx) || (tx.notes?.trim() || '') || parentName || assetLabel
 }
 
 export function fmtTxDate(d: string, locale: string): string {

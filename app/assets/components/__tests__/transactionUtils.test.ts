@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { txKind, txDir } from '../transactionUtils'
+import { txKind, txDir, txPrimaryName } from '../transactionUtils'
 
 // A held-for-merge settlement is a withdrawal whose cash was PARKED for a future
 // merge, not spent — so across the History tab, Recent activity, and the ledger it
@@ -53,5 +53,39 @@ describe('txKind / txDir — held-for-merge labeling', () => {
 
   it('a missing transaction_type defaults to investment (no held flags)', () => {
     expect(txKind({})).toBe('investment')
+  })
+})
+
+// A withdrawal row carries no notes of its own — SellWithdrawSheet posts only
+// parent_transaction_id, amount and principal — so it fell through to the
+// generic asset-type label ("Ngân hàng") instead of naming the bank the money
+// was withdrawn FROM. The source's own name — "PVcombank", or whatever the
+// user typed — already answers that, and the DB carries it: a renewal
+// re-parents the closed cycle's withdrawal rows onto the SNAPSHOT
+// (20260815000001, 20260904000001), which keeps the label the bank had at the
+// time, not the live row's post-renewal name. So this is a straight read, not
+// a guess: the API attaches it as `parentNotes`.
+describe('txPrimaryName — a withdrawal names the source it drew from (#712 follow-up)', () => {
+  it('falls back to the parent source name when the withdrawal has no notes', () => {
+    const tx = { transaction_type: 'withdrawal', notes: null, parentNotes: 'PVcombank', funds: null }
+    expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('PVcombank')
+  })
+
+  it('still prefers the fund name, then its own notes, over the parent source', () => {
+    const withFund = { transaction_type: 'withdrawal', notes: null, parentNotes: 'PVcombank', funds: { id: 'f1', name: 'VESAF', nav: 1 } }
+    expect(txPrimaryName(withFund as never, 'Quỹ')).toBe('VESAF')
+
+    const withOwnNotes = { transaction_type: 'withdrawal', notes: 'Sổ khẩn cấp', parentNotes: 'PVcombank', funds: null }
+    expect(txPrimaryName(withOwnNotes as never, 'Ngân hàng')).toBe('Sổ khẩn cấp')
+  })
+
+  it('falls back to the asset-type label when neither the row nor its parent has a name', () => {
+    const tx = { transaction_type: 'withdrawal', notes: null, parentNotes: null, funds: null }
+    expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('Ngân hàng')
+  })
+
+  it('does not reach for the parent on a non-withdrawal row (an investment names only itself)', () => {
+    const tx = { transaction_type: 'investment', notes: null, parentNotes: 'should not surface', funds: null }
+    expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('Ngân hàng')
   })
 })
