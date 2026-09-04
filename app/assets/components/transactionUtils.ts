@@ -111,28 +111,38 @@ export function txDir(tx: TxKindFields): TxDir {
 }
 
 
-// Primary label shown in a row: the fund name for funds, otherwise the notes,
-// otherwise — for a withdrawal only — the name of the source it drew from,
+// A withdrawal's name once any asset-specific name (a fund) is ruled out: for a
+// BANK withdrawal, the source it drew from outranks its own free-text note —
+// that note usually describes the ACTION being taken ("Rút để gộp gửi"), not
+// where the money came from, and it used to bury the bank name every other
+// bank row in the ledger identifies itself by. Anything else (gold's provider,
+// e.g. "PNJ", set at creation, not an after-the-fact note) keeps its own note
+// first, same as before.
+//
+// Shared by txPrimaryName (Recent activity / the ledger) and describeHistoryRow
+// (the goal-detail History tab) so a bank withdrawal reads the same name on
+// every surface — the two used to diverge because only txPrimaryName knew this
+// rule (#712/#713's own history: the goal-detail tab kept reading "Rút để gộp
+// gửi" after the ledger had already been fixed, because it never called this).
+export function withdrawalSourceName(
+  assetType: string | null | undefined,
+  notes: string | null | undefined,
+  parentNotes: string | null | undefined,
+): string {
+  const own = notes?.trim() || ''
+  const parent = parentNotes?.trim() || ''
+  if (assetType === 'bank' && parent) return parent
+  return own || parent
+}
+
+// Primary label shown in a row: the fund name for funds, otherwise — for a
+// withdrawal — withdrawalSourceName's precedence, otherwise the notes,
 // falling back to the asset-type label provided by the caller (i18n lives in
 // the component).
-//
-// A BANK withdrawal inverts that last pair: the source's name outranks the
-// row's own note. A withdrawal's own note describes the ACTION ("Rút để gộp
-// gửi"), not where the money came from, and that action note used to bury the
-// bank name every other row in the ledger identifies itself by. Gold is left
-// out of the swap — its notes field already carries the provider (e.g. "PNJ")
-// set at creation, not an after-the-fact note, so it has nothing to invert.
 export function txPrimaryName(tx: LedgerTransaction, assetLabel: string): string {
   const fund = fundNameOf(tx)
   if (fund) return fund
-
-  if (isWithdrawal(tx)) {
-    const parentName = tx.parentNotes?.trim() || ''
-    const ownNotes = tx.notes?.trim() || ''
-    if (tx.asset_type === 'bank' && parentName) return parentName
-    return ownNotes || parentName || assetLabel
-  }
-
+  if (isWithdrawal(tx)) return withdrawalSourceName(tx.asset_type, tx.notes, tx.parentNotes) || assetLabel
   return (tx.notes?.trim() || '') || assetLabel
 }
 

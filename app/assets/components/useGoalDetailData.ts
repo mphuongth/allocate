@@ -32,6 +32,10 @@ interface InvestmentTx {
   // Set on every row of an accumulating book; equals transaction_id on the
   // anchor, which is the row that carries the book's terms.
   deposit_group_id?: string | null
+  // The name of the row parent_transaction_id points at — the deposit a
+  // withdrawal drew from. Attached by the API for withdrawal rows (#713); the
+  // history render passes it straight into describeHistoryRow.
+  parentNotes?: string | null
 }
 
 export interface UseGoalDetailData {

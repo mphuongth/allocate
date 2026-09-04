@@ -540,6 +540,44 @@ describe('describeHistoryRow', () => {
     expect(describeHistoryRow({ transaction_type: 'investment' }, false, false).name).toBe('Investment')
     expect(describeHistoryRow({ transaction_type: 'investment' }, false, true).name).toBe('Khoản đầu tư')
   })
+
+  // #713 taught the ledger's txPrimaryName that a bank withdrawal's source name
+  // outranks its own free-text action note ("Rút để gộp gửi" describes the
+  // action, not the source). This goal-detail row descriptor is a SEPARATE copy
+  // of the naming logic and did not call that function, so the History tab kept
+  // showing the action note after the ledger had already been fixed — reported
+  // live against the "Thuế và Thầu" goal.
+  it('a bank withdrawal prefers the source name (parentNotes) over its own action note', () => {
+    const d = describeHistoryRow(
+      { transaction_type: 'withdrawal', asset_type: 'bank', notes: 'Rút để gộp gửi', parentNotes: 'PVcombank' },
+      false, false,
+    )
+    expect(d.name).toBe('PVcombank')
+  })
+
+  it('a bank withdrawal falls back to its own note when the source has no name', () => {
+    const d = describeHistoryRow(
+      { transaction_type: 'withdrawal', asset_type: 'bank', notes: 'Rút để gộp gửi', parentNotes: null },
+      false, false,
+    )
+    expect(d.name).toBe('Rút để gộp gửi')
+  })
+
+  it('a non-bank withdrawal (gold) still prefers its own note over the parent', () => {
+    const d = describeHistoryRow(
+      { transaction_type: 'withdrawal', asset_type: 'gold', notes: 'PNJ', parentNotes: 'Some other label' },
+      false, false,
+    )
+    expect(d.name).toBe('PNJ')
+  })
+
+  it('a fund name still wins over everything on a withdrawal, unaffected by the swap', () => {
+    const d = describeHistoryRow(
+      { transaction_type: 'withdrawal', asset_type: 'fund', fund_name: 'VESAF', notes: 'Rút để gộp gửi', parentNotes: 'PVcombank' },
+      false, false,
+    )
+    expect(d.name).toBe('VESAF')
+  })
 })
 
 // #656: a credited tranche's "Gộp từ <A>" used to die with the successor's first
