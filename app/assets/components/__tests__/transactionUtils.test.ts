@@ -71,12 +71,9 @@ describe('txPrimaryName — a withdrawal names the source it drew from (#712 fol
     expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('PVcombank')
   })
 
-  it('still prefers the fund name, then its own notes, over the parent source', () => {
+  it('still prefers the fund name over the parent source, for a fund withdrawal', () => {
     const withFund = { transaction_type: 'withdrawal', notes: null, parentNotes: 'PVcombank', funds: { id: 'f1', name: 'VESAF', nav: 1 } }
     expect(txPrimaryName(withFund as never, 'Quỹ')).toBe('VESAF')
-
-    const withOwnNotes = { transaction_type: 'withdrawal', notes: 'Sổ khẩn cấp', parentNotes: 'PVcombank', funds: null }
-    expect(txPrimaryName(withOwnNotes as never, 'Ngân hàng')).toBe('Sổ khẩn cấp')
   })
 
   it('falls back to the asset-type label when neither the row nor its parent has a name', () => {
@@ -89,26 +86,34 @@ describe('txPrimaryName — a withdrawal names the source it drew from (#712 fol
     expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('Ngân hàng')
   })
 
-  // A bank withdrawal that ALSO carries its own free-text note used to show the
-  // note ("Rút để gộp gửi") over the source's name — that note describes the
-  // ACTION being taken, not where the money came from, and the source's name is
-  // what every other bank row in the ledger identifies itself by. So for a bank
-  // withdrawal specifically, the source outranks the row's own note.
-  it('a bank withdrawal prefers the source name over its own descriptive note', () => {
+  // A withdrawal that ALSO carries its own free-text note used to show the note
+  // ("Rút để gộp gửi") over the source's name — but SellWithdrawSheet never
+  // posts `notes` for ANY withdrawal at creation (fund, bank, or gold); a note
+  // on a withdrawal only ever gets there via a later manual edit describing the
+  // ACTION being taken, not where the money came from. The source's name is
+  // what every other row in the ledger identifies itself by, so it outranks
+  // the row's own note — for every withdrawal, not just bank.
+  it('a withdrawal prefers the source name over its own descriptive note', () => {
     const tx = { transaction_type: 'withdrawal', asset_type: 'bank', notes: 'Rút để gộp gửi', parentNotes: 'PVcombank', funds: null }
     expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('PVcombank')
   })
 
-  it('a bank withdrawal falls back to its own note when the source has none', () => {
+  it('falls back to its own note when the source has none', () => {
     const tx = { transaction_type: 'withdrawal', asset_type: 'bank', notes: 'Rút để gộp gửi', parentNotes: null, funds: null }
     expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('Rút để gộp gửi')
   })
 
-  // Gold has no separate "source account" concept the way a bank deposit does —
-  // notes there already carries meaning (the provider, e.g. "PNJ") set at
-  // creation, not an after-the-fact action note. The swap is bank-only.
-  it('a non-bank withdrawal (gold) still prefers its own note over the parent', () => {
-    const tx = { transaction_type: 'withdrawal', asset_type: 'gold', notes: 'PNJ', parentNotes: 'Some other label', funds: null }
+  // Real production data: a legacy withdrawal row with asset_type = null (not
+  // set at creation, or lost some other way) still has a parent that names it.
+  // The swap must not depend on the withdrawal's OWN asset_type — that field
+  // can be missing on old rows in a way the parent link and its name are not.
+  it('prefers the source name even when the withdrawal itself has no asset_type on record', () => {
+    const tx = { transaction_type: 'withdrawal', asset_type: null, notes: 'Rút để gộp gửi', parentNotes: 'PVCombank', funds: null }
+    expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('PVCombank')
+  })
+
+  it('a gold withdrawal follows the same rule — the source outranks its own note', () => {
+    const tx = { transaction_type: 'withdrawal', asset_type: 'gold', notes: 'Bán vàng trả nợ', parentNotes: 'PNJ', funds: null }
     expect(txPrimaryName(tx as never, 'Vàng')).toBe('PNJ')
   })
 })

@@ -24,7 +24,6 @@ export function describeHistoryRow(
   tx: TxKindFields & {
     fund_name?: string | null
     notes?: string | null
-    asset_type?: string | null
     // The name of the row `parent_transaction_id` points at — the deposit a
     // withdrawal drew from. See withdrawalSourceName's doc.
     parentNotes?: string | null
@@ -40,7 +39,7 @@ export function describeHistoryRow(
   const Icon = isRenewed ? RefreshCw : kind === 'held' ? PiggyBank : kind === 'consumed' ? GitMerge : isWithdraw ? ArrowDownRight : ArrowUpRight
   const sign = isWithdraw ? '-' : kind === 'investment' ? '+' : ''
   const name = tx.fund_name
-    ?? (isWithdraw ? withdrawalSourceName(tx.asset_type, tx.notes, tx.parentNotes) || null : tx.notes)
+    ?? (isWithdraw ? withdrawalSourceName(tx.notes, tx.parentNotes) || null : tx.notes)
     ?? (isVi ? 'Khoản đầu tư' : 'Investment')
   return { kind, ink, fill, Icon, sign, name }
 }

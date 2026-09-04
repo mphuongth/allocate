@@ -111,28 +111,33 @@ export function txDir(tx: TxKindFields): TxDir {
 }
 
 
-// A withdrawal's name once any asset-specific name (a fund) is ruled out: for a
-// BANK withdrawal, the source it drew from outranks its own free-text note —
-// that note usually describes the ACTION being taken ("Rút để gộp gửi"), not
-// where the money came from, and it used to bury the bank name every other
-// bank row in the ledger identifies itself by. Anything else (gold's provider,
-// e.g. "PNJ", set at creation, not an after-the-fact note) keeps its own note
-// first, same as before.
+// A withdrawal's name once any asset-specific name (a fund) is ruled out: the
+// source it drew from outranks its own free-text note. SellWithdrawSheet never
+// posts `notes` for ANY withdrawal at creation — fund, bank, or gold — so a
+// note on a withdrawal only ever arrives via a later manual edit describing
+// the ACTION being taken ("Rút để gộp gửi", "Bán vàng trả nợ"), never the
+// source. The source's name is what every other row in the ledger identifies
+// itself by, so it wins whenever there is one; a withdrawal with no named
+// source (or none at all) falls back to its own note.
+//
+// Deliberately NOT gated on the withdrawal's own asset_type: an earlier
+// version of this rule was `assetType === 'bank' && parent`, and it silently
+// never fired on a real production row whose asset_type was null (a legacy
+// gap on an old withdrawal) even though its parent — the actual deposit the
+// money came from — was a perfectly good bank name. Whether a parent name
+// EXISTS is the reliable signal; the withdrawal's own asset_type is not.
 //
 // Shared by txPrimaryName (Recent activity / the ledger) and describeHistoryRow
-// (the goal-detail History tab) so a bank withdrawal reads the same name on
-// every surface — the two used to diverge because only txPrimaryName knew this
-// rule (#712/#713's own history: the goal-detail tab kept reading "Rút để gộp
-// gửi" after the ledger had already been fixed, because it never called this).
+// (the goal-detail History tab) so a withdrawal reads the same name on every
+// surface — the two used to diverge because only txPrimaryName knew this rule
+// (#712/#713's own history: the goal-detail tab kept reading "Rút để gộp gửi"
+// after the ledger had already been fixed, because it never called this).
 export function withdrawalSourceName(
-  assetType: string | null | undefined,
   notes: string | null | undefined,
   parentNotes: string | null | undefined,
 ): string {
-  const own = notes?.trim() || ''
   const parent = parentNotes?.trim() || ''
-  if (assetType === 'bank' && parent) return parent
-  return own || parent
+  return parent || (notes?.trim() || '')
 }
 
 // Primary label shown in a row: the fund name for funds, otherwise — for a
@@ -142,7 +147,7 @@ export function withdrawalSourceName(
 export function txPrimaryName(tx: LedgerTransaction, assetLabel: string): string {
   const fund = fundNameOf(tx)
   if (fund) return fund
-  if (isWithdrawal(tx)) return withdrawalSourceName(tx.asset_type, tx.notes, tx.parentNotes) || assetLabel
+  if (isWithdrawal(tx)) return withdrawalSourceName(tx.notes, tx.parentNotes) || assetLabel
   return (tx.notes?.trim() || '') || assetLabel
 }
 
