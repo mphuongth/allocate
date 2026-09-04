@@ -8,6 +8,7 @@ import { useState, useRef } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
+import { clickAway } from '@/components/ui/clickAway'
 
 export function DModal({ onClose, title, width = 400, children }: {
   onClose: () => void; title: string; width?: number; children: React.ReactNode
@@ -16,7 +17,9 @@ export function DModal({ onClose, title, width = 400, children }: {
   useDialogA11y(dialogRef, true, onClose)
   return (
     <div
-      onClick={onClose}
+      // clickAway, not a bare onClick: a selection dragged out of the panel
+      // releases on this element and would otherwise read as a click-away.
+      {...clickAway(onClose)}
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(2px)', animation: 'fade-in 150ms ease' }}
     >
       <div
