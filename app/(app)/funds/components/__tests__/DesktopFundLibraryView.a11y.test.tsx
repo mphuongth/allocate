@@ -71,3 +71,33 @@ describe('DesktopFundLibraryView — dialog accessible names', () => {
     expect(within(modal).getByRole('button', { name: 'Close' })).toBeInTheDocument()
   })
 })
+
+// #709 taught every backdrop to tell a click from the end of a drag, but its
+// sweep missed this file's two hand-rolled DModal copies. The delete modal is
+// the one that dismisses on its backdrop, so it is where the gap shows: a drag
+// released out there fires its click on the backdrop — the panel is not on that
+// event's path — and the modal took it for a click-away.
+describe('DesktopFundLibraryView — a selection drag is not a click-away (#709)', () => {
+  it('the delete modal survives a drag that ends on its backdrop', async () => {
+    render(<Harness />)
+    await userEvent.click(screen.getByTestId('fund-delete-btn'))
+    const modal = screen.getByTestId('delete-fund-modal')
+    const backdrop = modal.parentElement as HTMLElement
+
+    fireEvent.pointerDown(within(modal).getByRole('button', { name: 'Close' }))
+    fireEvent.pointerUp(backdrop)
+    fireEvent.click(backdrop)
+
+    expect(screen.getByTestId('delete-fund-modal')).toBeInTheDocument()
+  })
+
+  it('the delete modal still closes on a genuine backdrop click', async () => {
+    render(<Harness />)
+    await userEvent.click(screen.getByTestId('fund-delete-btn'))
+    const backdrop = screen.getByTestId('delete-fund-modal').parentElement as HTMLElement
+
+    await userEvent.click(backdrop)
+
+    await waitFor(() => expect(screen.queryByTestId('delete-fund-modal')).not.toBeInTheDocument())
+  })
+})
