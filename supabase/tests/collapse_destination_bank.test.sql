@@ -108,6 +108,90 @@ begin
   if v_collapsed.bank_code is distinct from 'PVCB' then
     raise exception 'a null destination must leave the bank alone, got %', v_collapsed.bank_code;
   end if;
+end $$;
+
+-- 4) A bank-DERIVED label follows the money. renew_term_deposit_with_merge has
+--    relabelled since 20260809000001; collapse applied bank_code and left the
+--    notes advertising a bank the money is no longer held at. Observed in
+--    production: a five-tranche PVcomBank book collapsed at maturity to NCB kept
+--    reading "PVcombank" — the structured field said NCB, every screen said
+--    PVcomBank, and the deposit was unrecognisable to its owner.
+--
+--    The drifted capitalisation is the real one from that incident, so the
+--    case-insensitive match is what is being locked in here.
+do $$
+declare
+  v_user      uuid;
+  v_goal      uuid;
+  v_anchor    uuid;
+  v_collapsed public.investment_transactions;
+  v_snapshot  text;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'collapse-relabel@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Emergency') returning goal_id into v_goal;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, interest_rate, expiry_date, bank_code, notes)
+  values (v_user, v_goal, 'bank', 'investment', '2026-03-03', 12000000, 5.8, '2026-09-03', 'PVCB', 'PVcombank')
+  returning transaction_id into v_anchor;
+  update public.investment_transactions set deposit_group_id = v_anchor where transaction_id = v_anchor;
+
+  select * into v_collapsed from public.collapse_accumulating_book(
+    p_group_id         => v_anchor,
+    p_amount_vnd       => 12500000,
+    p_interest_rate    => 5.0,
+    p_expiry_date      => '2027-03-03',
+    p_investment_date  => '2026-09-03',
+    p_tranche_ids      => array[v_anchor],
+    p_tranche_interest => array[500000::bigint],
+    p_bank_code        => 'VCB'
+  );
+
+  if v_collapsed.notes is distinct from 'Vietcombank' then
+    raise exception 'expected the bank-named book relabelled to Vietcombank, got %', v_collapsed.notes;
+  end if;
+
+  -- The closed cycle is history: it keeps the name the money was held under.
+  select notes into v_snapshot
+    from public.investment_transactions
+   where renewed_from_transaction_id = v_anchor;
+  if v_snapshot is distinct from 'PVcombank' then
+    raise exception 'expected the snapshot to keep the old label, got %', v_snapshot;
+  end if;
+end $$;
+
+-- 5) A name the user typed is theirs. Only a label that reads as some bank's name
+--    is bank-derived; "Sổ khẩn cấp" is not, and renaming it would be the worse bug.
+do $$
+declare
+  v_user      uuid;
+  v_goal      uuid;
+  v_anchor    uuid;
+  v_collapsed public.investment_transactions;
+begin
+  insert into auth.users (id, email) values (gen_random_uuid(), 'collapse-keeps-name@test.invalid') returning id into v_user;
+  insert into public.savings_goals (user_id, goal_name) values (v_user, 'Emergency') returning goal_id into v_goal;
+
+  insert into public.investment_transactions
+    (user_id, goal_id, asset_type, transaction_type, investment_date, amount_vnd, interest_rate, expiry_date, bank_code, notes)
+  values (v_user, v_goal, 'bank', 'investment', '2026-03-03', 12000000, 5.8, '2026-09-03', 'PVCB', 'Sổ khẩn cấp')
+  returning transaction_id into v_anchor;
+  update public.investment_transactions set deposit_group_id = v_anchor where transaction_id = v_anchor;
+
+  select * into v_collapsed from public.collapse_accumulating_book(
+    p_group_id         => v_anchor,
+    p_amount_vnd       => 12500000,
+    p_interest_rate    => 5.0,
+    p_expiry_date      => '2027-03-03',
+    p_investment_date  => '2026-09-03',
+    p_tranche_ids      => array[v_anchor],
+    p_tranche_interest => array[500000::bigint],
+    p_bank_code        => 'VCB'
+  );
+
+  if v_collapsed.notes is distinct from 'Sổ khẩn cấp' then
+    raise exception 'a user-typed name must survive the move, got %', v_collapsed.notes;
+  end if;
   raise notice 'collapse_destination_bank.test.sql: OK';
 end $$;
 
