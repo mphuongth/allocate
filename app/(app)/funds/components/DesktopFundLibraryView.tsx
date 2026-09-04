@@ -11,6 +11,7 @@ import { SyncPill } from '@/components/ui/SyncPill'
 // Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under
 // the Plan feature today; reused here so Funds dialogs behave the same.
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
+import { clickAway } from '@/components/ui/clickAway'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
 import type { Fund, Goal, FundType, FundsData, FundsBusy } from './useFundsData'
@@ -67,7 +68,7 @@ function DModal({ open, onClose, title, width = 460, dismissOnBackdrop = true, c
     <div
       // Form modals opt out of backdrop dismissal so a stray click doesn't
       // discard typed input; they're closed via Cancel or the X (#2 P2).
-      onClick={dismissOnBackdrop ? onClose : undefined}
+      {...clickAway(dismissOnBackdrop ? onClose : undefined)}
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(2px)', animation: 'fade-in 150ms ease' }}
     >
       <div
@@ -101,7 +102,9 @@ function DeleteModal({ open, onClose, fundCode, onConfirm, deleting }: {
   if (!open) return null
   return (
     <div
-      onClick={onClose}
+      // clickAway, not a bare onClick: a selection dragged out of the panel
+      // releases on this element and would otherwise read as a click-away.
+      {...clickAway(onClose)}
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(2px)', animation: 'fade-in 150ms ease' }}
     >
       <div

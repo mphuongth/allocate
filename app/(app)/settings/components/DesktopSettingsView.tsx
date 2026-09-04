@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
+import { clickAway } from '@/components/ui/clickAway'
 import { RefreshCw, LogOut, Download, X, Check, Edit2 } from 'lucide-react'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import { useSettingsController } from '../useSettingsController'
@@ -28,7 +29,9 @@ function DModal({ open, onClose, title, dismissOnBackdrop = true, children }: {
     <div
       // Form modals (the profile editor) opt out of backdrop dismissal so a
       // stray click doesn't discard a half-typed name. Esc + Cancel still close.
-      onClick={dismissOnBackdrop ? onClose : undefined}
+      // clickAway, not a bare onClick: a selection dragged out of the panel
+      // releases on this element and would otherwise read as a click-away.
+      {...clickAway(dismissOnBackdrop ? onClose : undefined)}
       style={{
         position: 'fixed', inset: 0,
         background: 'rgba(15,23,42,0.4)',
