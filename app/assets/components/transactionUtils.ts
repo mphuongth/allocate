@@ -115,9 +115,25 @@ export function txDir(tx: TxKindFields): TxDir {
 // otherwise — for a withdrawal only — the name of the source it drew from,
 // falling back to the asset-type label provided by the caller (i18n lives in
 // the component).
+//
+// A BANK withdrawal inverts that last pair: the source's name outranks the
+// row's own note. A withdrawal's own note describes the ACTION ("Rút để gộp
+// gửi"), not where the money came from, and that action note used to bury the
+// bank name every other row in the ledger identifies itself by. Gold is left
+// out of the swap — its notes field already carries the provider (e.g. "PNJ")
+// set at creation, not an after-the-fact note, so it has nothing to invert.
 export function txPrimaryName(tx: LedgerTransaction, assetLabel: string): string {
-  const parentName = isWithdrawal(tx) ? tx.parentNotes?.trim() || '' : ''
-  return fundNameOf(tx) || (tx.notes?.trim() || '') || parentName || assetLabel
+  const fund = fundNameOf(tx)
+  if (fund) return fund
+
+  if (isWithdrawal(tx)) {
+    const parentName = tx.parentNotes?.trim() || ''
+    const ownNotes = tx.notes?.trim() || ''
+    if (tx.asset_type === 'bank' && parentName) return parentName
+    return ownNotes || parentName || assetLabel
+  }
+
+  return (tx.notes?.trim() || '') || assetLabel
 }
 
 export function fmtTxDate(d: string, locale: string): string {

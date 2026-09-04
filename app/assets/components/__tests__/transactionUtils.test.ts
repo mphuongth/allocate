@@ -88,4 +88,27 @@ describe('txPrimaryName — a withdrawal names the source it drew from (#712 fol
     const tx = { transaction_type: 'investment', notes: null, parentNotes: 'should not surface', funds: null }
     expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('Ngân hàng')
   })
+
+  // A bank withdrawal that ALSO carries its own free-text note used to show the
+  // note ("Rút để gộp gửi") over the source's name — that note describes the
+  // ACTION being taken, not where the money came from, and the source's name is
+  // what every other bank row in the ledger identifies itself by. So for a bank
+  // withdrawal specifically, the source outranks the row's own note.
+  it('a bank withdrawal prefers the source name over its own descriptive note', () => {
+    const tx = { transaction_type: 'withdrawal', asset_type: 'bank', notes: 'Rút để gộp gửi', parentNotes: 'PVcombank', funds: null }
+    expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('PVcombank')
+  })
+
+  it('a bank withdrawal falls back to its own note when the source has none', () => {
+    const tx = { transaction_type: 'withdrawal', asset_type: 'bank', notes: 'Rút để gộp gửi', parentNotes: null, funds: null }
+    expect(txPrimaryName(tx as never, 'Ngân hàng')).toBe('Rút để gộp gửi')
+  })
+
+  // Gold has no separate "source account" concept the way a bank deposit does —
+  // notes there already carries meaning (the provider, e.g. "PNJ") set at
+  // creation, not an after-the-fact action note. The swap is bank-only.
+  it('a non-bank withdrawal (gold) still prefers its own note over the parent', () => {
+    const tx = { transaction_type: 'withdrawal', asset_type: 'gold', notes: 'PNJ', parentNotes: 'Some other label', funds: null }
+    expect(txPrimaryName(tx as never, 'Vàng')).toBe('PNJ')
+  })
 })
