@@ -407,6 +407,20 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
             </div>
           )}
 
+          {/* Purchasing power. Out here with the progress bar rather than
+              behind the Calculator tab: the tab is somewhere a user goes on
+              purpose to try a monthly amount, and what the target will actually
+              cost is something they have to see without going looking. It also
+              does not depend on the calculator's input — only on the deadline. */}
+          <InflationOutlookCard
+            outlook={inflation}
+            targetAmount={goal.targetAmount ?? 0}
+            currentValue={goal.currentValue}
+            targetDate={goal.targetDate ?? ''}
+            isVi={isVI}
+            style={{ marginBottom: 16 }}
+          />
+
           {/* Tab bar */}
           <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--c-line)' }}>
             {(['investments', 'calculator', 'history'] as const).map((tab) => {
@@ -669,16 +683,6 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                 <ProgressGatherNote amount={creditedWithdrawn} isVi={isVI} />
               )}
 
-              {/* Purchasing power. Shown whether or not a monthly amount has
-                  been typed — what the target will cost does not depend on the
-                  calculator input, only on the deadline. */}
-              <InflationOutlookCard
-                outlook={inflation}
-                targetAmount={goal.targetAmount ?? 0}
-                currentValue={goal.currentValue}
-                targetDate={goal.targetDate ?? ''}
-                isVi={isVI}
-              />
 
               {/* Empty state */}
               {monthly <= 0 && (

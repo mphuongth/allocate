@@ -311,6 +311,18 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           </div>
         )}
 
+        {/* Purchasing power. Out here with the progress bar rather than
+          behind the Calculator tab: the tab is somewhere a user goes on
+          purpose to try a monthly amount, and what the target will actually
+          cost is something they have to see without going looking. It also
+          does not depend on the calculator's input — only on the deadline. */}
+        <InflationOutlookCard
+          outlook={inflation}
+          targetAmount={goal.targetAmount ?? 0}
+          currentValue={goal.currentValue}
+          targetDate={goal.targetDate ?? ''}
+          isVi={isVi}
+        />
         {/* Tabs card */}
         <div className="cn-card" style={{ overflow: 'hidden' }}>
           <div style={{ display: 'flex', borderBottom: '1px solid var(--c-line)', padding: '0 16px' }}>
@@ -505,16 +517,6 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                 <ProgressGatherNote amount={creditedWithdrawn} isVi={isVi} />
               )}
 
-              {/* Purchasing power. Shown whether or not a monthly amount has
-                  been typed — what the target will cost does not depend on the
-                  calculator input, only on the deadline. */}
-              <InflationOutlookCard
-                outlook={inflation}
-                targetAmount={goal.targetAmount ?? 0}
-                currentValue={goal.currentValue}
-                targetDate={goal.targetDate ?? ''}
-                isVi={isVi}
-              />
 
               {calcInput <= 0 && (
                 <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--c-muted)' }}>

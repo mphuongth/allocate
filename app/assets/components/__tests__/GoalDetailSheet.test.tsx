@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GoalDetailSheet from '../GoalDetailSheet'
 import type { GoalData } from '@/features/dashboard/contracts'
+import { businessYearMonth } from '@/lib/dates'
 
 vi.mock('next-intl', () => ({
   useLocale: () => 'en',
@@ -954,5 +955,39 @@ describe('GoalDetailSheet — the withdraw preview starts from the goal bar, not
     const control = await screen.findByTestId('affects-progress-control')
     expect(control).toHaveTextContent('100%')
     expect(control).not.toHaveTextContent('86%')
+  })
+})
+
+// The purchasing-power card sits with the progress bar, not behind the
+// calculator tab. It was in that tab first and the answer to "how much do I
+// really need" turned out to be invisible: the tab is where a user goes to
+// PLAY with a monthly amount, on purpose, whereas this is something they have
+// to see without going looking for it. So the assertion that matters is that it
+// renders with NO tab interaction at all.
+describe('GoalDetailSheet — purchasing power', () => {
+  // Far enough out that the horizon stays open as the calendar moves, and
+  // derived from the BUSINESS month so a UTC runner agrees with Vietnam.
+  const futureYm = `${businessYearMonth().year + 5}-06`
+
+  it('shows the inflation outlook without opening any tab', async () => {
+    render(<GoalDetailSheet {...baseProps} goal={{ ...mockGoal, targetDate: futureYm }} />)
+    expect(await screen.findByTestId('inflation-outlook')).toBeInTheDocument()
+    // The full card, not a teaser: both directions and the scenario band.
+    expect(screen.getByTestId('inflation-target-future')).toBeInTheDocument()
+    expect(screen.getByTestId('inflation-savings-today')).toBeInTheDocument()
+    expect(screen.getAllByTestId(/^inflation-scenario-/)).toHaveLength(3)
+  })
+
+  it('stays silent for a goal with no deadline — no horizon, nothing to say', async () => {
+    render(<GoalDetailSheet {...baseProps} goal={{ ...mockGoal, targetDate: null }} />)
+    // Wait for the sheet to be past its load before asserting an ABSENCE.
+    await screen.findByRole('button', { name: /calculator/i })
+    expect(screen.queryByTestId('inflation-outlook')).toBeNull()
+  })
+
+  it('does not repeat itself inside the calculator tab', async () => {
+    render(<GoalDetailSheet {...baseProps} goal={{ ...mockGoal, targetDate: futureYm }} />)
+    await userEvent.click(await screen.findByRole('button', { name: /calculator/i }))
+    expect(screen.getAllByTestId('inflation-outlook')).toHaveLength(1)
   })
 })

@@ -1,5 +1,6 @@
 'use client'
 
+import type { CSSProperties } from 'react'
 import { fmtCompact } from '@/lib/formatters'
 import type { GoalInflationOutlook } from '@/lib/inflation'
 
@@ -29,13 +30,16 @@ function formatYm(ym: string, isVi: boolean): string {
 const fmtRate = (n: number) => `${n}%`
 
 export default function InflationOutlookCard({
-  outlook, targetAmount, currentValue, targetDate, isVi,
+  outlook, targetAmount, currentValue, targetDate, isVi, style,
 }: {
   outlook: GoalInflationOutlook | null
   targetAmount: number
   currentValue: number
   targetDate: string
   isVi: boolean
+  // Spacing is the caller's business: desktop stacks this in a gapped column,
+  // the mobile sheet in a padded block that needs its own bottom margin.
+  style?: CSSProperties
 }) {
   // Null is the ordinary case for a goal with no target, no deadline, or a
   // deadline already reached — silence, not an empty card.
@@ -51,6 +55,7 @@ export default function InflationOutlookCard({
         padding: 16, borderRadius: 14,
         background: 'var(--c-card-2)',
         border: '1px solid var(--c-line)',
+        ...style,
       }}
     >
       <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 10 }}>
