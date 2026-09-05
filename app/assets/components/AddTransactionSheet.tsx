@@ -97,6 +97,11 @@ export interface EditableTransaction {
   goal_id: string | null
   // Structured bank reference (FK to banks.code). Null on legacy deposits.
   bank_code?: string | null
+  // Set on every row of an accumulating book (anchor and tranches alike). It is
+  // what makes the deposit a book — there is no separate "type" column — so the
+  // edit form reads the savings type from it.
+  deposit_group_id?: string | null
+  top_up_lock_days?: number | null
 }
 
 // When set (and `existing` is not), the sheet opens in create mode with these
@@ -267,7 +272,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
       setBankAmount(existing.amount_vnd != null ? String(existing.amount_vnd) : '')
       setRate(existing.interest_rate != null ? String(existing.interest_rate) : '')
       setMaturity(existing.expiry_date || '')
-      setDepositType(existing.interest_rate != null ? 'term' : 'flex')
+      // A book is a book because it is grouped, whatever its rate — checking the
+      // rate first showed every accumulating deposit as "term" on every edit.
+      setDepositType(existing.deposit_group_id != null ? 'accumulating' : existing.interest_rate != null ? 'term' : 'flex')
+      setTopUpLockDays(existing.top_up_lock_days != null ? String(existing.top_up_lock_days) : '')
       setBankCode(existing.bank_code || '')
       // Legacy deposits stored their name only as free text (no bank_code). Keep
       // that text alive in the general note so editing doesn't silently drop it;
@@ -559,6 +567,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
               rate={rate} setRate={setRate}
               maturity={maturity} setMaturity={setMaturity} date={date}
               topUpLockDays={topUpLockDays} setTopUpLockDays={setTopUpLockDays}
+              lockType={Boolean(existing?.deposit_group_id)}
               inputStyle={inputStyle} labelStyle={labelStyle}
             />
           )}

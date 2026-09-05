@@ -15,6 +15,9 @@ export interface LedgerTransaction {
   expiry_date: string | null
   fund_id: string | null
   bank_code?: string | null
+  // An accumulating book: every tranche (and its anchor) carries the group id.
+  deposit_group_id?: string | null
+  top_up_lock_days?: number | null
   notes: string | null
   principal_withdrawn?: number | null
   units_withdrawn?: number | null
