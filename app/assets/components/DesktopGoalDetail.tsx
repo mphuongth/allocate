@@ -12,7 +12,7 @@ import { GD_COLORS, TypeIcon, UnlinkSvg, BankInfoStrip, TopUpControl, RenewalSum
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
 import { needsMaturityAction, needsBookMaturityAction } from './goalDetailMaturity'
 import { computeGoalCalculator, describeHistoryRow, mergedFromLabel } from './goalDetailModel'
-import { goalInflationLadder, goalInflationOutlook, resolveInflationRate } from '@/lib/inflation'
+import { goalInflationLadder, goalInflationOutlook, goalRealReturn, resolveInflationRate } from '@/lib/inflation'
 import InflationOutlookCard from './InflationOutlookCard'
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate } from './transactionUtils'
@@ -163,6 +163,12 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const inflationLadder = goalInflationLadder(goal, inflationRate)
 
   const visibleInvRows = invRows.filter((inv) => !unassignedIds.includes(inv.id))
+
+  // What the holdings are really earning, netted against the same assumption
+  // (lib/inflation goalRealReturn). Built from the rows this surface renders, so
+  // the figure covers exactly the money on screen.
+  const inflationReal = goalRealReturn(visibleInvRows, inflationRate)
+
 
   // "Bỏ chờ gộp" — delete the held settlement row, restoring the original deposit;
   // onDataChanged re-fetches so the chip drops and the deposit reappears.
@@ -324,6 +330,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
         <InflationOutlookCard
           outlook={inflation}
           ladder={inflationLadder}
+          realReturn={inflationReal}
           targetAmount={goal.targetAmount ?? 0}
           currentValue={goal.currentValue}
           targetDate={goal.targetDate}

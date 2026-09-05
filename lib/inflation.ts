@@ -196,3 +196,64 @@ export function goalInflationLadder(
     yearOneLoss: savings - presentValue(savings, ratePct, 1),
   }
 }
+
+export interface RealReturn {
+  /** Value-weighted yield across the holdings that state one. */
+  nominalRatePct: number
+  inflationRatePct: number
+  /** What the money actually gains once prices are accounted for. */
+  realRatePct: number
+  /** The value that yield applies to, and the value it does not cover. */
+  ratedValue: number
+  unratedValue: number
+  /** The real rate as money over the next twelve months, in today's dong. */
+  perYear: number
+}
+
+/**
+ * What a goal's holdings are really earning, or null when nothing states a rate.
+ *
+ * "Standing still costs you X a year" is false for money that is not standing
+ * still, and a goal held in term deposits is earning the whole time. The net is
+ * the only honest answer to "am I gaining or losing", and it is a RATIO, not a
+ * difference: 5.6% against 4% inflation leaves 1.538%, not 1.6. Subtraction is a
+ * decent approximation at small rates and simply the wrong operation.
+ *
+ * A holding with no stated rate — a fund, gold, a flex deposit — is excluded
+ * from the average rather than scored as 0%. Nobody said a fund earns nothing;
+ * its forward return is unknown, which is not the same claim. It is returned as
+ * `unratedValue` so the caller can say what its answer covers instead of
+ * quietly averaging over money the rate was never about.
+ */
+export function goalRealReturn(
+  holdings: { value: number; interestRate: number | null }[],
+  inflationRatePct: number,
+): RealReturn | null {
+  let ratedValue = 0
+  let unratedValue = 0
+  let weighted = 0
+  for (const h of holdings) {
+    const value = Math.max(0, h.value || 0)
+    if (h.interestRate == null) {
+      unratedValue += value
+      continue
+    }
+    ratedValue += value
+    weighted += value * h.interestRate
+  }
+  if (ratedValue <= 0) return null
+
+  const nominalRatePct = weighted / ratedValue
+  // Fisher. inflationFactor guards the rate at or below -100% that would make
+  // the denominator zero or negative.
+  const realRatePct = ((1 + nominalRatePct / 100) / inflationFactor(inflationRatePct, 1) - 1) * 100
+
+  return {
+    nominalRatePct,
+    inflationRatePct,
+    realRatePct,
+    ratedValue,
+    unratedValue,
+    perYear: Math.round(ratedValue * (realRatePct / 100)),
+  }
+}

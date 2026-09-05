@@ -665,6 +665,28 @@ describe('DesktopGoalDetail — purchasing power', () => {
     expect(screen.queryByTestId('inflation-outlook')).toBeNull()
   })
 
+
+  it('nets the deposit rate against inflation for a goal held in term deposits', async () => {
+    // The wiring that matters: the holding rows this surface builds must carry
+    // interestRate through to the card, or the line silently never appears.
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [{
+          transaction_id: 'bank-1', transaction_type: 'investment', asset_type: 'bank',
+          fund_id: null, investment_date: '2026-01-01', amount_vnd: 240_000_000,
+          units: null, unit_price: null, interest_rate: 5.6, expiry_date: null,
+          notes: 'NCB', principal_withdrawn: null, units_withdrawn: null,
+        }] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<DesktopGoalDetail {...baseProps} goal={{ ...mockGoal, targetDate: null, funds: [] }} />)
+    const line = await screen.findByTestId('inflation-real-return')
+    expect(line).toHaveAttribute('data-sign', 'positive')
+    // …and the standing-still line is gone, because this money is not standing still.
+    expect(screen.queryByTestId('inflation-year-loss')).toBeNull()
+  })
+
   it('does not repeat itself inside the calculator tab', async () => {
     render(<DesktopGoalDetail {...baseProps} goal={{ ...mockGoal, targetDate: futureYm }} />)
     await userEvent.click(await screen.findByRole('button', { name: /calculator/i }))

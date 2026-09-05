@@ -9,6 +9,7 @@ import {
   resolveInflationRate,
   goalInflationOutlook,
   goalInflationLadder,
+  goalRealReturn,
   INFLATION_LADDER_YEARS,
 } from '../inflation'
 
@@ -241,5 +242,67 @@ describe('goalInflationLadder', () => {
 
   it('carries the rate so the card can label its own assumption', () => {
     expect(goalInflationLadder(goal, 5.5)!.ratePct).toBe(5.5)
+  })
+})
+
+// ── Real return ───────────────────────────────────────────────────────────────
+// "Standing still costs you X a year" is false for money that is not standing
+// still. A goal held in term deposits is earning, and the only honest answer to
+// "am I gaining or losing" is the NET of the two: nominal yield against
+// inflation, by Fisher, not by subtraction.
+
+describe('goalRealReturn', () => {
+  const deposit = (value: number, interestRate: number | null) => ({ value, interestRate })
+
+  it('nets yield against inflation the compounding way, not by subtracting', () => {
+    const rr = goalRealReturn([deposit(240_000_000, 5.6)], 4)!
+    // (1.056 / 1.04) − 1 = 1.538%, NOT 5.6 − 4 = 1.6. The difference is small
+    // here and grows with both rates; subtraction is simply the wrong operation.
+    expect(rr.realRatePct).toBeCloseTo((1.056 / 1.04 - 1) * 100, 10)
+    expect(rr.realRatePct).not.toBeCloseTo(1.6, 3)
+  })
+
+  it('turns the real rate into money a year on the balance that earns it', () => {
+    const rr = goalRealReturn([deposit(240_000_000, 5.6)], 4)!
+    expect(rr.perYear).toBe(Math.round(240_000_000 * (1.056 / 1.04 - 1)))
+    expect(rr.perYear).toBeGreaterThan(0)
+  })
+
+  it('goes negative when the rate does not keep up with prices', () => {
+    const rr = goalRealReturn([deposit(240_000_000, 3)], 4.45)!
+    expect(rr.realRatePct).toBeLessThan(0)
+    expect(rr.perYear).toBeLessThan(0)
+  })
+
+  it('weights the blended rate by value, not by holding count', () => {
+    // 200M at 6% and 50M at 2% average 5.2%, not 4%.
+    const rr = goalRealReturn([deposit(200_000_000, 6), deposit(50_000_000, 2)], 4)!
+    expect(rr.nominalRatePct).toBeCloseTo(5.2, 10)
+    expect(rr.ratedValue).toBe(250_000_000)
+  })
+
+  it('excludes a holding with no stated rate rather than calling it 0%', () => {
+    // A fund has no forward-looking rate to quote; scoring it as zero would
+    // claim it earns nothing, which is a statement nobody made. It is reported
+    // separately so the card can say what its answer covers.
+    const rr = goalRealReturn([deposit(240_000_000, 5.6), deposit(60_000_000, null)], 4)!
+    expect(rr.nominalRatePct).toBeCloseTo(5.6, 10)
+    expect(rr.ratedValue).toBe(240_000_000)
+    expect(rr.unratedValue).toBe(60_000_000)
+    expect(rr.perYear).toBe(Math.round(240_000_000 * (1.056 / 1.04 - 1)))
+  })
+
+  it('is null when nothing carries a rate — no yield, no claim', () => {
+    expect(goalRealReturn([deposit(240_000_000, null)], 4)).toBeNull()
+    expect(goalRealReturn([], 4)).toBeNull()
+  })
+
+  it('ignores a rated holding worth nothing, which cannot carry weight', () => {
+    expect(goalRealReturn([deposit(0, 5.6)], 4)).toBeNull()
+  })
+
+  it('reports the nominal rate as the real one when inflation is assumed away', () => {
+    const rr = goalRealReturn([deposit(240_000_000, 5.6)], 0)!
+    expect(rr.realRatePct).toBeCloseTo(5.6, 10)
   })
 })

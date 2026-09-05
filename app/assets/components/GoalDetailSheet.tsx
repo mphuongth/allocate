@@ -20,7 +20,7 @@ import { MaturityResolveSheet } from './MaturityResolveSheet'
 import { GD_COLORS, TypeIcon, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
 import { computeGoalCalculator, describeHistoryRow, mergedFromLabel } from './goalDetailModel'
-import { goalInflationLadder, goalInflationOutlook, resolveInflationRate } from '@/lib/inflation'
+import { goalInflationLadder, goalInflationOutlook, goalRealReturn, resolveInflationRate } from '@/lib/inflation'
 import InflationOutlookCard from './InflationOutlookCard'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -227,6 +227,11 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   // assuming a date — see InflationOutlookCard. Computed unconditionally; the
   // card prefers `inflation` whenever it exists.
   const inflationLadder = goalInflationLadder(goal, inflationRate)
+  // What the holdings are really earning, netted against the same assumption
+  // (lib/inflation goalRealReturn). Built from the rows this surface renders, so
+  // the figure covers exactly the money on screen.
+  const inflationReal = goalRealReturn(invRows, inflationRate)
+
 
   const detailFund = fundDetailId ? (fundMap.get(fundDetailId) ?? null) : null
 
@@ -420,6 +425,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
           <InflationOutlookCard
             outlook={inflation}
             ladder={inflationLadder}
+            realReturn={inflationReal}
             targetAmount={goal.targetAmount ?? 0}
             currentValue={goal.currentValue}
             targetDate={goal.targetDate}

@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from 'react'
 import { fmtCompact } from '@/lib/formatters'
-import type { GoalInflationOutlook, InflationLadder } from '@/lib/inflation'
+import type { GoalInflationOutlook, InflationLadder, RealReturn } from '@/lib/inflation'
 
 // The purchasing-power view of a goal, shown on both goal-detail surfaces.
 //
@@ -31,6 +31,13 @@ function formatYm(ym: string, isVi: boolean): string {
 // 4 → "4%", 4.5 → "4.5%". Kept plain rather than locale-formatted: this reads as
 // a rate label beside prose, not as an amount in a column of figures.
 const fmtRate = (n: number) => `${n}%`
+
+// A real rate is a small number whose SIGN is the whole message, so it is always
+// written with one — "1.54%" and "+1.54%" read very differently next to a "-".
+const fmtSignedRate = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+
+// The same for money: a gain must not be able to read as a loss at a glance.
+const fmtSignedMoney = (n: number) => `${n >= 0 ? '+' : ''}${fmtCompact(n)}`
 
 const MUTED: CSSProperties = { fontSize: 12, color: 'var(--c-muted)' }
 const RULE: CSSProperties = { marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--c-line)' }
@@ -106,12 +113,53 @@ function DeadlineBody({ outlook, targetAmount, currentValue, targetDate, isVi }:
   )
 }
 
+// ─── The net, in both registers ───────────────────────────────────────────────
+
+// What the user actually asked: not what inflation costs, but whether they are
+// ahead. Shown wherever the card appears, because it is a per-year figure that
+// owes nothing to any horizon.
+function RealReturnLine({ realReturn: rr, isVi }: { realReturn: RealReturn; isVi: boolean }) {
+  const up = rr.perYear >= 0
+  const ink = up ? 'var(--c-pos)' : 'var(--c-neg)'
+  return (
+    <>
+      <div
+        data-testid="inflation-real-return"
+        data-sign={up ? 'positive' : 'negative'}
+        style={{ ...RULE, fontSize: 13, fontWeight: 600, color: ink, fontVariantNumeric: 'tabular-nums' }}
+      >
+        {/* Both halves of the sum are shown so the net is checkable rather than
+            asserted — the user can see which side moved when it changes. */}
+        <span style={{ fontWeight: 500, color: 'var(--c-muted)' }}>
+          {isVi
+            ? `Lãi ${fmtRate(Number(rr.nominalRatePct.toFixed(2)))}/năm · lạm phát ${fmtRate(rr.inflationRatePct)} → `
+            : `${fmtRate(Number(rr.nominalRatePct.toFixed(2)))}/yr interest · ${fmtRate(rr.inflationRatePct)} inflation → `}
+        </span>
+        {isVi ? 'thực ' : 'real '}{fmtSignedRate(rr.realRatePct)}
+        <span style={{ fontWeight: 500 }}>
+          {isVi ? ` ≈ ${fmtSignedMoney(rr.perYear)}/năm` : ` ≈ ${fmtSignedMoney(rr.perYear)}/yr`}
+        </span>
+      </div>
+      {rr.unratedValue > 0 && (
+        <div data-testid="inflation-real-return-scope" style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>
+          {isVi
+            ? `Tính trên ${fmtCompact(rr.ratedValue)} có lãi suất — ${fmtCompact(rr.unratedValue)} còn lại chưa có lợi suất công bố để tính.`
+            : `Over the ${fmtCompact(rr.ratedValue)} that states a rate — the other ${fmtCompact(rr.unratedValue)} quotes no forward yield.`}
+        </div>
+      )}
+    </>
+  )
+}
+
 // ─── Without a deadline: the shape, not a guessed date ────────────────────────
 
-function LadderBody({ ladder, targetAmount, isVi }: {
+function LadderBody({ ladder, targetAmount, isVi, earns }: {
   ladder: InflationLadder
   targetAmount: number
   isVi: boolean
+  // Whether a real-return line follows. "Standing still costs you X" is simply
+  // false for money in a term deposit, so the two must never both appear.
+  earns: boolean
 }) {
   return (
     <>
@@ -140,7 +188,7 @@ function LadderBody({ ladder, targetAmount, isVi }: {
 
       {/* The one line here that is about the user's own money rather than the
           target, and the one that needs no horizon at all. */}
-      {ladder.yearOneLoss > 0 && (
+      {!earns && ladder.yearOneLoss > 0 && (
         <div data-testid="inflation-year-loss" style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-warn)', marginTop: 10, fontVariantNumeric: 'tabular-nums' }}>
           {isVi ? 'Mỗi năm đứng yên mất ' : 'Standing still costs '}
           {fmtCompact(ladder.yearOneLoss)}
@@ -160,12 +208,15 @@ function LadderBody({ ladder, targetAmount, isVi }: {
 }
 
 export default function InflationOutlookCard({
-  outlook, ladder, targetAmount, currentValue, targetDate, isVi, style,
+  outlook, ladder, realReturn, targetAmount, currentValue, targetDate, isVi, style,
 }: {
   outlook: GoalInflationOutlook | null
   // Used only when there is no deadline. A month the user named beats a ladder
   // of horizons nobody chose, so `outlook` wins whenever both are present.
   ladder: InflationLadder | null
+  // Null when no holding states a rate — then there is no yield to net against
+  // inflation, and the card says only what inflation does.
+  realReturn: RealReturn | null
   targetAmount: number
   currentValue: number
   targetDate: string | null
@@ -195,7 +246,9 @@ export default function InflationOutlookCard({
 
       {outlook
         ? <DeadlineBody outlook={outlook} targetAmount={targetAmount} currentValue={currentValue} targetDate={targetDate ?? ''} isVi={isVi} />
-        : <LadderBody ladder={ladder!} targetAmount={targetAmount} isVi={isVi} />}
+        : <LadderBody ladder={ladder!} targetAmount={targetAmount} isVi={isVi} earns={realReturn != null} />}
+
+      {realReturn && <RealReturnLine realReturn={realReturn} isVi={isVi} />}
 
       <div data-testid="inflation-assumption-note" style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 10, lineHeight: 1.45 }}>
         {isVi

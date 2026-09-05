@@ -996,6 +996,27 @@ describe('GoalDetailSheet — purchasing power', () => {
     expect(screen.queryByTestId('inflation-outlook')).toBeNull()
   })
 
+
+  it('nets the deposit rate against inflation for a goal held in term deposits', async () => {
+    // The wiring that matters: the holding rows this surface builds must carry
+    // interestRate through to the card, or the line silently never appears.
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [{
+          ...mockTx, transaction_id: 'bank-1', asset_type: 'bank', fund_id: null,
+          fund_name: null, notes: 'NCB', units: null, unit_price: null,
+          amount_vnd: 240_000_000, interest_rate: 5.6,
+        }] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+    render(<GoalDetailSheet {...baseProps} goal={{ ...mockGoal, targetDate: null, funds: [] }} />)
+    const line = await screen.findByTestId('inflation-real-return')
+    expect(line).toHaveAttribute('data-sign', 'positive')
+    // …and the standing-still line is gone, because this money is not standing still.
+    expect(screen.queryByTestId('inflation-year-loss')).toBeNull()
+  })
+
   it('does not repeat itself inside the calculator tab', async () => {
     render(<GoalDetailSheet {...baseProps} goal={{ ...mockGoal, targetDate: futureYm }} />)
     await userEvent.click(await screen.findByRole('button', { name: /calculator/i }))

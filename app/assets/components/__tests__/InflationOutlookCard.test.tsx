@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import InflationOutlookCard from '../InflationOutlookCard'
-import { goalInflationOutlook, goalInflationLadder } from '@/lib/inflation'
+import { goalInflationOutlook, goalInflationLadder, goalRealReturn } from '@/lib/inflation'
 
 // The card is the only place the app talks about purchasing power, so what it
 // may and may not claim is the thing under test — not its styling.
@@ -26,6 +26,7 @@ const renderCard = (props: Partial<React.ComponentProps<typeof InflationOutlookC
     <InflationOutlookCard
       outlook={outlook()}
       ladder={null}
+      realReturn={null}
       targetAmount={500_000_000}
       currentValue={320_000_000}
       targetDate="2030-06"
@@ -112,6 +113,7 @@ const renderLadder = (props: Partial<React.ComponentProps<typeof InflationOutloo
     <InflationOutlookCard
       outlook={null}
       ladder={ladder()}
+      realReturn={null}
       targetAmount={288_000_000}
       currentValue={240_000_000}
       targetDate={null}
@@ -161,5 +163,65 @@ describe('InflationOutlookCard — no deadline', () => {
     renderLadder({ ladder: ladder(4, 0), currentValue: 0 })
     expect(screen.queryByTestId('inflation-year-loss')).toBeNull()
     expect(screen.getByTestId('inflation-ladder-10')).toBeInTheDocument()
+  })
+})
+
+// ── Real return ───────────────────────────────────────────────────────────────
+// The line the user actually asked for: not "what does inflation cost me" but
+// "am I ahead or behind, net". It belongs in both registers — it is a per-year
+// figure and owes nothing to the horizon.
+
+const realReturn = (rate: number, inflation = 4, unrated = 0) =>
+  goalRealReturn(
+    [{ value: 240_000_000, interestRate: rate }, ...(unrated ? [{ value: unrated, interestRate: null }] : [])],
+    inflation,
+  )!
+
+describe('InflationOutlookCard — real return', () => {
+  it('reports a gain when the rate outruns inflation', () => {
+    renderLadder({ realReturn: realReturn(5.6) })
+    const line = screen.getByTestId('inflation-real-return')
+    expect(line).toHaveTextContent('+1.54%')
+    expect(line).toHaveAttribute('data-sign', 'positive')
+  })
+
+  it('reports a loss when it does not', () => {
+    renderLadder({ realReturn: realReturn(3, 4.45) })
+    const line = screen.getByTestId('inflation-real-return')
+    expect(line).toHaveAttribute('data-sign', 'negative')
+    expect(line.textContent).toMatch(/-1\.3\d%/)
+  })
+
+  it('shows both halves of the sum, so the net is checkable', () => {
+    renderLadder({ realReturn: realReturn(5.6) })
+    const line = screen.getByTestId('inflation-real-return')
+    expect(line.textContent).toMatch(/5\.6%/)
+    expect(line.textContent).toMatch(/4%/)
+  })
+
+  it('replaces the standing-still line, which is false for money that earns', () => {
+    renderLadder({ realReturn: realReturn(5.6) })
+    expect(screen.queryByTestId('inflation-year-loss')).toBeNull()
+  })
+
+  it('keeps the standing-still line when nothing states a rate', () => {
+    renderLadder({ realReturn: null })
+    expect(screen.getByTestId('inflation-year-loss')).toBeInTheDocument()
+  })
+
+  it('says what the answer does not cover', () => {
+    renderLadder({ realReturn: realReturn(5.6, 4, 60_000_000) })
+    expect(screen.getByTestId('inflation-real-return-scope')).toHaveTextContent('60.0M ₫')
+  })
+
+  it('claims no scope caveat when every holding states a rate', () => {
+    renderLadder({ realReturn: realReturn(5.6) })
+    expect(screen.queryByTestId('inflation-real-return-scope')).toBeNull()
+  })
+
+  it('appears on the exact card too — the net owes nothing to the horizon', () => {
+    renderCard({ realReturn: realReturn(5.6) })
+    expect(screen.getByTestId('inflation-real-return')).toBeInTheDocument()
+    expect(screen.getByTestId('inflation-target-future')).toBeInTheDocument()
   })
 })
