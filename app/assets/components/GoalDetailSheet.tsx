@@ -20,6 +20,8 @@ import { MaturityResolveSheet } from './MaturityResolveSheet'
 import { GD_COLORS, TypeIcon, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
 import { computeGoalCalculator, describeHistoryRow, mergedFromLabel } from './goalDetailModel'
+import { goalInflationLadder, goalInflationOutlook, goalRealReturn, resolveInflationRate } from '@/lib/inflation'
+import InflationOutlookCard from './InflationOutlookCard'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
@@ -75,7 +77,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [unassignedIds, setUnassignedIds] = useState<string[]>([])
   // Transactions + gold price load (shared with DesktopGoalDetail, #467). The
   // sheet only loads while open; each load clears the optimistic unassign filter.
-  const { transactions, bookNames, txLoading, txError, goldPricePerChi } = useGoalDetailData({
+  const { transactions, bookNames, txLoading, txError, goldPricePerChi, userInflationRatePct } = useGoalDetailData({
     goalId: goal?.goalId,
     enabled: open && !!goal,
     refreshKey,
@@ -215,6 +217,21 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const monthly = Math.max(0, parseFloat(monthlyContrib.replace(/,/g, '')) || 0)
   const { remaining, monthsLeft, neededPerMonth, monthsToGoal, projectedDate, isOnTrack, gap } = computeGoalCalculator(goal, monthly)
   const projectedMonths = monthsToGoal ?? 0
+
+  // The purchasing-power commentary (see InflationOutlookCard). Derived from the
+  // goal's own rate if it has one, else the user's, else the app default; null
+  // whenever there is no target, no deadline, or the deadline has arrived.
+  const inflationRate = resolveInflationRate(goal.inflationRatePct, userInflationRatePct)
+  const inflation = goalInflationOutlook(goal, inflationRate)
+  // Without a deadline the card drops to a ladder of horizons rather than
+  // assuming a date — see InflationOutlookCard. Computed unconditionally; the
+  // card prefers `inflation` whenever it exists.
+  const inflationLadder = goalInflationLadder(goal, inflationRate)
+  // What the holdings are really earning, netted against the same assumption
+  // (lib/inflation goalRealReturn). Built from the rows this surface renders, so
+  // the figure covers exactly the money on screen.
+  const inflationReal = goalRealReturn(invRows, inflationRate)
+
 
   const detailFund = fundDetailId ? (fundMap.get(fundDetailId) ?? null) : null
 
@@ -399,6 +416,22 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               </div>
             </div>
           )}
+
+          {/* Purchasing power. Out here with the progress bar rather than
+              behind the Calculator tab: the tab is somewhere a user goes on
+              purpose to try a monthly amount, and what the target will actually
+              cost is something they have to see without going looking. It also
+              does not depend on the calculator's input — only on the deadline. */}
+          <InflationOutlookCard
+            outlook={inflation}
+            ladder={inflationLadder}
+            realReturn={inflationReal}
+            targetAmount={goal.targetAmount ?? 0}
+            currentValue={goal.currentValue}
+            targetDate={goal.targetDate}
+            isVi={isVI}
+            style={{ marginBottom: 16 }}
+          />
 
           {/* Tab bar */}
           <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--c-line)' }}>
@@ -661,6 +694,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               {monthly > 0 && goal.targetAmount && creditedWithdrawn > 0 && remaining > 0 && (
                 <ProgressGatherNote amount={creditedWithdrawn} isVi={isVI} />
               )}
+
 
               {/* Empty state */}
               {monthly <= 0 && (

@@ -30,6 +30,11 @@ export interface GoalData {
   goalName: string
   targetAmount: number | null
   targetDate: string | null
+  // This goal's own inflation assumption, overriding the user's — tuition and
+  // the general consumer basket have not moved together. Null/absent means "use
+  // the user's rate" (see lib/inflation resolveInflationRate); optional for
+  // back-compat with cached overview payloads predating the field.
+  inflationRatePct?: number | null
   currentValue: number
   // Progress-bar numerator: equals currentValue except that affects_progress=false
   // withdrawals are added back, so the bar holds steady while net worth (currentValue)

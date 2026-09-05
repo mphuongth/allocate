@@ -9,6 +9,7 @@ import { Globe, Sun, Download, RefreshCw, LogOut, ChevronRight, Check } from 'lu
 import { useNavigation } from '@/components/navigation/NavigationContext'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import { useSettingsController } from '../useSettingsController'
+import InflationRateCard from './InflationRateCard'
 import { useProfileEditor } from '@/features/settings/useProfileEditor'
 import {
   themeOptions, themeLabel, localeOptions, localeLabel, priceSources,
@@ -429,6 +430,16 @@ export default function MobileSettingsView({ email, initials, displayName }: Set
               onClick={() => setShowAppearance(true)}
               last
             />
+          </div>
+        </section>
+
+        {/* Inflation assumption */}
+        <section style={{ marginTop: 22 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 8, paddingLeft: 4 }}>
+            {t('inflation')}
+          </div>
+          <div style={{ background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 16, padding: 16, boxShadow: 'var(--shadow-card)' }}>
+            <InflationRateCard />
           </div>
         </section>
 

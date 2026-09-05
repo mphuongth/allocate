@@ -12,6 +12,8 @@ import { GD_COLORS, TypeIcon, UnlinkSvg, BankInfoStrip, TopUpControl, RenewalSum
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
 import { needsMaturityAction, needsBookMaturityAction } from './goalDetailMaturity'
 import { computeGoalCalculator, describeHistoryRow, mergedFromLabel } from './goalDetailModel'
+import { goalInflationLadder, goalInflationOutlook, goalRealReturn, resolveInflationRate } from '@/lib/inflation'
+import InflationOutlookCard from './InflationOutlookCard'
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -79,7 +81,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   // Transactions + gold price load (shared with GoalDetailSheet, #467). The
   // panel is always mounted, so it always loads; each load clears the optimistic
   // unassign filter.
-  const { transactions, bookNames, txLoading, txError, goldPricePerChi } = useGoalDetailData({
+  const { transactions, bookNames, txLoading, txError, goldPricePerChi, userInflationRatePct } = useGoalDetailData({
     goalId: goal.goalId,
     enabled: true,
     refreshKey,
@@ -150,7 +152,23 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   const calcInput = Math.max(0, Number(calcAmount) || 0)
   const { remaining, monthsLeft, neededPerMonth, monthsToGoal, projectedDate, isOnTrack, gap } = computeGoalCalculator(goal, calcInput)
 
+  // The purchasing-power commentary (see InflationOutlookCard). Derived from the
+  // goal's own rate if it has one, else the user's, else the app default; null
+  // whenever there is no target, no deadline, or the deadline has arrived.
+  const inflationRate = resolveInflationRate(goal.inflationRatePct, userInflationRatePct)
+  const inflation = goalInflationOutlook(goal, inflationRate)
+  // Without a deadline the card drops to a ladder of horizons rather than
+  // assuming a date — see InflationOutlookCard. Computed unconditionally; the
+  // card prefers `inflation` whenever it exists.
+  const inflationLadder = goalInflationLadder(goal, inflationRate)
+
   const visibleInvRows = invRows.filter((inv) => !unassignedIds.includes(inv.id))
+
+  // What the holdings are really earning, netted against the same assumption
+  // (lib/inflation goalRealReturn). Built from the rows this surface renders, so
+  // the figure covers exactly the money on screen.
+  const inflationReal = goalRealReturn(visibleInvRows, inflationRate)
+
 
   // "Bỏ chờ gộp" — delete the held settlement row, restoring the original deposit;
   // onDataChanged re-fetches so the chip drops and the deposit reappears.
@@ -304,6 +322,20 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           </div>
         )}
 
+        {/* Purchasing power. Out here with the progress bar rather than
+          behind the Calculator tab: the tab is somewhere a user goes on
+          purpose to try a monthly amount, and what the target will actually
+          cost is something they have to see without going looking. It also
+          does not depend on the calculator's input — only on the deadline. */}
+        <InflationOutlookCard
+          outlook={inflation}
+          ladder={inflationLadder}
+          realReturn={inflationReal}
+          targetAmount={goal.targetAmount ?? 0}
+          currentValue={goal.currentValue}
+          targetDate={goal.targetDate}
+          isVi={isVi}
+        />
         {/* Tabs card */}
         <div className="cn-card" style={{ overflow: 'hidden' }}>
           <div style={{ display: 'flex', borderBottom: '1px solid var(--c-line)', padding: '0 16px' }}>
@@ -497,6 +529,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
               {calcInput > 0 && goal.targetAmount && creditedWithdrawn > 0 && remaining > 0 && (
                 <ProgressGatherNote amount={creditedWithdrawn} isVi={isVi} />
               )}
+
 
               {calcInput <= 0 && (
                 <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--c-muted)' }}>
