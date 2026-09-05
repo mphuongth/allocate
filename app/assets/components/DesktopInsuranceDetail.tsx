@@ -6,6 +6,7 @@ import { iconHit } from './iconHit'
 import { toast } from 'sonner'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
+import PendingButton from '@/components/ui/PendingButton'
 import { STATUS_COLOR, BAR_COLOR_DETAIL, COVERAGE_OPTIONS, insurancePaidState, insuranceStatusLabel } from './insuranceShared'
 import type { InsuranceData } from '@/features/dashboard/contracts'
 import LogInsurancePaymentModal from './LogInsurancePaymentModal'
@@ -272,9 +273,9 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
             <button onClick={() => setEditing(false)} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>
               {isVi ? 'Hủy' : 'Cancel'}
             </button>
-            <button onClick={handleSaveEdit} disabled={saving || !editName.trim() || editPremium <= 0} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center', opacity: saving ? 0.6 : 1 }}>
+            <PendingButton pending={saving} pendingLabel={isVi ? 'Đang lưu…' : 'Saving…'} onClick={handleSaveEdit} disabled={!editName.trim() || editPremium <= 0} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }}>
               {isVi ? 'Lưu' : 'Save'}
-            </button>
+            </PendingButton>
           </div>
         </div>
       ) : (
@@ -581,21 +582,22 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
               >
                 {isVi ? 'Hủy' : 'Cancel'}
               </button>
-              <button
+              <PendingButton
                 data-testid="insurance-remove-confirm"
+                pending={deleting}
+                pendingLabel={isVi ? 'Đang xóa…' : 'Removing…'}
+                icon={<Trash2 size={14} />}
                 onClick={handleDelete}
-                disabled={deleting}
                 style={{
                   flex: 2, padding: '10px 0', fontSize: 13, fontWeight: 600,
                   background: 'var(--c-neg)', color: '#fff', border: 'none',
-                  borderRadius: 10, cursor: deleting ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit', opacity: deleting ? 0.6 : 1,
+                  borderRadius: 10, cursor: deleting ? 'default' : 'pointer',
+                  fontFamily: 'inherit',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                 }}
               >
-                <Trash2 size={14} />
                 {isVi ? 'Xóa' : 'Remove'}
-              </button>
+              </PendingButton>
             </div>
           </div>
         </div>

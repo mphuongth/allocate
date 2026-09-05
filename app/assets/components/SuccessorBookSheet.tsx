@@ -178,10 +178,10 @@ export default function SuccessorBookSheet({
             {isVi
               ? `${target.bookName} vẫn nhận nạp vào ngày này, nên đây là một lần nạp thêm chứ chưa cần sổ mới.`
               : `${target.bookName} still accepts a contribution on that date, so this is a top-up rather than a new book.`}
-            <button type="button" data-testid="record-topup-instead" disabled={saving} onClick={topUpInstead}
-              style={{ display: 'block', marginTop: 6, padding: 0, border: 'none', background: 'none', color: 'inherit', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+            <PendingButton data-testid="record-topup-instead" pending={saving} pendingLabel={isVi ? 'Đang xử lý...' : 'Processing...'} loaderVariant="muted" loaderSize={12} onClick={topUpInstead}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, padding: 0, border: 'none', background: 'none', color: 'inherit', fontSize: 12, fontWeight: 700, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
               {isVi ? 'Ghi thành nạp thêm vào sổ cũ' : 'Record it as a top-up instead'}
-            </button>
+            </PendingButton>
           </div>
         )}
         {error && <p data-testid="successor-error" style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}

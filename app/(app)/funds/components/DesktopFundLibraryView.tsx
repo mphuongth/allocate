@@ -131,13 +131,14 @@ function DeleteModal({ open, onClose, fundCode, onConfirm, deleting }: {
             <button onClick={onClose} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }} disabled={deleting}>
               {tc('cancel')}
             </button>
-            <button
+            <PendingButton
+              pending={deleting}
+              pendingLabel={tc('deleting')}
               onClick={onConfirm}
-              disabled={deleting}
-              style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 'var(--r-control)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: deleting ? 0.5 : 1 }}
+              style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 'var(--r-control)', fontSize: 13, fontWeight: 600, cursor: deleting ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             >
-              {deleting ? tc('deleting') : t('deleteBtn')}
-            </button>
+              {t('deleteBtn')}
+            </PendingButton>
           </div>
         </div>
       </div>

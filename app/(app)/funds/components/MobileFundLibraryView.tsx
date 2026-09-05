@@ -824,10 +824,9 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
               <button onClick={() => setDeleteFund(null)} disabled={deleting} style={{ flex: 1, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>
                 {tc('cancel')}
               </button>
-              <button onClick={handleDelete} disabled={deleting} style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 10, background: 'var(--c-neg)', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1, fontFamily: 'inherit' }}>
-                <IconTrash size={14} color="#fff" />
-                {deleting ? tc('deleting') : t('deleteBtn')}
-              </button>
+              <PendingButton pending={deleting} pendingLabel={tc('deleting')} icon={<IconTrash size={14} color="#fff" />} onClick={handleDelete} style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 10, background: 'var(--c-neg)', color: '#fff', cursor: deleting ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                {t('deleteBtn')}
+              </PendingButton>
             </div>
           </div>
         )}

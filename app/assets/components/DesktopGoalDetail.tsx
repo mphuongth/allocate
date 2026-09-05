@@ -6,6 +6,7 @@ import { iconHit } from './iconHit'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
+import PendingButton from '@/components/ui/PendingButton'
 import type { GoalData } from '@/features/dashboard/contracts'
 import { GD_COLORS, TypeIcon, UnlinkSvg, BankInfoStrip, TopUpControl, RenewalSummaryLine, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
@@ -1005,9 +1006,9 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button onClick={onClose} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
-          <button onClick={handleSave} disabled={saving} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center', opacity: saving ? 0.7 : 1 }}>
-            {saving ? (isVi ? 'Đang lưu…' : 'Saving…') : (isVi ? 'Lưu thay đổi' : 'Save changes')}
-          </button>
+          <PendingButton pending={saving} pendingLabel={isVi ? 'Đang lưu…' : 'Saving…'} onClick={handleSave} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }}>
+            {isVi ? 'Lưu thay đổi' : 'Save changes'}
+          </PendingButton>
         </div>
       </div>
     </DModal>

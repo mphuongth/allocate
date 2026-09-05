@@ -869,7 +869,12 @@ export function MaturityResolveBody({
 
       {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
       {(handoverBlocked || hasSuccessor) && (
-        <button type="button" data-testid="cancel-handover-btn" disabled={saving}
+        <PendingButton
+          data-testid="cancel-handover-btn"
+          pending={saving}
+          pendingLabel={isVi ? 'Đang huỷ…' : 'Cancelling…'}
+          loaderVariant="muted"
+          loaderSize={12}
           onClick={async () => {
             setSaving(true)
             try {
@@ -878,11 +883,11 @@ export function MaturityResolveBody({
               else setError(isVi ? 'Không huỷ được bàn giao' : 'Could not cancel the handover')
             } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
           }}
-          style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'none', color: 'var(--c-navy)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+          style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 5, padding: 0, border: 'none', background: 'none', color: 'var(--c-navy)', fontSize: 13, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
           {handoverBlocked
             ? (isVi ? 'Huỷ bàn giao rồi thử lại' : 'Cancel the handover and try again')
             : (isVi ? 'Huỷ bàn giao để xử lý theo cách khác' : 'Cancel the handover to resolve this another way')}
-        </button>
+        </PendingButton>
       )}
 
       {/* Where the new cycle is deposited. Shown for every renewal — a matured

@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { deleteTransaction } from './deleteTransaction'
 import { useDialogMount } from '@/components/ui/useDialogMount'
 import DialogShell from '@/components/ui/DialogShell'
+import PendingButton from '@/components/ui/PendingButton'
 
 interface Goal { goal_id: string; goal_name: string; completed_at?: string | null }
 interface Fund { id: string; name: string; code: string; nav: number }
@@ -815,7 +816,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
 
           <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
             <button type="button" onClick={() => setFormMode(null)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
-            <button type="submit" className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={saving}>{saving ? tc('saving') : tc('save')}</button>
+            <PendingButton type="submit" pending={saving} pendingLabel={tc('saving')} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }}>{tc('save')}</PendingButton>
           </div>
         </form>
       </Shell>
@@ -838,7 +839,7 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
 
           <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
             <button type="button" onClick={() => setWdTx(null)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
-            <button data-testid="withdraw-edit-save" type="submit" className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={wdSaving}>{wdSaving ? tc('saving') : tc('save')}</button>
+            <PendingButton data-testid="withdraw-edit-save" type="submit" pending={wdSaving} pendingLabel={tc('saving')} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }}>{tc('save')}</PendingButton>
           </div>
         </form>
       </Shell>
@@ -890,9 +891,9 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
 
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setShowImport(false)} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
-            <button onClick={handleImport} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={importing || !importFundId || importRows.filter((r) => !r.error).length === 0}>
-              {importing ? t('importing') : t('importCount', { count: importRows.filter((r) => !r.error).length })}
-            </button>
+            <PendingButton onClick={handleImport} pending={importing} pendingLabel={t('importing')} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={!importFundId || importRows.filter((r) => !r.error).length === 0}>
+              {t('importCount', { count: importRows.filter((r) => !r.error).length })}
+            </PendingButton>
           </div>
         </div>
       </Shell>
@@ -924,14 +925,16 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
             )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={closeConfirm} className="cn-btn" style={{ flex: 1, justifyContent: 'center' }}>{tc('cancel')}</button>
-              <button
+              <PendingButton
                 data-testid="tx-ledger-delete-confirm"
+                pending={deletingId === confirmTx.transaction_id || lookupPending}
+                pendingLabel={tc('loading')}
+                icon={<Trash size={14} />}
                 onClick={() => handleDelete(confirmTx)}
-                disabled={deletingId === confirmTx.transaction_id || lookupPending}
-                style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: deletingId === confirmTx.transaction_id || lookupPending ? 0.7 : 1 }}
+                style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
-                <Trash size={14} />{deletingId === confirmTx.transaction_id || lookupPending ? tc('loading') : tc('delete')}
-              </button>
+                {tc('delete')}
+              </PendingButton>
             </div>
           </div>
         )}

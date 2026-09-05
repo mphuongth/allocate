@@ -357,7 +357,12 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
         {inv.successorName
           ? (isVi ? `Sẽ gộp vào “${inv.successorName}” khi đáo hạn.` : `Will merge into “${inv.successorName}” at maturity.`)
           : (isVi ? 'Sẽ gộp vào sổ kế nhiệm khi đáo hạn.' : 'Will merge into its successor book at maturity.')}
-        <button type="button" data-testid="cancel-successor-btn" disabled={saving}
+        <PendingButton
+          data-testid="cancel-successor-btn"
+          pending={saving}
+          pendingLabel={isVi ? 'Đang huỷ…' : 'Cancelling…'}
+          loaderVariant="muted"
+          loaderSize={12}
           onClick={async () => {
             setSaving(true)
             try {
@@ -365,9 +370,9 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
               if (res.ok) onDone()
             } finally { setSaving(false) }
           }}
-          style={{ display: 'block', marginTop: 6, padding: 0, border: 'none', background: 'none', color: 'var(--c-navy)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, padding: 0, border: 'none', background: 'none', color: 'var(--c-navy)', fontSize: 12, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
           {isVi ? 'Huỷ bàn giao' : 'Cancel the handover'}
-        </button>
+        </PendingButton>
       </div>
     )
   }
