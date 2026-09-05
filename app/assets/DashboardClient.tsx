@@ -97,7 +97,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // SellWithdrawSheet so a goal-assigned deposit withdraws in one tap (linked to
   // its goal, issue #261) instead of bouncing through the goal detail panel.
   const [maturityWithdraw, setMaturityWithdraw] = useState<
-    { item: SellItem; goalId: string; goalCurrentValue: number; goalTargetAmount: number | null; received: number | null } | null
+    { item: SellItem; goalId: string; goalProgressValue: number; goalTargetAmount: number | null; received: number | null } | null
   >(null)
   // Same figure for the unallocated fork, which reuses the plain sell sheet (#705).
   const [sellPayout, setSellPayout] = useState<number | null>(null)
@@ -259,7 +259,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
       setMaturityWithdraw({
         item,
         goalId: dep.goalId,
-        goalCurrentValue: goal?.currentValue ?? dep.raw.currentValue,
+        goalProgressValue: goal?.progressValue ?? goal?.currentValue ?? dep.raw.currentValue,
         goalTargetAmount: goal?.targetAmount ?? null,
         received: received ?? null,
       })
@@ -771,7 +771,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
           open
           context="goal"
           goalId={maturityWithdraw.goalId}
-          goalCurrentValue={maturityWithdraw.goalCurrentValue}
+          goalProgressValue={maturityWithdraw.goalProgressValue}
           goalTargetAmount={maturityWithdraw.goalTargetAmount}
           receivedPrefill={maturityWithdraw.received}
           desktop={isDesktop}

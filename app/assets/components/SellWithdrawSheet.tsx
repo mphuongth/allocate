@@ -28,7 +28,8 @@ interface Props {
   goalId?: string
   // Goal value & target drive the "count toward goal progress" preview. Only
   // used in the 'goal' context.
-  goalCurrentValue?: number
+  // The goal bar's numerator (progressValue), NOT net worth — see AffectsProgressControl.
+  goalProgressValue?: number
   goalTargetAmount?: number | null
   onClose: () => void
   onSuccess: () => void
@@ -64,7 +65,7 @@ function maturityCloseAmount(item: SellItem | null, receivedPrefill?: number | n
   return String(Math.round(item.purchasePrice ?? item.currentValue ?? 0))
 }
 
-export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValue, goalTargetAmount, onClose, onSuccess, receivedPrefill, desktop }: Props) {
+export function SellWithdrawSheet({ item, open, context, goalId, goalProgressValue, goalTargetAmount, onClose, onSuccess, receivedPrefill, desktop }: Props) {
   const locale = useLocale()
   // Generic fallback shown when the API fails without a message. Inline-localized
   // to match the rest of this file (no next-intl t() here).
@@ -703,7 +704,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalCurrentValu
                 checked={affectsProgress}
                 onChange={setAffectsProgress}
                 isVi={isVI}
-                currentValue={goalCurrentValue ?? 0}
+                progressValue={goalProgressValue ?? 0}
                 targetAmount={goalTargetAmount ?? null}
                 withdrawnValue={isGold ? goldProceeds : isBank ? bankValueReleased : numAmount}
               />

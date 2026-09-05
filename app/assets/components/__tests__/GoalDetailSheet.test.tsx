@@ -913,3 +913,46 @@ describe('GoalDetailSheet — dialog contract (#688)', () => {
     expect(dialog).toContainElement(document.activeElement as HTMLElement)
   })
 })
+
+// Mobile counterpart of the desktop wiring: the preview's baseline is the bar's
+// numerator (progressValue), not net worth.
+describe('GoalDetailSheet — the withdraw preview starts from the goal bar, not net worth', () => {
+  const mockBankTx = {
+    transaction_id: 'tx-bank-credited',
+    transaction_type: 'investment',
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    fund_code: null,
+    investment_date: '2026-01-01',
+    amount_vnd: 86_000_000,
+    units: null,
+    unit_price: null,
+    interest_rate: 6,
+    expiry_date: null,
+    notes: 'Techcombank',
+    principal_withdrawn: null,
+    units_withdrawn: null,
+  }
+  const creditedGoal: GoalData = {
+    ...mockGoal, funds: [], targetAmount: 100_000_000,
+    currentValue: 86_000_000, progressValue: 100_000_000, progressPercentage: 100,
+  }
+
+  it('previews the progress the goal header shows', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) =>
+      url.includes('investment-transactions')
+        ? Promise.resolve({ ok: true, json: async () => ({ transactions: [mockBankTx] }) })
+        : Promise.resolve({ ok: true, json: async () => ({}) }))
+
+    render(<GoalDetailSheet {...baseProps} goal={creditedGoal} />)
+    await waitFor(() => screen.getByText('Techcombank'))
+    await userEvent.click(screen.getByRole('button', { name: /^Options$/ }))
+    await waitFor(() => expect(screen.getByText('Withdraw')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Withdraw'))
+
+    const control = await screen.findByTestId('affects-progress-control')
+    expect(control).toHaveTextContent('100%')
+    expect(control).not.toHaveTextContent('86%')
+  })
+})

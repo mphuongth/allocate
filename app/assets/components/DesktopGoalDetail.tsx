@@ -670,7 +670,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
           item={invToSellItem(actionInv)}
           context="goal"
           goalId={goal.goalId}
-          goalCurrentValue={goal.currentValue}
+          goalProgressValue={goal.progressValue ?? goal.currentValue}
           goalTargetAmount={goal.targetAmount}
           onClose={() => setShowSell(false)}
           onSuccess={() => {

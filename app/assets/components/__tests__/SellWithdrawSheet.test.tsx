@@ -136,7 +136,7 @@ describe('SellWithdrawSheet — goal-progress preview tracks the value released,
     currentValue: 24_000_000, interestRate: 6,
     transactionId: 't1', purchasePrice: 20_000_000,
   }
-  const goalProps = { context: 'goal' as const, goalId: 'g1', goalCurrentValue: 24_000_000, goalTargetAmount: 24_000_000 }
+  const goalProps = { context: 'goal' as const, goalId: 'g1', goalProgressValue: 24_000_000, goalTargetAmount: 24_000_000 }
 
   it('previews the drop from the value released', () => {
     render(<SellWithdrawSheet item={book} open {...goalProps} onClose={vi.fn()} onSuccess={vi.fn()} />)
@@ -233,7 +233,7 @@ describe('SellWithdrawSheet — count toward goal progress toggle', () => {
     const fetchMock = vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<SellWithdrawSheet item={bankItem} open context="goal" goalId="g1" goalCurrentValue={20_000_000} goalTargetAmount={50_000_000} onClose={vi.fn()} onSuccess={vi.fn()} />)
+    render(<SellWithdrawSheet item={bankItem} open context="goal" goalId="g1" goalProgressValue={20_000_000} goalTargetAmount={50_000_000} onClose={vi.fn()} onSuccess={vi.fn()} />)
 
     expect(screen.getByTestId('affects-progress-control')).toBeInTheDocument()
 
@@ -251,7 +251,7 @@ describe('SellWithdrawSheet — count toward goal progress toggle', () => {
     const fetchMock = vi.fn((_url?: string, _init?: RequestInit) => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<SellWithdrawSheet item={bankItem} open context="goal" goalId="g1" goalCurrentValue={20_000_000} goalTargetAmount={50_000_000} onClose={vi.fn()} onSuccess={vi.fn()} />)
+    render(<SellWithdrawSheet item={bankItem} open context="goal" goalId="g1" goalProgressValue={20_000_000} goalTargetAmount={50_000_000} onClose={vi.fn()} onSuccess={vi.fn()} />)
 
     fireEvent.click(screen.getByTestId('affects-progress-switch'))
     fireEvent.click(screen.getByTestId('sell-all-btn'))

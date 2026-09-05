@@ -15,7 +15,7 @@ describe('AffectsProgressControl — OFF copy does not promise a within-goal tra
         checked={false}
         onChange={() => {}}
         isVi={isVi}
-        currentValue={20_000_000}
+        progressValue={20_000_000}
         targetAmount={50_000_000}
         withdrawnValue={4_000_000}
       />,

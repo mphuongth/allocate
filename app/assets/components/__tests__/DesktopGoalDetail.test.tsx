@@ -578,3 +578,50 @@ describe('DesktopGoalDetail — recurring contributions are not holdings (#640)'
     expect(screen.getAllByRole('button', { name: /^Options$/ })).toHaveLength(1)
   })
 })
+
+// The goal bar runs off progressValue — currentValue with every
+// affects_progress=false withdrawal added back. The withdraw sheet's progress
+// preview was handed currentValue instead, so a goal reading 100% on the card
+// opened its withdraw preview at 86%: the same bar, two numbers.
+describe('DesktopGoalDetail — the withdraw preview starts from the goal bar, not net worth', () => {
+  const mockBankTx = {
+    transaction_id: 'tx-bank-1',
+    transaction_type: 'investment',
+    asset_type: 'bank',
+    fund_id: null,
+    fund_name: null,
+    parent_transaction_id: null,
+    investment_date: '2026-01-01',
+    amount_vnd: 86_000_000,
+    units: null,
+    interest_rate: 6,
+    notes: 'Techcombank',
+    principal_withdrawn: null,
+    units_withdrawn: null,
+  }
+  // 14M already withdrawn but still credited: the bar is full, net worth is 86%.
+  const creditedGoal: GoalData = {
+    ...mockGoal, funds: [], targetAmount: 100_000_000,
+    currentValue: 86_000_000, progressValue: 100_000_000, progressPercentage: 100,
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation((url: string) =>
+      url.includes('investment-transactions')
+        ? Promise.resolve({ ok: true, json: async () => ({ transactions: [mockBankTx] }) })
+        : Promise.resolve({ ok: true, json: async () => ({}) }))
+  })
+
+  it('previews the progress the card shows', async () => {
+    render(<DesktopGoalDetail {...baseProps} goal={creditedGoal} />)
+    await waitFor(() => screen.getByText('Techcombank'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }))
+    await waitFor(() => expect(screen.getByText('Withdraw')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('Withdraw'))
+
+    const control = await screen.findByTestId('affects-progress-control')
+    expect(control).toHaveTextContent('100%')
+    expect(control).not.toHaveTextContent('86%')
+  })
+})
