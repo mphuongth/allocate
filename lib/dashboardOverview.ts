@@ -112,7 +112,7 @@ export async function buildDashboardOverview(
     supabase.from('monthly_plans').select('id, month, year').eq('user_id', userId),
     supabase
       .from('savings_goals')
-      .select('goal_id, goal_name, target_amount, target_date, completed_at, completion_value, completion_percentage')
+      .select('goal_id, goal_name, target_amount, target_date, inflation_rate_pct, completed_at, completion_value, completion_percentage')
       .eq('user_id', userId),
     supabase
       // Snapshot-free view — renewal history rows can't reach the net-worth /
@@ -250,6 +250,9 @@ export async function buildDashboardOverview(
     goalName: string
     targetAmount: number | null
     targetDate: string | null
+    // The goal's own inflation assumption, overriding the user's. NULL — where
+    // every goal starts — means "use the user's rate"; it is not 0.
+    inflationRatePct: number | null
     // The completion snapshot (#650) — carried through untouched, so a finished
     // goal keeps reading 100% however its live holdings are valued afterwards.
     completedAt: string | null
@@ -290,6 +293,7 @@ export async function buildDashboardOverview(
       goalName: goal.goal_name,
       targetAmount: goal.target_amount ?? null,
       targetDate: goal.target_date ?? null,
+      inflationRatePct: goal.inflation_rate_pct ?? null,
       completedAt: goal.completed_at ?? null,
       completionValue: goal.completion_value ?? null,
       completionPercentage: goal.completion_percentage ?? null,
@@ -547,6 +551,7 @@ export async function buildDashboardOverview(
       goalName: g.goalName,
       targetAmount: g.targetAmount,
       targetDate: g.targetDate,
+      inflationRatePct: g.inflationRatePct,
       completedAt: g.completedAt,
       completionValue: g.completionValue,
       completionPercentage: g.completionPercentage,

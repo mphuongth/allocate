@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobileSettingsView from '../MobileSettingsView'
 
@@ -80,7 +80,7 @@ describe('MobileSettingsView — profile card', () => {
     const nameInput = screen.getByDisplayValue('Phuong')
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, 'Minh Phuong')
-    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /save/i }))
     await waitFor(() => expect(screen.getByText('MP')).toBeInTheDocument(), { timeout: 2000 })
   })
 
@@ -114,7 +114,7 @@ describe('MobileSettingsView — profile sheet', () => {
     const nameInput = screen.getByDisplayValue('Phuong')
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, 'Minh')
-    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /save/i }))
     // After the success flash + close, the profile card should show the new name
     await waitFor(() => expect(screen.getByText('Minh')).toBeInTheDocument(), { timeout: 2000 })
     expect(screen.queryByText('Phuong')).not.toBeInTheDocument()
@@ -136,7 +136,7 @@ describe('MobileSettingsView — profile sheet', () => {
     const nameInput = screen.getByDisplayValue('Phuong')
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, 'Minh')
-    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /save/i }))
     await waitFor(() =>
       expect(updateUserMock).toHaveBeenCalledWith({ data: { display_name: 'Minh' } })
     )
@@ -152,7 +152,7 @@ describe('MobileSettingsView — profile sheet', () => {
     const nameInput = screen.getByDisplayValue('Phuong')
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, 'Minh Phuong')
-    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /save/i }))
     await waitFor(() => expect(setUserNameMock).toHaveBeenCalledWith('Minh Phuong'))
   })
 })
@@ -244,7 +244,7 @@ describe('MobileSettingsView — profile save failure', () => {
     const nameInput = screen.getByDisplayValue('Phuong')
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, 'Broken')
-    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /save/i }))
 
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
     // No success flash, and the form is still editable (not closed).
@@ -539,7 +539,7 @@ describe('MobileSettingsView — touch targets (≥44px)', () => {
   it('gives the profile sheet Save and Cancel buttons a ≥44px touch target', async () => {
     render(<MobileSettingsView {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /profile/i }))
-    expect(screen.getByRole('button', { name: /save/i })).toHaveStyle({ minHeight: '44px' })
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /save/i })).toHaveStyle({ minHeight: '44px' })
     expect(screen.getByRole('button', { name: /cancel/i })).toHaveStyle({ minHeight: '44px' })
   })
 

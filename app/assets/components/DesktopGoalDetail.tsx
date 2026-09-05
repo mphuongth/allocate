@@ -12,6 +12,8 @@ import { GD_COLORS, TypeIcon, UnlinkSvg, BankInfoStrip, TopUpControl, RenewalSum
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
 import { needsMaturityAction, needsBookMaturityAction } from './goalDetailMaturity'
 import { computeGoalCalculator, describeHistoryRow, mergedFromLabel } from './goalDetailModel'
+import { goalInflationOutlook, resolveInflationRate } from '@/lib/inflation'
+import InflationOutlookCard from './InflationOutlookCard'
 import { MaturityResolveModal } from './MaturityResolveSheet'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -79,7 +81,7 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   // Transactions + gold price load (shared with GoalDetailSheet, #467). The
   // panel is always mounted, so it always loads; each load clears the optimistic
   // unassign filter.
-  const { transactions, bookNames, txLoading, txError, goldPricePerChi } = useGoalDetailData({
+  const { transactions, bookNames, txLoading, txError, goldPricePerChi, userInflationRatePct } = useGoalDetailData({
     goalId: goal.goalId,
     enabled: true,
     refreshKey,
@@ -149,6 +151,11 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
   // number on this surface) and drives the shared derivation.
   const calcInput = Math.max(0, Number(calcAmount) || 0)
   const { remaining, monthsLeft, neededPerMonth, monthsToGoal, projectedDate, isOnTrack, gap } = computeGoalCalculator(goal, calcInput)
+
+  // The purchasing-power commentary (see InflationOutlookCard). Derived from the
+  // goal's own rate if it has one, else the user's, else the app default; null
+  // whenever there is no target, no deadline, or the deadline has arrived.
+  const inflation = goalInflationOutlook(goal, resolveInflationRate(goal.inflationRatePct, userInflationRatePct))
 
   const visibleInvRows = invRows.filter((inv) => !unassignedIds.includes(inv.id))
 
@@ -497,6 +504,17 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
               {calcInput > 0 && goal.targetAmount && creditedWithdrawn > 0 && remaining > 0 && (
                 <ProgressGatherNote amount={creditedWithdrawn} isVi={isVi} />
               )}
+
+              {/* Purchasing power. Shown whether or not a monthly amount has
+                  been typed — what the target will cost does not depend on the
+                  calculator input, only on the deadline. */}
+              <InflationOutlookCard
+                outlook={inflation}
+                targetAmount={goal.targetAmount ?? 0}
+                currentValue={goal.currentValue}
+                targetDate={goal.targetDate ?? ''}
+                isVi={isVi}
+              />
 
               {calcInput <= 0 && (
                 <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--c-muted)' }}>

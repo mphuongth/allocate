@@ -46,6 +46,10 @@ export interface UseGoalDetailData {
   txLoading: boolean
   txError: boolean
   goldPricePerChi: number | null
+  // The user's inflation assumption, or null when they have never set one — the
+  // caller resolves that against a per-goal override and the app default (see
+  // lib/inflation resolveInflationRate). Null is "not chosen", never 0.
+  userInflationRatePct: number | null
 }
 
 // The goal-detail transactions + gold-price load, shared by GoalDetailSheet
@@ -66,6 +70,7 @@ export function useGoalDetailData(opts: {
   const [transactions, setTransactions] = useState<InvestmentTx[]>([])
   const [bookNames, setBookNames] = useState<Record<string, string>>({})
   const [goldPricePerChi, setGoldPricePerChi] = useState<number | null>(null)
+  const [userInflationRatePct, setUserInflationRatePct] = useState<number | null>(null)
   const [txLoading, setTxLoading] = useState(false)
   const [txError, setTxError] = useState(false)
 
@@ -186,7 +191,14 @@ export function useGoalDetailData(opts: {
       .then((r) => r.ok ? r.json() : null)
       .then((res) => setGoldPricePerChi(res?.price_per_chi ?? null))
       .catch(() => setGoldPricePerChi(null))
+    // The inflation assumption is commentary on the goal, not part of its
+    // valuation, so a failed read degrades to "not chosen" — the card then
+    // speaks with the app default rather than disappearing or blocking the page.
+    fetch('/api/v1/user-settings', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((res) => setUserInflationRatePct(res?.inflation_rate_pct ?? null))
+      .catch(() => setUserInflationRatePct(null))
   }, [enabled, goalId, refreshKey, txReload])
 
-  return { transactions, bookNames, txLoading, txError, goldPricePerChi }
+  return { transactions, bookNames, txLoading, txError, goldPricePerChi, userInflationRatePct }
 }

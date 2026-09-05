@@ -8,6 +8,7 @@ import { clickAway } from '@/components/ui/clickAway'
 import { RefreshCw, LogOut, Download, X, Check, Edit2 } from 'lucide-react'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import { useSettingsController } from '../useSettingsController'
+import InflationRateCard from './InflationRateCard'
 import { useProfileEditor } from '@/features/settings/useProfileEditor'
 import {
   themeOptions, localeOptions, priceSources, type SettingsViewProps,
@@ -240,6 +241,12 @@ export default function DesktopSettingsView({ email, initials, displayName }: Se
                   ))}
                 </div>
               </div>
+            </Card>
+
+            {/* Inflation assumption */}
+            <Card>
+              <CardLabel>{t('inflation')}</CardLabel>
+              <InflationRateCard />
             </Card>
 
             {/* Sign out */}

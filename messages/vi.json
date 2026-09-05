@@ -174,7 +174,15 @@
     "goldNote": "Tự động đồng bộ lúc 09:00 mỗi ngày",
     "signOut": "Đăng xuất",
     "signOutFailed": "Đăng xuất thất bại",
-    "versionTag": "Bản nội bộ"
+    "versionTag": "Bản nội bộ",
+    "inflation": "Lạm phát",
+    "inflationRate": "Tỉ lệ giả định",
+    "inflationUnit": "%/năm",
+    "inflationHint": "Dùng để dự phóng mục tiêu sẽ tốn bao nhiêu theo giá tương lai. CPI Việt Nam bình quân khoảng 3%/năm giai đoạn 2021–2025, mục tiêu kiểm soát 2026 khoảng 4,5%. Đây là giả định để lập kế hoạch, không phải số liệu công bố — một năm cao hay thấp hơn không có nghĩa là phải sửa.",
+    "inflationDefaultNote": "Để trống để dùng mặc định của ứng dụng.",
+    "inflationRangeError": "Nhập tỉ lệ từ 0 đến 100.",
+    "inflationSaveFailed": "Không lưu được tỉ lệ lạm phát",
+    "inflationSave": "Lưu tỉ lệ giả định"
   },
   "goals": {
     "title": "Mục tiêu Tiết kiệm",

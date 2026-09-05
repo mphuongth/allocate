@@ -20,6 +20,8 @@ import { MaturityResolveSheet } from './MaturityResolveSheet'
 import { GD_COLORS, TypeIcon, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
 import { computeGoalCalculator, describeHistoryRow, mergedFromLabel } from './goalDetailModel'
+import { goalInflationOutlook, resolveInflationRate } from '@/lib/inflation'
+import InflationOutlookCard from './InflationOutlookCard'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
@@ -75,7 +77,7 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const [unassignedIds, setUnassignedIds] = useState<string[]>([])
   // Transactions + gold price load (shared with DesktopGoalDetail, #467). The
   // sheet only loads while open; each load clears the optimistic unassign filter.
-  const { transactions, bookNames, txLoading, txError, goldPricePerChi } = useGoalDetailData({
+  const { transactions, bookNames, txLoading, txError, goldPricePerChi, userInflationRatePct } = useGoalDetailData({
     goalId: goal?.goalId,
     enabled: open && !!goal,
     refreshKey,
@@ -215,6 +217,11 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   const monthly = Math.max(0, parseFloat(monthlyContrib.replace(/,/g, '')) || 0)
   const { remaining, monthsLeft, neededPerMonth, monthsToGoal, projectedDate, isOnTrack, gap } = computeGoalCalculator(goal, monthly)
   const projectedMonths = monthsToGoal ?? 0
+
+  // The purchasing-power commentary (see InflationOutlookCard). Derived from the
+  // goal's own rate if it has one, else the user's, else the app default; null
+  // whenever there is no target, no deadline, or the deadline has arrived.
+  const inflation = goalInflationOutlook(goal, resolveInflationRate(goal.inflationRatePct, userInflationRatePct))
 
   const detailFund = fundDetailId ? (fundMap.get(fundDetailId) ?? null) : null
 
@@ -661,6 +668,17 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               {monthly > 0 && goal.targetAmount && creditedWithdrawn > 0 && remaining > 0 && (
                 <ProgressGatherNote amount={creditedWithdrawn} isVi={isVI} />
               )}
+
+              {/* Purchasing power. Shown whether or not a monthly amount has
+                  been typed — what the target will cost does not depend on the
+                  calculator input, only on the deadline. */}
+              <InflationOutlookCard
+                outlook={inflation}
+                targetAmount={goal.targetAmount ?? 0}
+                currentValue={goal.currentValue}
+                targetDate={goal.targetDate ?? ''}
+                isVi={isVI}
+              />
 
               {/* Empty state */}
               {monthly <= 0 && (

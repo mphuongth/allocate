@@ -174,7 +174,15 @@
     "goldNote": "Auto-syncs daily at 9:00 AM",
     "signOut": "Sign out",
     "signOutFailed": "Sign out failed",
-    "versionTag": "Internal preview"
+    "versionTag": "Internal preview",
+    "inflation": "Inflation",
+    "inflationRate": "Assumed rate",
+    "inflationUnit": "%/yr",
+    "inflationHint": "Used to project what your goals will cost in future money. Vietnam's CPI averaged about 3% a year over 2021–2025, and the 2026 control target is about 4.5%. This is a planning assumption, not a published figure — a year coming in higher or lower doesn't mean it needs changing.",
+    "inflationDefaultNote": "Leave empty to use the app default.",
+    "inflationRangeError": "Enter a rate between 0 and 100.",
+    "inflationSaveFailed": "Couldn't save the inflation rate",
+    "inflationSave": "Save assumed rate"
   },
   "goals": {
     "title": "Savings Goals",
