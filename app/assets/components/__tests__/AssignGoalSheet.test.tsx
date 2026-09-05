@@ -45,6 +45,34 @@ describe('AssignGoalSheet — goals load error vs empty', () => {
     expect(screen.queryByTestId('load-error')).not.toBeInTheDocument()
   })
 
+  it('answers the confirm tap with a loader and a busy label — the mobile sheet too', async () => {
+    // A bottom sheet is where this matters most: a phone tap has no hover or
+    // cursor to fall back on, so a button that neither moves nor speaks while
+    // the assignment is in flight reads as a tap that missed.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ goals: [{ goal_id: 'g1', goal_name: 'House Fund', current_value: 1_000_000 }] }),
+    })
+    let release: () => void = () => {}
+    const onConfirm = vi.fn().mockReturnValue(new Promise<void>((resolve) => { release = resolve }))
+
+    const { container } = render(<AssignGoalSheet {...baseProps} desktop={false} onConfirm={onConfirm} />)
+    fireEvent.click(await screen.findByText('House Fund'))
+
+    const confirm = screen.getByRole('button', { name: /Confirm assignment/i })
+    fireEvent.click(confirm)
+
+    await waitFor(() => expect(container.querySelectorAll('.cairn-loader .stone')).toHaveLength(3))
+    expect(confirm).toHaveAttribute('aria-busy', 'true')
+    expect(confirm).toHaveTextContent('Assigning…')
+    expect(confirm).toBeDisabled()
+
+    fireEvent.click(confirm)
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+
+    release()
+  })
+
   it('gives the close button a ≥44px touch target', async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ goals: [] }) })
 

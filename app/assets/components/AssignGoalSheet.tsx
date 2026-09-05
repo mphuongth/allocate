@@ -8,6 +8,7 @@ import { fmt, fmtCompact } from '@/lib/formatters'
 import LoadError from './LoadError'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 import { clickAway } from '@/components/ui/clickAway'
+import PendingButton from '@/components/ui/PendingButton'
 
 interface GoalOption {
   id: string
@@ -249,19 +250,17 @@ export default function AssignGoalSheet({ open, onClose, onConfirm, item, deskto
         >
           {isVI ? 'Hủy' : 'Cancel'}
         </button>
-        <button
+        <PendingButton
+          pending={confirming}
+          pendingLabel={isVI ? 'Đang xử lý…' : 'Assigning…'}
+          icon={<Check size={14} strokeWidth={2.4} />}
           onClick={handleConfirm}
-          disabled={!selected || confirming}
-          className={selected && !confirming ? 'cn-btn primary' : 'cn-btn'}
-          style={{ flex: 2, justifyContent: 'center', opacity: !selected || confirming ? 0.5 : 1 }}
+          disabled={!selected}
+          className={selected ? 'cn-btn primary' : 'cn-btn'}
+          style={{ flex: 2, justifyContent: 'center', opacity: !selected ? 0.5 : 1 }}
         >
-          {confirming ? (isVI ? 'Đang xử lý…' : 'Assigning…') : (
-            <>
-              <Check size={14} strokeWidth={2.4} />
-              {isVI ? 'Xác nhận gán' : 'Confirm assignment'}
-            </>
-          )}
-        </button>
+          {isVI ? 'Xác nhận gán' : 'Confirm assignment'}
+        </PendingButton>
       </div>
     </div>
   )

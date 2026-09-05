@@ -532,14 +532,16 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       subtitle: t('pageSubtitle'),
       trailing: (
         <div style={{ display: 'flex', gap: 6 }}>
-          <button
+          <PendingButton
+            pending={refreshing}
+            icon={<RefreshCw size={16} color="var(--c-ink)" />}
+            loaderVariant="muted"
+            loaderSize={13}
             onClick={handleRefreshNav}
-            disabled={refreshing || !funds.some((f) => f.nav_auto_sync)}
+            disabled={!funds.some((f) => f.nav_auto_sync)}
             aria-label={t('refreshNav')}
-            style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: refreshing || !funds.some((f) => f.nav_auto_sync) ? 0.4 : 1 }}
-          >
-            <RefreshCw size={16} color="var(--c-ink)" />
-          </button>
+            style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', opacity: !funds.some((f) => f.nav_auto_sync) ? 0.4 : 1 }}
+          />
           <button
             onClick={() => { setFormError(null); setAddOpen(true) }}
             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', fontSize: 12, fontWeight: 600, background: 'var(--c-btn-primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}

@@ -543,16 +543,20 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
 
           {/* Actions */}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button
+            <PendingButton
+              pending={refreshing}
+              pendingLabel={tc('loading')}
+              icon={<RefreshCw size={15} />}
+              loaderVariant="muted"
+              loaderSize={12}
               onClick={handleRefreshNav}
-              disabled={refreshing || !funds.some(f => f.nav_auto_sync)}
+              disabled={!funds.some(f => f.nav_auto_sync)}
               title={funds.some(f => f.nav_auto_sync) ? undefined : t('refreshDisabledHint')}
               className="cn-btn ghost"
               style={{ padding: '7px 10px', gap: 5, fontSize: 12, display: 'flex', alignItems: 'center' }}
             >
-              <RefreshCw size={15} />
               {tc('refresh')}
-            </button>
+            </PendingButton>
             <button
               onClick={openAddModal}
               className="cn-btn primary"

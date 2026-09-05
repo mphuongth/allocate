@@ -332,19 +332,23 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
                   </div>
                   {/* Reverse an accidental settlement — rolls the due date back and
                       restores the saved progress (issue: mark-paid was one-way). */}
-                  <button
+                  <PendingButton
                     data-testid="insurance-undo-mark-paid"
+                    pending={undoingPaid}
+                    pendingLabel={isVi ? 'Đang hoàn tác…' : 'Undoing…'}
+                    loaderVariant="pos"
+                    loaderSize={11}
                     onClick={handleUndoMarkPaid}
-                    disabled={undoingPaid}
                     style={{
                       flexShrink: 0, background: 'transparent', border: 'none',
                       fontSize: 11, fontWeight: 600, color: 'var(--c-pos)',
                       textDecoration: 'underline', cursor: undoingPaid ? 'default' : 'pointer',
-                      fontFamily: 'inherit', opacity: undoingPaid ? 0.6 : 1, padding: 0,
+                      fontFamily: 'inherit', padding: 0,
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
                     }}
                   >
-                    {undoingPaid ? (isVi ? 'Đang hoàn tác…' : 'Undoing…') : (isVi ? 'Hoàn tác' : 'Undo')}
-                  </button>
+                    {isVi ? 'Hoàn tác' : 'Undo'}
+                  </PendingButton>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                   {isVi ? `Tích lũy cho ${paidYear! + 1}` : `Saving for ${paidYear! + 1}`}
@@ -653,21 +657,22 @@ export default function DesktopInsuranceDetail({ ins, locale, onClose, onChanged
               >
                 {isVi ? 'Hủy' : 'Cancel'}
               </button>
-              <button
+              <PendingButton
                 data-testid="insurance-delete-savings-confirm"
+                pending={deletingEntry}
+                pendingLabel={isVi ? 'Đang xóa…' : 'Deleting…'}
+                icon={<Trash2 size={14} />}
                 onClick={handleDeleteSavings}
-                disabled={deletingEntry}
                 style={{
                   flex: 2, padding: '10px 0', fontSize: 13, fontWeight: 600,
                   background: 'var(--c-neg)', color: '#fff', border: 'none',
-                  borderRadius: 10, cursor: deletingEntry ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit', opacity: deletingEntry ? 0.6 : 1,
+                  borderRadius: 10, cursor: deletingEntry ? 'default' : 'pointer',
+                  fontFamily: 'inherit',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                 }}
               >
-                <Trash2 size={14} />
                 {isVi ? 'Xóa' : 'Delete'}
-              </button>
+              </PendingButton>
             </div>
           </div>
         </div>
