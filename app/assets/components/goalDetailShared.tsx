@@ -79,12 +79,16 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 // into the same goal double-counts the bar (issue #342). The preview animates
 // current% → resulting% so the consequence is visible before confirming.
 export function AffectsProgressControl({
-  checked, onChange, isVi, currentValue, targetAmount, withdrawnValue = 0,
+  checked, onChange, isVi, progressValue, targetAmount, withdrawnValue = 0,
 }: {
   checked: boolean
   onChange: (v: boolean) => void
   isVi: boolean
-  currentValue: number
+  /** The goal bar's numerator — currentValue with affects_progress=false
+   *  withdrawals added back, i.e. what every other progress bar in the app
+   *  divides by the target. Net worth would preview a percentage the goal card
+   *  never shows, and a drop measured off the wrong baseline. */
+  progressValue: number
   targetAmount: number | null
   withdrawnValue?: number
 }) {
@@ -102,12 +106,12 @@ export function AffectsProgressControl({
 
   const hasTarget = targetAmount != null && targetAmount > 0
   const target = targetAmount ?? 0
-  const curPct = hasTarget ? Math.min(100, Math.max(0, (currentValue / target) * 100)) : 0
-  const afterVal = Math.max(0, currentValue - (withdrawnValue || 0))
+  const curPct = hasTarget ? Math.min(100, Math.max(0, (progressValue / target) * 100)) : 0
+  const afterVal = Math.max(0, progressValue - (withdrawnValue || 0))
   const afterPct = hasTarget ? Math.min(100, Math.max(0, (afterVal / target) * 100)) : 0
   const fillPct = checked ? afterPct : curPct
   const willDrop = checked && (curPct - afterPct) > 0.05
-  const drop = Math.min(currentValue, withdrawnValue || 0)
+  const drop = Math.min(progressValue, withdrawnValue || 0)
 
   return (
     <div data-testid="affects-progress-control" style={{ border: '1px solid var(--c-line)', borderRadius: 12, overflow: 'hidden', background: 'var(--c-card)' }}>
