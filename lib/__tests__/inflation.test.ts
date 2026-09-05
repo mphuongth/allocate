@@ -8,6 +8,8 @@ import {
   presentValue,
   resolveInflationRate,
   goalInflationOutlook,
+  goalInflationLadder,
+  INFLATION_LADDER_YEARS,
 } from '../inflation'
 
 // Pinned so "the business month" is a fixed point: 5 Sep 2026, 07:00 Vietnam
@@ -194,5 +196,50 @@ describe('goalInflationOutlook', () => {
     const out = goalInflationOutlook({ targetAmount: 500_000_000, targetDate: '2030-06', currentValue: 0 }, 4, NOW)!
     expect(out.savingsInTodayMoney).toBe(0)
     expect(out.gapInFutureMoney).toBe(out.targetInFutureMoney)
+  })
+})
+
+// ── No deadline ───────────────────────────────────────────────────────────────
+// Most goals never get a target month, and the deadline card has nothing to say
+// about them. Inventing a horizon ("assume 5 years") would be fabricating the
+// one input the user didn't give. A LADDER says the same thing honestly: here is
+// what the target costs at several horizons, pick the one you mean.
+
+describe('goalInflationLadder', () => {
+  const goal = { targetAmount: 288_000_000, currentValue: 240_000_000 }
+
+  it('prices the target at each horizon, compounding', () => {
+    const ladder = goalInflationLadder(goal, 4)!
+    expect(ladder.steps.map(s => s.years)).toEqual([...INFLATION_LADDER_YEARS])
+    expect(ladder.steps.map(s => s.targetInFutureMoney)).toEqual(
+      INFLATION_LADDER_YEARS.map(y => Math.round(288_000_000 * 1.04 ** y)),
+    )
+  })
+
+  it('says what a year of standing still costs the balance already saved', () => {
+    // 240M at 4%: after a year it buys what 230.8M buys today — a 9.2M loss.
+    const ladder = goalInflationLadder(goal, 4)!
+    expect(ladder.yearOneLoss).toBe(Math.round(240_000_000 - 240_000_000 / 1.04))
+  })
+
+  it('loses nothing at a zero rate', () => {
+    const ladder = goalInflationLadder(goal, 0)!
+    expect(ladder.yearOneLoss).toBe(0)
+    expect(ladder.steps.every(s => s.targetInFutureMoney === 288_000_000)).toBe(true)
+  })
+
+  it('reports nothing for a goal with nothing saved yet, but still prices the target', () => {
+    const ladder = goalInflationLadder({ targetAmount: 288_000_000, currentValue: 0 }, 4)!
+    expect(ladder.yearOneLoss).toBe(0)
+    expect(ladder.steps[0].targetInFutureMoney).toBeGreaterThan(288_000_000)
+  })
+
+  it('is null without a target amount — there is still nothing to inflate', () => {
+    expect(goalInflationLadder({ targetAmount: null, currentValue: 240_000_000 }, 4)).toBeNull()
+    expect(goalInflationLadder({ targetAmount: 0, currentValue: 240_000_000 }, 4)).toBeNull()
+  })
+
+  it('carries the rate so the card can label its own assumption', () => {
+    expect(goalInflationLadder(goal, 5.5)!.ratePct).toBe(5.5)
   })
 })

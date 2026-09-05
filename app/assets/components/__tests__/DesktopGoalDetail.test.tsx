@@ -647,9 +647,20 @@ describe('DesktopGoalDetail — purchasing power', () => {
     expect(screen.getAllByTestId(/^inflation-scenario-/)).toHaveLength(3)
   })
 
-  it('stays silent for a goal with no deadline — no horizon, nothing to say', async () => {
+  it('falls back to the horizon ladder when the goal has no deadline', async () => {
     render(<DesktopGoalDetail {...baseProps} goal={{ ...mockGoal, targetDate: null }} />)
-    // Wait for the sheet to be past its load before asserting an ABSENCE.
+    // Most goals never get a target month. Silence there read as "the feature
+    // isn't here" rather than "you haven't told me when", so the card drops to a
+    // ladder of horizons instead of inventing a date.
+    expect(await screen.findByTestId('inflation-outlook')).toBeInTheDocument()
+    expect(screen.getByTestId('inflation-ladder-10')).toBeInTheDocument()
+    expect(screen.getByTestId('inflation-set-deadline')).toBeInTheDocument()
+    expect(screen.queryByTestId('inflation-target-future')).toBeNull()
+  })
+
+  it('stays silent for a goal with no target amount at all', async () => {
+    render(<DesktopGoalDetail {...baseProps} goal={{ ...mockGoal, targetAmount: null, targetDate: null }} />)
+    // Wait for the surface to be past its load before asserting an ABSENCE.
     await screen.findByRole('button', { name: /calculator/i })
     expect(screen.queryByTestId('inflation-outlook')).toBeNull()
   })

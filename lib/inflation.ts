@@ -28,6 +28,13 @@ export const DEFAULT_INFLATION_RATE_PCT = 4
 // 3.6%-4.6%) would alarm rather than inform.
 export const INFLATION_SCENARIO_RATES: readonly number[] = [3, 4, 5]
 
+// The horizons a goal WITHOUT a deadline is priced at. Most goals never get a
+// target month, and the deadline card has nothing to say about them — but
+// assuming one ("call it five years") would fabricate the single input the user
+// declined to give. A ladder answers honestly: here is the shape of the problem
+// at several horizons, pick the one you meant.
+export const INFLATION_LADDER_YEARS: readonly number[] = [1, 3, 5, 10]
+
 // Fractional years from the business month until a `YYYY-MM` target, floored at 0.
 //
 // Unlike `monthsUntilYm` — which floors at 1, because a goal due this month still
@@ -152,5 +159,40 @@ export function goalInflationOutlook(
       targetInFutureMoney: futureCost(target, r, years),
       isCurrent: r === ratePct,
     })),
+  }
+}
+
+export interface InflationLadder {
+  ratePct: number
+  steps: { years: number; targetInFutureMoney: number }[]
+  // What twelve months of standing still costs the balance already saved,
+  // measured in today's money. The one figure here that is about the user's
+  // actual holdings rather than about the target, and the one that makes the
+  // point without needing any horizon at all.
+  yearOneLoss: number
+}
+
+/**
+ * The inflation view of a goal with a target but NO deadline, or null when there
+ * is no target either.
+ *
+ * Deliberately not a fallback that guesses a date and reuses goalInflationOutlook:
+ * the precise card's authority comes from the user having named the month. Say
+ * less, rather than say it about a month nobody chose.
+ */
+export function goalInflationLadder(
+  goal: { targetAmount?: number | null; currentValue: number },
+  ratePct: number,
+): InflationLadder | null {
+  const target = goal.targetAmount ?? 0
+  if (target <= 0) return null
+  const savings = Math.max(0, goal.currentValue || 0)
+  return {
+    ratePct,
+    steps: INFLATION_LADDER_YEARS.map(years => ({
+      years,
+      targetInFutureMoney: futureCost(target, ratePct, years),
+    })),
+    yearOneLoss: savings - presentValue(savings, ratePct, 1),
   }
 }

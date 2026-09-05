@@ -20,7 +20,7 @@ import { MaturityResolveSheet } from './MaturityResolveSheet'
 import { GD_COLORS, TypeIcon, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
 import { computeGoalCalculator, describeHistoryRow, mergedFromLabel } from './goalDetailModel'
-import { goalInflationOutlook, resolveInflationRate } from '@/lib/inflation'
+import { goalInflationLadder, goalInflationOutlook, resolveInflationRate } from '@/lib/inflation'
 import InflationOutlookCard from './InflationOutlookCard'
 import { fmtTxDate } from './transactionUtils'
 import { TxRowsSkeleton } from './Skeletons'
@@ -221,7 +221,12 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
   // The purchasing-power commentary (see InflationOutlookCard). Derived from the
   // goal's own rate if it has one, else the user's, else the app default; null
   // whenever there is no target, no deadline, or the deadline has arrived.
-  const inflation = goalInflationOutlook(goal, resolveInflationRate(goal.inflationRatePct, userInflationRatePct))
+  const inflationRate = resolveInflationRate(goal.inflationRatePct, userInflationRatePct)
+  const inflation = goalInflationOutlook(goal, inflationRate)
+  // Without a deadline the card drops to a ladder of horizons rather than
+  // assuming a date — see InflationOutlookCard. Computed unconditionally; the
+  // card prefers `inflation` whenever it exists.
+  const inflationLadder = goalInflationLadder(goal, inflationRate)
 
   const detailFund = fundDetailId ? (fundMap.get(fundDetailId) ?? null) : null
 
@@ -414,9 +419,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
               does not depend on the calculator's input — only on the deadline. */}
           <InflationOutlookCard
             outlook={inflation}
+            ladder={inflationLadder}
             targetAmount={goal.targetAmount ?? 0}
             currentValue={goal.currentValue}
-            targetDate={goal.targetDate ?? ''}
+            targetDate={goal.targetDate}
             isVi={isVI}
             style={{ marginBottom: 16 }}
           />

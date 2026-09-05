@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import InflationOutlookCard from '../InflationOutlookCard'
-import { goalInflationOutlook } from '@/lib/inflation'
+import { goalInflationOutlook, goalInflationLadder } from '@/lib/inflation'
 
 // The card is the only place the app talks about purchasing power, so what it
 // may and may not claim is the thing under test — not its styling.
@@ -25,6 +25,7 @@ const renderCard = (props: Partial<React.ComponentProps<typeof InflationOutlookC
   render(
     <InflationOutlookCard
       outlook={outlook()}
+      ladder={null}
       targetAmount={500_000_000}
       currentValue={320_000_000}
       targetDate="2030-06"
@@ -95,5 +96,70 @@ describe('InflationOutlookCard', () => {
   it('names the target month so the horizon is never implicit', () => {
     renderCard()
     expect(screen.getByTestId('inflation-target-future').textContent).toMatch(/2030/)
+  })
+})
+
+// ── No deadline ───────────────────────────────────────────────────────────────
+// The commonest goal has a target and no target month. It used to get silence,
+// which read as "the feature isn't there" rather than "you haven't told me
+// when". The ladder answers without inventing a date.
+
+const ladder = (rate = 4, currentValue = 240_000_000) =>
+  goalInflationLadder({ targetAmount: 288_000_000, currentValue }, rate)!
+
+const renderLadder = (props: Partial<React.ComponentProps<typeof InflationOutlookCard>> = {}) =>
+  render(
+    <InflationOutlookCard
+      outlook={null}
+      ladder={ladder()}
+      targetAmount={288_000_000}
+      currentValue={240_000_000}
+      targetDate={null}
+      isVi={false}
+      {...props}
+    />,
+  )
+
+describe('InflationOutlookCard — no deadline', () => {
+  it('prices the target at each horizon instead of going quiet', () => {
+    renderLadder()
+    const steps = screen.getAllByTestId(/^inflation-ladder-/)
+    expect(steps).toHaveLength(4)
+    // 288M at 4% over 10 years ≈ 426.3M.
+    expect(screen.getByTestId('inflation-ladder-10')).toHaveTextContent('426.3M ₫')
+  })
+
+  it('says what a year of standing still costs the balance already saved', () => {
+    renderLadder()
+    // 240M at 4% loses ~9.2M of purchasing power over twelve months.
+    expect(screen.getByTestId('inflation-year-loss')).toHaveTextContent('9.2M ₫')
+  })
+
+  it('still names the rate as an assumption', () => {
+    renderLadder()
+    expect(screen.getByTestId('inflation-assumption-note')).toHaveTextContent('4%')
+  })
+
+  it('invites the deadline that would make the answer exact', () => {
+    renderLadder()
+    expect(screen.getByTestId('inflation-set-deadline')).toBeInTheDocument()
+  })
+
+  it('prefers the exact answer whenever a deadline exists', () => {
+    // Both shapes can be passed; a named month beats a ladder of guesses.
+    renderLadder({ outlook: outlook(), targetDate: '2030-06' })
+    expect(screen.getByTestId('inflation-target-future')).toBeInTheDocument()
+    expect(screen.queryByTestId('inflation-ladder-10')).toBeNull()
+  })
+
+  it('renders nothing when there is neither a deadline nor a target', () => {
+    const { container } = renderLadder({ outlook: null, ladder: null })
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('drops the standing-still line for a goal with nothing saved yet', () => {
+    renderLadder({ ladder: ladder(4, 0), currentValue: 0 })
+    expect(screen.queryByTestId('inflation-year-loss')).toBeNull()
+    expect(screen.getByTestId('inflation-ladder-10')).toBeInTheDocument()
   })
 })
