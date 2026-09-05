@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
+import PendingButton from '@/components/ui/PendingButton'
 import { clickAway } from '@/components/ui/clickAway'
 import { RefreshCw, LogOut, Download, X, Check, Edit2 } from 'lucide-react'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
@@ -282,19 +283,21 @@ export default function DesktopSettingsView({ email, initials, displayName }: Se
                     {c.syncStatusLabel}
                   </div>
                 </div>
-                <button
+                <PendingButton
+                  pending={isSyncing}
+                  pendingLabel={t('syncingShort')}
                   onClick={c.runSync}
-                  disabled={isSyncing}
                   aria-label={t('syncNow')}
                   style={{
                     padding: '7px 14px', fontSize: 12, fontWeight: 600,
                     background: 'var(--c-btn-primary)', border: 'none', borderRadius: 8,
-                    color: '#fff', cursor: isSyncing ? 'not-allowed' : 'pointer',
-                    fontFamily: 'inherit', opacity: isSyncing ? 0.6 : 1, transition: 'opacity 150ms',
+                    color: '#fff', cursor: isSyncing ? 'default' : 'pointer',
+                    fontFamily: 'inherit', transition: 'opacity 150ms',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   }}
                 >
-                  {isSyncing ? t('syncingShort') : t('syncNow')}
-                </button>
+                  {t('syncNow')}
+                </PendingButton>
               </div>
               <div style={{ display: 'grid', gap: 10, paddingTop: 12, borderTop: '1px solid var(--c-line)' }}>
                 {priceSources(t).map((row) => (

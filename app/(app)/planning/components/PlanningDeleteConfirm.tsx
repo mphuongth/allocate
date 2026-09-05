@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import { useId } from 'react'
 import DialogShell from '@/components/ui/DialogShell'
+import PendingButton from '@/components/ui/PendingButton'
 import { ghostBtn, type PlanningVariant } from './planningManagerShell'
 
 // The delete confirmation both planning managers show (#689) — the one overlay
@@ -21,6 +22,7 @@ export default function PlanningDeleteConfirm({
   extra,
   cancelLabel,
   confirmLabel,
+  deletingLabel,
   deleting,
   onCancel,
   onConfirm,
@@ -36,6 +38,8 @@ export default function PlanningDeleteConfirm({
   extra?: ReactNode
   cancelLabel: string
   confirmLabel: string
+  /** Shown on the confirm button while the delete is in flight. */
+  deletingLabel: string
   deleting: boolean
   onCancel: () => void
   onConfirm: () => void
@@ -48,15 +52,18 @@ export default function PlanningDeleteConfirm({
       {extra}
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" onClick={onCancel} style={ghostBtn}>{cancelLabel}</button>
-        <button
-          type="button"
+        {/* Keeps its red while deleting so the loader stays legible — a destructive
+            action in flight has to look like it is happening, not like it went
+            nowhere and wants pressing again. */}
+        <PendingButton
+          pending={deleting}
+          pendingLabel={deletingLabel}
           data-testid={`${testIdPrefix}-delete-confirm`}
           onClick={onConfirm}
-          disabled={deleting}
-          style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-neg)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: deleting ? 0.7 : 1 }}
+          style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-neg)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: deleting ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
         >
           {confirmLabel}
-        </button>
+        </PendingButton>
       </div>
     </>
   )

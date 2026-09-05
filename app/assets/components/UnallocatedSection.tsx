@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, ChevronUp, ChevronRight, Target, Building, Coins, TrendingUp, BarChart2, Clock, ArrowDownToLine, ArrowDownRight, ArrowRight, Wallet, Check, X } from 'lucide-react'
 import { iconHit } from './iconHit'
+import PendingButton from '@/components/ui/PendingButton'
 import { SUCCESS_FLASH_MS } from '../successFlash'
 import { useTranslations } from 'next-intl'
 import { useLocale } from 'next-intl'
@@ -104,9 +105,9 @@ function DesktopAssignPicker({
         <button onClick={onBack} className="cn-btn" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>
           {isVI ? 'Quay lại' : 'Back'}
         </button>
-        <button onClick={onConfirm} disabled={!selected || confirming} className={selected && !confirming ? 'cn-btn primary' : 'cn-btn'} style={{ flex: 2, justifyContent: 'center', opacity: !selected || confirming ? 0.5 : 1 }}>
-          {confirming ? (isVI ? 'Đang xử lý…' : 'Assigning…') : <><Check size={14} strokeWidth={2.4} />{isVI ? 'Xác nhận gán' : 'Confirm assignment'}</>}
-        </button>
+        <PendingButton pending={confirming} pendingLabel={isVI ? 'Đang xử lý…' : 'Assigning…'} icon={<Check size={14} strokeWidth={2.4} />} onClick={onConfirm} disabled={!selected} className={selected ? 'cn-btn primary' : 'cn-btn'} style={{ flex: 2, justifyContent: 'center', gap: 6, opacity: !selected ? 0.5 : 1 }}>
+          {isVI ? 'Xác nhận gán' : 'Confirm assignment'}
+        </PendingButton>
       </div>
     </div>
   )

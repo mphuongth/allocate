@@ -25,6 +25,7 @@ import { TxRowsSkeleton } from './Skeletons'
 import LoadError from './LoadError'
 import { useGoalDetailData } from './useGoalDetailData'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
+import PendingButton from '@/components/ui/PendingButton'
 import { deleteGoal, reopenGoal, unholdTransaction, unassignInvestment } from './goalActions'
 import { FinishGoalSheet } from './FinishGoalSheet'
 import { goalCompletion } from '@/lib/finishGoal'
@@ -448,10 +449,10 @@ export default function GoalDetailSheet({ goal, open, onClose, onDataChanged, re
                           {fmtCompact(h.amount)} · {isVI ? 'Đang chờ gộp' : 'Held for merge'}
                         </div>
                       </div>
-                      <button type="button" data-testid={`unhold-${h.transactionId}`} onClick={() => handleUnhold(h.transactionId)} disabled={unholdingId === h.transactionId}
-                        style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: '1px solid var(--c-line)', borderRadius: 8, padding: '5px 10px', cursor: unholdingId === h.transactionId ? 'default' : 'pointer', opacity: unholdingId === h.transactionId ? 0.6 : 1, fontFamily: 'inherit' }}>
+                      <PendingButton data-testid={`unhold-${h.transactionId}`} pending={unholdingId === h.transactionId} pendingLabel={isVI ? 'Đang bỏ…' : 'Releasing…'} loaderVariant="muted" loaderSize={11} onClick={() => handleUnhold(h.transactionId)}
+                        style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: '1px solid var(--c-line)', borderRadius: 8, padding: '5px 10px', cursor: unholdingId === h.transactionId ? 'default' : 'pointer', fontFamily: 'inherit' }}>
                         {isVI ? 'Bỏ chờ gộp' : 'Unhold'}
-                      </button>
+                      </PendingButton>
                     </div>
                   ))}
                 </div>

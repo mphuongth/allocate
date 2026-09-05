@@ -13,6 +13,7 @@ import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/
 import { TYPE_META, TYPE_FILTERS, FORM_TYPES, filterAndSortFunds, nextSort } from '@/features/funds/fundListModel'
 import type { TypeFilter } from '@/features/funds/contracts'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
+import PendingButton from '@/components/ui/PendingButton'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
 import type { Fund, Goal, FundType, FundsData, FundsBusy } from './useFundsData'
@@ -220,7 +221,10 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
   const [nav, setNav] = useState(existing ? String(existing.nav) : '')
   const [autoSync, setAutoSync] = useState(existing?.nav_auto_sync ?? false)
 
-  const disabled = !name.trim() || !code.trim() || !nav || Number(nav) <= 0 || saving
+  // Incompleteness alone greys the button out. A save in flight is blocked by
+  // PendingButton itself, and leaving it out of `incomplete` keeps the navy fill
+  // behind the loader instead of turning it into a disabled-looking slab.
+  const incomplete = !name.trim() || !code.trim() || !nav || Number(nav) <= 0
 
   const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', fontSize: 16, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
   const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: 'var(--c-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }
@@ -267,13 +271,15 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
         <button onClick={onClose} disabled={saving} style={{ flex: 1, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>
           {tc('cancel')}
         </button>
-        <button
+        <PendingButton
+          pending={saving}
+          pendingLabel={tc('saving')}
           onClick={() => onSave({ name: name.trim(), code: code.trim(), fund_type: type, nav: Number(nav), nav_auto_sync: autoSync })}
-          disabled={disabled}
-          style={{ flex: 2, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 10, background: disabled ? 'var(--c-line)' : 'var(--c-navy)', color: disabled ? 'var(--c-muted)' : '#fff', cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+          disabled={incomplete}
+          style={{ flex: 2, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 10, background: incomplete ? 'var(--c-line)' : 'var(--c-navy)', color: incomplete ? 'var(--c-muted)' : '#fff', cursor: incomplete ? 'not-allowed' : saving ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
         >
-          {saving ? tc('saving') : t('saveBtn')}
-        </button>
+          {t('saveBtn')}
+        </PendingButton>
       </div>
     </div>
   )
@@ -526,14 +532,16 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
       subtitle: t('pageSubtitle'),
       trailing: (
         <div style={{ display: 'flex', gap: 6 }}>
-          <button
+          <PendingButton
+            pending={refreshing}
+            icon={<RefreshCw size={16} color="var(--c-ink)" />}
+            loaderVariant="muted"
+            loaderSize={13}
             onClick={handleRefreshNav}
-            disabled={refreshing || !funds.some((f) => f.nav_auto_sync)}
+            disabled={!funds.some((f) => f.nav_auto_sync)}
             aria-label={t('refreshNav')}
-            style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: refreshing || !funds.some((f) => f.nav_auto_sync) ? 0.4 : 1 }}
-          >
-            <RefreshCw size={16} color="var(--c-ink)" />
-          </button>
+            style={{ padding: 8, background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 10, cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', opacity: !funds.some((f) => f.nav_auto_sync) ? 0.4 : 1 }}
+          />
           <button
             onClick={() => { setFormError(null); setAddOpen(true) }}
             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', fontSize: 12, fontWeight: 600, background: 'var(--c-btn-primary)', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
@@ -818,10 +826,9 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
               <button onClick={() => setDeleteFund(null)} disabled={deleting} style={{ flex: 1, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>
                 {tc('cancel')}
               </button>
-              <button onClick={handleDelete} disabled={deleting} style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 10, background: 'var(--c-neg)', color: '#fff', cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1, fontFamily: 'inherit' }}>
-                <IconTrash size={14} color="#fff" />
-                {deleting ? tc('deleting') : t('deleteBtn')}
-              </button>
+              <PendingButton pending={deleting} pendingLabel={tc('deleting')} icon={<IconTrash size={14} color="#fff" />} onClick={handleDelete} style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 10, background: 'var(--c-neg)', color: '#fff', cursor: deleting ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                {t('deleteBtn')}
+              </PendingButton>
             </div>
           </div>
         )}

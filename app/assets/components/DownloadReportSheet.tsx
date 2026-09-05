@@ -5,7 +5,7 @@ import { Check, Download, X } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { useLocale } from 'next-intl'
 import { fmt } from '@/lib/formatters'
-import { CairnLoader } from '@/components/ui/CairnLoader'
+import PendingButton from '@/components/ui/PendingButton'
 import { formatBusinessDate } from '@/lib/dates'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
@@ -188,9 +188,11 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                 >
                   {t.cancel}
                 </button>
-                <button
+                <PendingButton
+                  pending={exporting}
+                  pendingLabel={isVI ? 'Đang xuất…' : 'Exporting…'}
+                  icon={<Download size={14} strokeWidth={2.2} />}
                   onClick={handleExport}
-                  disabled={exporting}
                   data-testid="export-report-btn"
                   aria-label={exporting ? t.exporting : t.export}
                   style={{
@@ -199,20 +201,12 @@ export default function DownloadReportSheet({ open, onClose, data, onExport, des
                     background: 'var(--c-btn-primary)', border: 'none',
                     borderRadius: 10, color: '#fff',
                     cursor: exporting ? 'default' : 'pointer',
-                    opacity: exporting ? 0.7 : 1,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     fontFamily: 'inherit', transition: 'opacity 150ms',
                   }}
                 >
-                  {exporting ? (
-                    <CairnLoader size={14} variant="on-dark" />
-                  ) : (
-                    <Download size={14} strokeWidth={2.2} />
-                  )}
-                  {exporting
-                    ? (isVI ? 'Đang xuất…' : 'Exporting…')
-                    : t.export}
-                </button>
+                  {t.export}
+                </PendingButton>
               </div>
             </div>
           )

@@ -6,7 +6,7 @@ import { X, Mountain, Home, Shield, ShoppingCart, Target } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { fmt } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
-import { CairnLoader } from '@/components/ui/CairnLoader'
+import PendingButton from '@/components/ui/PendingButton'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 import { monthsUntilYm } from '@/lib/dates'
 import { clickAway } from '@/components/ui/clickAway'
@@ -266,21 +266,20 @@ export function CreateGoalSheet({ open, onClose, onSuccess, desktop }: Props) {
             >
               {tc('cancel')}
             </button>
-            <button
+            <PendingButton
               type="submit"
-              disabled={saving}
+              pending={saving}
+              pendingLabel={tc('saving')}
               style={{
                 flex: 2, padding: '11px 0', borderRadius: 10,
                 background: 'var(--c-btn-primary)', border: '1px solid var(--c-btn-primary)',
                 color: '#fff', fontSize: 14, fontWeight: 500,
                 cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                opacity: saving ? 0.7 : 1,
               }}
             >
-              {saving && <CairnLoader size={14} variant="on-dark" />}
-              {saving ? tc('saving') : tg('createBtn')}
-            </button>
+              {tg('createBtn')}
+            </PendingButton>
           </div>
         </form>
   )

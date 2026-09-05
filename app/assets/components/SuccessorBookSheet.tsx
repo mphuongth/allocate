@@ -14,6 +14,7 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtCompact } from '@/lib/formatters'
 import DialogShell from '@/components/ui/DialogShell'
+import PendingButton from '@/components/ui/PendingButton'
 import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 
 export interface SuccessorTarget {
@@ -177,19 +178,27 @@ export default function SuccessorBookSheet({
             {isVi
               ? `${target.bookName} vẫn nhận nạp vào ngày này, nên đây là một lần nạp thêm chứ chưa cần sổ mới.`
               : `${target.bookName} still accepts a contribution on that date, so this is a top-up rather than a new book.`}
-            <button type="button" data-testid="record-topup-instead" disabled={saving} onClick={topUpInstead}
-              style={{ display: 'block', marginTop: 6, padding: 0, border: 'none', background: 'none', color: 'inherit', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+            <PendingButton data-testid="record-topup-instead" pending={saving} pendingLabel={isVi ? 'Đang xử lý...' : 'Processing...'} loaderVariant="muted" loaderSize={12} onClick={topUpInstead}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6, padding: 0, border: 'none', background: 'none', color: 'inherit', fontSize: 12, fontWeight: 700, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
               {isVi ? 'Ghi thành nạp thêm vào sổ cũ' : 'Record it as a top-up instead'}
-            </button>
+            </PendingButton>
           </div>
         )}
         {error && <p data-testid="successor-error" style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
-          <button type="button" data-testid="successor-submit" onClick={submit} disabled={saving || !(amt > 0) || !datesOk || !rateOk || sourceStillOpen}
-            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) || !datesOk || !rateOk || sourceStillOpen ? 0.6 : 1 }}>
+          {/* Not dimmed while saving: the button keeps its filled navy so the
+              loader stays legible and it reads as "processing", not disabled. */}
+          <PendingButton
+            pending={saving}
+            pendingLabel={isVi ? 'Đang xử lý...' : 'Processing...'}
+            data-testid="successor-submit"
+            onClick={submit}
+            disabled={!(amt > 0) || !datesOk || !rateOk || sourceStillOpen}
+            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: !(amt > 0) || !datesOk || !rateOk || sourceStillOpen ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+          >
             {isVi ? 'Mở sổ mới' : 'Open the new book'}
-          </button>
+          </PendingButton>
         </div>
     </DialogShell>
   )

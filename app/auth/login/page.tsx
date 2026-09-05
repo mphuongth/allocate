@@ -7,6 +7,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
 import { Eye, EyeOff } from 'lucide-react'
 import { AuthLayout } from '../AuthLayout'
+import PendingButton from '@/components/ui/PendingButton'
 import { announceCacheOwner } from '@/lib/clientCache'
 
 const fieldLabelStyle: React.CSSProperties = {
@@ -135,9 +136,10 @@ function LoginForm() {
               it — no handler, no reset flow (#568). Removed until the feature
               exists; restore it together with the reset route. */}
 
-          <button
+          <PendingButton
             type="submit"
-            disabled={loading || redirecting}
+            pending={loading || redirecting}
+            pendingLabel={redirecting ? t('redirecting') : t('loggingIn')}
             className="cn-btn primary"
             style={{
               width: '100%',
@@ -145,11 +147,10 @@ function LoginForm() {
               marginTop: 18,
               fontSize: 14,
               fontWeight: 600,
-              opacity: loading || redirecting ? 0.7 : 1,
             }}
           >
-            {redirecting ? t('redirecting') : loading ? t('loggingIn') : t('loginBtn')}
-          </button>
+            {t('loginBtn')}
+          </PendingButton>
         </form>
       </div>
 

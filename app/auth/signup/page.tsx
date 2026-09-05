@@ -7,6 +7,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
 import { Eye, EyeOff } from 'lucide-react'
 import { AuthLayout } from '../AuthLayout'
+import PendingButton from '@/components/ui/PendingButton'
 import { announceCacheOwner } from '@/lib/clientCache'
 
 const fieldLabelStyle: React.CSSProperties = {
@@ -198,9 +199,10 @@ export default function SignupPage() {
             )}
           </div>
 
-          <button
+          <PendingButton
             type="submit"
-            disabled={loading}
+            pending={loading}
+            pendingLabel={t('signingUp')}
             className="cn-btn primary"
             style={{
               width: '100%',
@@ -208,11 +210,10 @@ export default function SignupPage() {
               marginTop: 18,
               fontSize: 14,
               fontWeight: 600,
-              opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? t('signingUp') : t('signupBtn')}
-          </button>
+            {t('signupBtn')}
+          </PendingButton>
         </form>
       </div>
 

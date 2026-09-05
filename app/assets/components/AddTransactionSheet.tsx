@@ -5,7 +5,7 @@ import { X, TrendingUp, Building2, Coins, ArrowUpRight, ArrowDownRight } from 'l
 import { iconHit } from './iconHit'
 import { useLocale, useTranslations } from 'next-intl'
 import DialogShell from '@/components/ui/DialogShell'
-import { CairnLoader } from '@/components/ui/CairnLoader'
+import PendingButton from '@/components/ui/PendingButton'
 import { todayIso } from '@/lib/dates'
 import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload, type TxForm } from './addTransactionModel'
 import { BuyFundFields, BuyBankFields, BuyGoldFields, SellForm } from './addTransactionForms'
@@ -636,26 +636,24 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
             >
               {tc('cancel')}
             </button>
-            <button
-              type="button"
+            <PendingButton
+              pending={saving}
+              pendingLabel={tc('saving')}
               onClick={handleSave}
-              disabled={saving || sellDisabled}
+              disabled={sellDisabled}
               style={{
                 flex: 2, padding: '12px 16px', borderRadius: 10,
                 background: dir === 'sell' ? 'var(--c-neg)' : 'var(--c-btn-primary)', border: 'none',
                 color: '#fff', fontSize: 14, fontWeight: 600,
                 cursor: (saving || sellDisabled) ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit', opacity: (saving || sellDisabled) ? 0.7 : 1,
+                fontFamily: 'inherit', opacity: sellDisabled ? 0.7 : 1,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}
             >
-              {saving && <CairnLoader size={14} variant="on-dark" />}
-              {saving
-                ? tc('saving')
-                : dir === 'sell'
+              {dir === 'sell'
                 ? (assetType === 'bank' ? t('confirmWithdrawal') : t('confirmSale'))
                 : existing ? t('saveChanges') : tc('save')}
-            </button>
+            </PendingButton>
           </div>
         </div>
   )

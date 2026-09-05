@@ -6,6 +6,7 @@ import { iconHit } from './iconHit'
 import { toast } from 'sonner'
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
+import PendingButton from '@/components/ui/PendingButton'
 import type { GoalData } from '@/features/dashboard/contracts'
 import { GD_COLORS, TypeIcon, UnlinkSvg, BankInfoStrip, TopUpControl, RenewalSummaryLine, ProgressCreditNote, ProgressGatherNote, progressCredit, type InvRow, type GoalDetailTx } from './goalDetailShared'
 import { buildCompositionSegments, buildInvRows, buildRenewalSummary } from './goalDetailRows'
@@ -339,10 +340,10 @@ export default function DesktopGoalDetail({ goal, locale, onClose, onDataChanged
                           {fmtCompact(h.amount)} · {isVi ? 'Đang chờ gộp' : 'Held for merge'}
                         </div>
                       </div>
-                      <button type="button" data-testid={`unhold-${h.transactionId}`} onClick={() => handleUnhold(h.transactionId)} disabled={unholdingId === h.transactionId}
-                        style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: '1px solid var(--c-line)', borderRadius: 8, padding: '5px 10px', cursor: unholdingId === h.transactionId ? 'default' : 'pointer', opacity: unholdingId === h.transactionId ? 0.6 : 1, fontFamily: 'inherit' }}>
+                      <PendingButton data-testid={`unhold-${h.transactionId}`} pending={unholdingId === h.transactionId} pendingLabel={isVi ? 'Đang bỏ…' : 'Releasing…'} loaderVariant="muted" loaderSize={11} onClick={() => handleUnhold(h.transactionId)}
+                        style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', background: 'none', border: '1px solid var(--c-line)', borderRadius: 8, padding: '5px 10px', cursor: unholdingId === h.transactionId ? 'default' : 'pointer', fontFamily: 'inherit' }}>
                         {isVi ? 'Bỏ chờ gộp' : 'Unhold'}
-                      </button>
+                      </PendingButton>
                     </div>
                   ))}
                 </div>
@@ -819,16 +820,20 @@ function UnassignConfirmModal({ inv, unassigning, isVi, onCancel, onConfirm }: {
           <button onClick={onCancel} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>
             {isVi ? 'Hủy' : 'Cancel'}
           </button>
-          <button onClick={onConfirm} disabled={unassigning} style={{
-            flex: 2, padding: '10px 14px', background: 'var(--c-warn,#b45309)', color: '#fff',
-            border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600,
-            cursor: unassigning ? 'default' : 'pointer', fontFamily: 'inherit',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            opacity: unassigning ? 0.6 : 1,
-          }}>
-            <UnlinkSvg size={14} />
-            {unassigning ? (isVi ? 'Đang xử lý…' : 'Unassigning…') : (isVi ? 'Bỏ gán' : 'Unassign')}
-          </button>
+          <PendingButton
+            pending={unassigning}
+            pendingLabel={isVi ? 'Đang xử lý…' : 'Unassigning…'}
+            icon={<UnlinkSvg size={14} />}
+            onClick={onConfirm}
+            style={{
+              flex: 2, padding: '10px 14px', background: 'var(--c-warn,#b45309)', color: '#fff',
+              border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600,
+              cursor: unassigning ? 'default' : 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+          >
+            {isVi ? 'Bỏ gán' : 'Unassign'}
+          </PendingButton>
         </div>
       </div>
     </DModal>
@@ -922,10 +927,9 @@ function DeleteGoalModal({ goalName, isDeleting, onCancel, onConfirm, isVi }: {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={onCancel} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>{isVi ? 'Hủy' : 'Cancel'}</button>
-          <button onClick={onConfirm} disabled={isDeleting} style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: isDeleting ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: isDeleting ? 0.6 : 1 }}>
-            <Trash2 size={14} />
-            {isDeleting ? (isVi ? 'Đang xoá…' : 'Deleting…') : (isVi ? 'Xoá mục tiêu' : 'Delete goal')}
-          </button>
+          <PendingButton pending={isDeleting} pendingLabel={isVi ? 'Đang xoá…' : 'Deleting…'} icon={<Trash2 size={14} />} onClick={onConfirm} style={{ flex: 2, padding: '10px 14px', background: 'var(--c-neg)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: isDeleting ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            {isVi ? 'Xoá mục tiêu' : 'Delete goal'}
+          </PendingButton>
         </div>
       </div>
     </DModal>
@@ -1005,9 +1009,9 @@ function EditGoalModal({ open, onClose, goal, onSaved, isVi }: {
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button onClick={onClose} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
-          <button onClick={handleSave} disabled={saving} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center', opacity: saving ? 0.7 : 1 }}>
-            {saving ? (isVi ? 'Đang lưu…' : 'Saving…') : (isVi ? 'Lưu thay đổi' : 'Save changes')}
-          </button>
+          <PendingButton pending={saving} pendingLabel={isVi ? 'Đang lưu…' : 'Saving…'} onClick={handleSave} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }}>
+            {isVi ? 'Lưu thay đổi' : 'Save changes'}
+          </PendingButton>
         </div>
       </div>
     </DModal>

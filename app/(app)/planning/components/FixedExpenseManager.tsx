@@ -8,6 +8,7 @@ import { fmt, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import EffectiveMonthFields from './EffectiveMonthFields'
 import PlanningDeleteConfirm from './PlanningDeleteConfirm'
+import PendingButton from '@/components/ui/PendingButton'
 import { ghostBtn, inputStyle, labelStyle, monthRangeLabel, primaryBtn, toMonthInput } from './planningManagerShell'
 
 // Master fixed-expense definitions. Categories mirror the Settings tab and the
@@ -212,9 +213,10 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
 
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button type="button" onClick={() => setMode('list')} style={ghostBtn}>{tc('cancel')}</button>
-          <button type="button" data-testid="fe-save" onClick={handleSave} disabled={saving} style={{ ...primaryBtn, opacity: saving ? 0.7 : 1 }}>
-            {saving ? tc('saving') : tc('save')}
-          </button>
+          {/* Not dimmed while saving: the fill has to stay behind the loader. */}
+          <PendingButton pending={saving} pendingLabel={tc('saving')} data-testid="fe-save" onClick={handleSave} style={{ ...primaryBtn, cursor: saving ? 'default' : 'pointer' }}>
+            {tc('save')}
+          </PendingButton>
         </div>
       </div>
     )
@@ -291,6 +293,7 @@ export default function FixedExpenseManager({ onChange, onToast, variant = 'moda
 
       {confirmDelete && (
         <PlanningDeleteConfirm
+          deletingLabel={tc('deleting')}
           variant={variant}
           testIdPrefix="fe"
           title={t('deleteModal')}

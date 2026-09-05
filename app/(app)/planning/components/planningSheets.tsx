@@ -9,6 +9,7 @@ import { useLocale } from 'next-intl'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { fmtCompact } from '@/lib/formatters'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
+import PendingButton from '@/components/ui/PendingButton'
 import { TrashIcon } from './planningIcons'
 import { saveIncome, deletePlan, saveOtherExpense } from '../planActions'
 import type { MonthlyPlan, OtherExpense } from '@/features/planning/contracts'
@@ -140,17 +141,20 @@ export function SalarySheet({
           >
             {isVI ? 'Hủy' : 'Cancel'}
           </button>
-          <button
+          {/* Not dimmed while saving: the fill has to stay behind the loader. */}
+          <PendingButton
+            pending={saving}
+            pendingLabel={isVI ? 'Đang lưu...' : 'Saving...'}
             onClick={handleSave}
-            disabled={saving}
             style={{
               flex: 2, padding: '10px 0', borderRadius: 10, border: 'none',
               background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600,
-              cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.7 : 1,
+              cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
-            {saving ? (isVI ? 'Đang lưu...' : 'Saving...') : (isVI ? 'Lưu' : 'Save')}
-          </button>
+            {isVI ? 'Lưu' : 'Save'}
+          </PendingButton>
         </div>
       </div>
     </Sheet>
@@ -200,9 +204,11 @@ export function DeletePlanSheet({
           >
             {isVI ? 'Huỷ' : 'Cancel'}
           </button>
-          <button
+          <PendingButton
+            pending={deleting}
+            pendingLabel={isVI ? 'Đang xoá...' : 'Deleting...'}
+            icon={<TrashIcon size={14} />}
             onClick={handleDelete}
-            disabled={deleting}
             style={{
               flex: 2, padding: '10px 0', borderRadius: 10, border: 'none',
               background: 'var(--c-neg)', color: '#fff', fontSize: 14, fontWeight: 600,
@@ -210,9 +216,8 @@ export function DeletePlanSheet({
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
           >
-            <TrashIcon size={14} />
-            {deleting ? (isVI ? 'Đang xoá...' : 'Deleting...') : (isVI ? 'Xoá kế hoạch' : 'Delete plan')}
-          </button>
+            {isVI ? 'Xoá kế hoạch' : 'Delete plan'}
+          </PendingButton>
         </div>
       </div>
     </Sheet>
@@ -311,17 +316,19 @@ export function OtherExpenseSheet({
           >
             {isVI ? 'Hủy' : 'Cancel'}
           </button>
-          <button
+          <PendingButton
+            pending={saving}
+            pendingLabel={isVI ? 'Đang lưu...' : 'Saving...'}
             onClick={handleSave}
-            disabled={saving}
             style={{
               flex: 2, padding: '10px 0', borderRadius: 10, border: 'none',
               background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit',
+              cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
             {isVI ? 'Lưu' : 'Save'}
-          </button>
+          </PendingButton>
         </div>
       </div>
     </Sheet>
@@ -387,13 +394,14 @@ export function SimpleOverrideSheet({
           <button onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
             {isVI ? 'Hủy' : 'Cancel'}
           </button>
-          <button
+          <PendingButton
+            pending={saving}
+            pendingLabel={isVI ? 'Đang lưu...' : 'Saving...'}
             onClick={handleSave}
-            disabled={saving}
-            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
           >
             {isVI ? 'Lưu' : 'Save'}
-          </button>
+          </PendingButton>
         </div>
       </div>
     </Sheet>

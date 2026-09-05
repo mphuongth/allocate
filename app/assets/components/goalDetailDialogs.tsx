@@ -9,6 +9,7 @@ import { useLocale } from 'next-intl'
 import { ChevronRight, RefreshCw, Trash2, Edit2, Download, Calendar, ArrowDownRight, CheckCircle2, RotateCcw } from 'lucide-react'
 import { fmtCompact, fmtPct } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
+import PendingButton from '@/components/ui/PendingButton'
 import type { GoalData } from '@/features/dashboard/contracts'
 import { GD_COLORS, TypeIcon, UnlinkSvg, BankInfoStrip, TopUpControl, RenewalSummaryLine, type InvRow } from './goalDetailShared'
 import { needsMaturityAction, needsBookMaturityAction } from './goalDetailMaturity'
@@ -273,20 +274,21 @@ export function DeleteGoalConfirmSheet({
             >
               {isVI ? 'Huỷ' : 'Cancel'}
             </button>
-            <button
+            <PendingButton
               data-testid="goal-delete-confirm"
+              pending={isDeleting}
+              pendingLabel={isVI ? 'Đang xoá…' : 'Deleting…'}
+              icon={<Trash2 size={15} />}
               onClick={onConfirm}
-              disabled={isDeleting}
               style={{
                 flex: 2, padding: '12px 0', borderRadius: 10, border: 'none',
                 background: 'var(--c-neg)', color: '#fff', fontSize: 15, fontWeight: 600,
-                cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? 0.6 : 1,
+                cursor: isDeleting ? 'default' : 'pointer',
                 fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}
             >
-              <Trash2 size={15} />
-              {isDeleting ? (isVI ? 'Đang xoá…' : 'Deleting…') : (isVI ? 'Xoá mục tiêu' : 'Delete goal')}
-            </button>
+              {isVI ? 'Xoá mục tiêu' : 'Delete goal'}
+            </PendingButton>
           </div>
         </div>
       </div>
@@ -407,18 +409,21 @@ export function EditGoalSheet({
             >
               {isVI ? 'Huỷ' : 'Cancel'}
             </button>
-            <button
+            {/* Not dimmed while saving: the fill has to stay behind the loader. */}
+            <PendingButton
+              pending={saving}
+              pendingLabel={isVI ? 'Đang lưu…' : 'Saving…'}
               onClick={handleSave}
-              disabled={saving}
               style={{
                 flex: 1, padding: '12px 0', borderRadius: 10, border: 'none',
                 background: 'var(--c-btn-primary)', color: '#fff', fontSize: 15,
-                cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1,
+                cursor: saving ? 'default' : 'pointer',
                 fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}
             >
-              {saving ? (isVI ? 'Đang lưu…' : 'Saving…') : (isVI ? 'Lưu' : 'Save')}
-            </button>
+              {isVI ? 'Lưu' : 'Save'}
+            </PendingButton>
           </div>
         </div>
       </div>
@@ -726,21 +731,21 @@ export function UnassignConfirmSheet({
             >
               {t.cancel}
             </button>
-            <button
+            <PendingButton
+              pending={unassigning}
+              pendingLabel={t.working}
+              icon={<UnlinkSvg size={14} color="#fff" />}
               onClick={onConfirm}
-              disabled={unassigning}
               style={{
                 flex: 2, padding: '11px 14px', fontSize: 13, fontWeight: 600,
                 background: 'var(--c-warn, #b45309)', color: '#fff',
                 border: 'none', borderRadius: 10, fontFamily: 'inherit',
                 cursor: unassigning ? 'default' : 'pointer',
-                opacity: unassigning ? 0.6 : 1,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}
             >
-              <UnlinkSvg size={14} color="#fff" />
-              {unassigning ? t.working : t.confirm}
-            </button>
+              {t.confirm}
+            </PendingButton>
           </div>
         </div>
       </div>

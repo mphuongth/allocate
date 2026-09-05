@@ -7,7 +7,7 @@ import { iconHit } from './iconHit'
 import { fmt } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
-import { CairnLoader } from '@/components/ui/CairnLoader'
+import PendingButton from '@/components/ui/PendingButton'
 import { AffectsProgressControl } from './goalDetailShared'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 import type { SellItem } from '@/features/dashboard/contracts'
@@ -742,7 +742,10 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
               <button onClick={onClose} style={{ flex: 1, padding: '11px 14px', border: '1px solid var(--c-line)', borderRadius: 10, fontSize: 13, fontWeight: 600, background: 'transparent', color: 'var(--c-ink)', cursor: 'pointer' }}>
                 {isVI ? 'Hủy' : 'Cancel'}
               </button>
-              <button
+              <PendingButton
+                pending={saving}
+                pendingLabel={isVI ? 'Đang xử lý…' : 'Processing…'}
+                icon={isBank ? <ArrowDownToLine size={15} strokeWidth={2.2} /> : <ArrowDownRight size={15} strokeWidth={2.2} />}
                 data-testid="sell-confirm-btn"
                 onClick={isValid ? handleConfirm : undefined}
                 disabled={!isValid}
@@ -758,9 +761,6 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
                   transition: 'background 120ms, color 120ms',
                 }}
               >
-                {saving
-                  ? <CairnLoader size={14} variant="on-dark" />
-                  : isBank ? <ArrowDownToLine size={15} strokeWidth={2.2} /> : <ArrowDownRight size={15} strokeWidth={2.2} />}
                 {(isGold ? numUnits <= 0 : numAmount <= 0)
                   ? (isVI
                       ? (isBank ? 'Nhập số tiền gốc rút' : isGold ? 'Nhập số lượng bán' : 'Nhập số tiền bán')
@@ -773,10 +773,8 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
                       : (isGold ? 'Exceeds quantity' : isBank ? 'Exceeds principal' : 'Exceeds balance'))
                   : (isBank && numReceived <= 0)
                   ? (isVI ? 'Nhập số tiền thực nhận' : 'Enter amount received')
-                  : saving
-                  ? (isVI ? 'Đang xử lý…' : 'Processing…')
                   : confirmLabel}
-              </button>
+              </PendingButton>
             </div>
           </div>
         )}

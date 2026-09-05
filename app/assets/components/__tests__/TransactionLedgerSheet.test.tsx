@@ -455,6 +455,37 @@ describe('TransactionLedgerSheet — a recorded withdrawal can have its received
     })
   })
 
+  it('answers the save click with a loader and a busy label, not a still button', async () => {
+    // Reported from the running app: "Sửa Giao dịch Rút" sat there unchanged
+    // for the whole PUT — no loader, no label change, nothing to say the click
+    // had landed.
+    putCalls = []
+    let release: (v: unknown) => void = () => {}
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') return new Promise((resolve) => { release = resolve })
+      if (url.includes('savings-goals')) return Promise.resolve({ ok: true, json: async () => ({ goals: [] }) })
+      if (url.includes('/api/funds')) return Promise.resolve({ ok: true, json: async () => ({ funds: [] }) })
+      if (url.includes('investment-transactions')) return Promise.resolve({ ok: true, json: async () => ({ transactions: [withdrawTx], total: 1 }) })
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+
+    const { container } = render(<TransactionLedgerSheet {...props} />)
+    ;(await screen.findByTestId('tx-ledger-withdraw-edit')).click()
+    await screen.findByTestId('withdraw-received-input')
+
+    const save = screen.getByTestId('withdraw-edit-save')
+    save.click()
+
+    await vi.waitFor(() => expect(container.querySelectorAll('.cairn-loader .stone')).toHaveLength(3))
+    expect(save).toHaveAttribute('aria-busy', 'true')
+    // The intl stub echoes keys, so the resting label is 'save' and the busy
+    // one 'saving' — the swap itself is what this pins down.
+    expect(save).toHaveTextContent('saving')
+    expect(save).toBeDisabled()
+
+    release({ ok: true, json: async () => ({}) })
+  })
+
   it('leaves a held-for-merge settlement uneditable — its cash is a claim on the merge pool', async () => {
     mockTxs([heldTx])
     render(<TransactionLedgerSheet {...props} />)

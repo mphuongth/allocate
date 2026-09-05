@@ -93,6 +93,7 @@ describe('PlanningDeleteConfirm (#689)', () => {
     description: 'Rent — ₫ 8500000',
     cancelLabel: 'Cancel',
     confirmLabel: 'Delete',
+    deletingLabel: 'Deleting...',
     deleting: false,
     onCancel: () => {},
     onConfirm: () => {},
@@ -142,6 +143,17 @@ describe('PlanningDeleteConfirm (#689)', () => {
 
     expect(onCancel).not.toHaveBeenCalled()
     expect(screen.getByTestId('fe-delete-confirm')).toBeDisabled()
+  })
+
+  it('says the delete is happening — loader and label, not just a dimmer button', () => {
+    // The destructive confirm used to keep its resting label at 0.7 opacity for
+    // the whole request, which reads as "nothing happened, press it again".
+    const { container } = render(<PlanningDeleteConfirm {...props} deleting />)
+
+    const confirm = screen.getByTestId('fe-delete-confirm')
+    expect(confirm).toHaveAttribute('aria-busy', 'true')
+    expect(confirm).toHaveTextContent('Deleting...')
+    expect(container.querySelectorAll('.cairn-loader .stone')).toHaveLength(3)
   })
 
   it('closes on Escape and traps focus — the contract, inherited once', async () => {

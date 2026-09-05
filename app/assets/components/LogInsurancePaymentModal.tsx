@@ -7,6 +7,7 @@ import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { todayIso } from '@/lib/dates'
 import type { InsuranceData } from '@/features/dashboard/contracts'
 import { clickAway } from '@/components/ui/clickAway'
+import PendingButton from '@/components/ui/PendingButton'
 
 interface Props {
   open: boolean
@@ -59,9 +60,9 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
 
   const t = isVi
     ? { title: settle ? 'Đánh dấu đã thanh toán' : 'Ghi nhận thanh toán', amount: 'Số tiền (₫)', date: 'Ngày thanh toán',
-        suggest: 'Gợi ý', cancel: 'Hủy', save: 'Xác nhận', doneMsg: settle ? 'Đã đánh dấu thanh toán!' : 'Đã ghi nhận!' }
+        suggest: 'Gợi ý', cancel: 'Hủy', save: 'Xác nhận', saving: 'Đang xử lý...', doneMsg: settle ? 'Đã đánh dấu thanh toán!' : 'Đã ghi nhận!' }
     : { title: settle ? 'Mark as paid' : 'Log payment', amount: 'Amount (₫)', date: 'Payment date',
-        suggest: 'Suggested', cancel: 'Cancel', save: 'Confirm', doneMsg: settle ? 'Marked as paid!' : 'Payment logged!' }
+        suggest: 'Suggested', cancel: 'Cancel', save: 'Confirm', saving: 'Processing...', doneMsg: settle ? 'Marked as paid!' : 'Payment logged!' }
 
   async function handleSave() {
     if (!canSubmit || !ins) return
@@ -250,16 +251,19 @@ export default function LogInsurancePaymentModal({ open, onClose, onSaved, ins, 
                 >
                   {t.cancel}
                 </button>
-                <button
-                  type="button"
+                {/* Full opacity while submitting so the loader stays legible
+                    against the filled primary — dimming reads as "disabled". */}
+                <PendingButton
+                  pending={submitting}
+                  pendingLabel={t.saving}
+                  icon={<Check size={14} strokeWidth={2.4} />}
                   onClick={handleSave}
                   disabled={!canSubmit}
                   className="cn-btn primary"
-                  style={{ flex: 2, justifyContent: 'center', gap: 6, opacity: canSubmit ? 1 : 0.6 }}
+                  style={{ flex: 2, justifyContent: 'center', gap: 6, opacity: canSubmit || submitting ? 1 : 0.6 }}
                 >
-                  <Check size={14} strokeWidth={2.4} />
                   {t.save}
-                </button>
+                </PendingButton>
               </div>
             </div>
           )}
