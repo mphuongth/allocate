@@ -9,6 +9,7 @@ import { fmtCompact } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
 import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 import DialogShell from '@/components/ui/DialogShell'
+import PendingButton from '@/components/ui/PendingButton'
 import SuccessorBookSheet, { type SuccessorTarget } from './SuccessorBookSheet'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { fmtTxDate } from './transactionUtils'
@@ -441,7 +442,18 @@ export function TopUpControl({ inv, isVi, onDone }: { inv: InvRow; isVi: boolean
                   {isVi ? 'Mở sổ kế nhiệm' : 'Open successor book'}
                 </button>
               ) : (
-              <button type="button" data-testid="top-up-submit" onClick={submit} disabled={saving || !(amt > 0) || eligibility.status !== 'allowed'} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) || eligibility.status !== 'allowed' ? 0.6 : 1 }}>{isVi ? 'Nạp thêm' : 'Top up'}</button>
+              // Not dimmed while saving: the button keeps its filled navy so the
+              // loader stays legible and it reads as "processing", not disabled.
+              <PendingButton
+                pending={saving}
+                pendingLabel={isVi ? 'Đang xử lý...' : 'Processing...'}
+                data-testid="top-up-submit"
+                onClick={submit}
+                disabled={!(amt > 0) || eligibility.status !== 'allowed'}
+                style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: !(amt > 0) || eligibility.status !== 'allowed' ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              >
+                {isVi ? 'Nạp thêm' : 'Top up'}
+              </PendingButton>
               )}
             </div>
         </DialogShell>

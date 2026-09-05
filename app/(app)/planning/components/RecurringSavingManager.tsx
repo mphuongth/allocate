@@ -8,6 +8,7 @@ import { fmt, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import EffectiveMonthFields from './EffectiveMonthFields'
 import PlanningDeleteConfirm from './PlanningDeleteConfirm'
+import PendingButton from '@/components/ui/PendingButton'
 import { ghostBtn, inputStyle, labelStyle, monthRangeLabel, primaryBtn, toMonthInput } from './planningManagerShell'
 import type { Goal } from '@/features/planning/contracts'
 
@@ -303,9 +304,10 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
 
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button type="button" onClick={() => setMode('list')} style={ghostBtn}>{tc('cancel')}</button>
-          <button type="button" data-testid="rs-save" onClick={handleSave} disabled={saving} style={{ ...primaryBtn, opacity: saving ? 0.7 : 1 }}>
-            {saving ? tc('saving') : tc('save')}
-          </button>
+          {/* Not dimmed while saving: the fill has to stay behind the loader. */}
+          <PendingButton pending={saving} pendingLabel={tc('saving')} data-testid="rs-save" onClick={handleSave} style={{ ...primaryBtn, cursor: saving ? 'default' : 'pointer' }}>
+            {tc('save')}
+          </PendingButton>
         </div>
       </div>
     )
@@ -382,6 +384,7 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
 
       {confirmDelete && (
         <PlanningDeleteConfirm
+          deletingLabel={tc('deleting')}
           variant={variant}
           testIdPrefix="rs"
           title={isVI ? 'Xoá khoản định kỳ?' : 'Delete recurring saving?'}

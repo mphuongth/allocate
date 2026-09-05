@@ -21,6 +21,7 @@
 import { useState, useEffect } from 'react'
 import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, PiggyBank } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
+import PendingButton from '@/components/ui/PendingButton'
 import { fieldLabel, moneyInput, dateInput, MoneyField, WithdrawSection, HeldPoolSection, DestinationBankField } from './maturityResolveFields'
 import { MergeSourcesSection } from './maturityResolveMergeSources'
 import { RecurringRedepositSection } from './maturityResolveRecurring'
@@ -649,11 +650,18 @@ export function MaturityResolveBody({
                 : 'This book has not matured yet — the bank has not paid out, so there is nothing to move.'}
             </p>
           )}
-          <button type="button" data-testid="merge-successor-submit" disabled={saving || !mergeReady}
+          {/* Not dimmed while saving: the button keeps its filled navy so the
+              loader stays legible and it reads as "processing", not disabled. */}
+          <PendingButton
+            pending={saving}
+            pendingLabel={isVi ? 'Đang xử lý...' : 'Processing...'}
+            data-testid="merge-successor-submit"
+            disabled={!mergeReady}
             onClick={handleMergeIntoSuccessor}
-            style={{ padding: '11px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !mergeReady ? 0.6 : 1 }}>
+            style={{ padding: '11px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: !mergeReady ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}
+          >
             {isVi ? 'Gộp vào sổ kế nhiệm' : 'Merge into the successor'}
-          </button>
+          </PendingButton>
         </div>
       )}
 
@@ -907,18 +915,32 @@ export function MaturityResolveBody({
           // Holding posts instead of withdrawing — navy CTA + piggy icon, never the
           // red withdraw button (the money is staying in the goal).
           const holding = mode === 'withdraw' && canHold && holdChoice === 'hold'
-          const disabled = saving || (mode !== 'withdraw' && !canRenew) || (holding && !(holdReceivedNum > 0)) || (mode === 'withdraw' && !holding && !(payoutNum > 0))
+          // Saving is deliberately not part of `disabled` here: PendingButton
+          // blocks the second click itself, and leaving it out keeps the button
+          // at full opacity so the loader stays legible against the fill.
+          const disabled = (mode !== 'withdraw' && !canRenew) || (holding && !(holdReceivedNum > 0)) || (mode === 'withdraw' && !holding && !(payoutNum > 0))
           return (
-            <button type="button" onClick={handleConfirm} disabled={disabled} style={{
-              flex: 2, justifyContent: 'center', gap: 7, padding: '10px 14px', borderRadius: 10, border: 'none',
-              fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-              cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1, color: '#fff',
-              background: mode === 'withdraw' && !holding ? 'var(--c-neg)' : 'var(--c-btn-primary)',
-              display: 'flex', alignItems: 'center',
-            }}>
-              {holding ? <PiggyBank size={14} strokeWidth={2.2} /> : mode === 'withdraw' ? <ArrowDownToLine size={14} strokeWidth={2.2} /> : mode === 'combine' ? <Plus size={14} strokeWidth={2.2} /> : <RefreshCw size={14} strokeWidth={2.2} />}
+            <PendingButton
+              pending={saving}
+              pendingLabel={isVi ? 'Đang xử lý...' : 'Processing...'}
+              // A stable handle for the E2E "the renewal landed" wait. Its label
+              // is no longer one: while the request is in flight the button says
+              // "Processing…", so matching on the resting name would read as
+              // "committed" the instant the click was registered.
+              data-testid="maturity-confirm"
+              onClick={handleConfirm}
+              disabled={disabled}
+              icon={holding ? <PiggyBank size={14} strokeWidth={2.2} /> : mode === 'withdraw' ? <ArrowDownToLine size={14} strokeWidth={2.2} /> : mode === 'combine' ? <Plus size={14} strokeWidth={2.2} /> : <RefreshCw size={14} strokeWidth={2.2} />}
+              style={{
+                flex: 2, justifyContent: 'center', gap: 7, padding: '10px 14px', borderRadius: 10, border: 'none',
+                fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+                cursor: disabled || saving ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1, color: '#fff',
+                background: mode === 'withdraw' && !holding ? 'var(--c-neg)' : 'var(--c-btn-primary)',
+                display: 'flex', alignItems: 'center',
+              }}
+            >
               {holding ? t.holdConfirm : mode === 'withdraw' ? t.confirmWithdraw : mode === 'combine' ? t.confirmCombine : t.confirmRenew}
-            </button>
+            </PendingButton>
           )
         })()}
       </div>

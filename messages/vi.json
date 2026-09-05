@@ -111,6 +111,7 @@
     "loading": "Đang tải...",
     "saving": "Đang lưu...",
     "deleting": "Đang xóa...",
+    "processing": "Đang xử lý...",
     "error": "Đã xảy ra lỗi.",
     "tryAgain": "Thử lại",
     "unassign": "Bỏ gán",

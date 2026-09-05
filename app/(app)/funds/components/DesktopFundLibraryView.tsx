@@ -11,6 +11,7 @@ import { SyncPill } from '@/components/ui/SyncPill'
 // Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under
 // the Plan feature today; reused here so Funds dialogs behave the same.
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
+import PendingButton from '@/components/ui/PendingButton'
 import { clickAway } from '@/components/ui/clickAway'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
@@ -789,9 +790,9 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
               <button type="button" onClick={closeModal} className="cn-btn ghost" style={{ flex: 1, justifyContent: 'center', border: '1px solid var(--c-line)' }} disabled={saving}>
                 {tc('cancel')}
               </button>
-              <button type="submit" className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }} disabled={saving}>
-                {saving ? tc('saving') : modalMode === 'edit' ? t('saveBtn') : t('add')}
-              </button>
+              <PendingButton type="submit" pending={saving} pendingLabel={tc('saving')} className="cn-btn primary" style={{ flex: 2, justifyContent: 'center' }}>
+                {modalMode === 'edit' ? t('saveBtn') : t('add')}
+              </PendingButton>
             </div>
           </div>
         </form>

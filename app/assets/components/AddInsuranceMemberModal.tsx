@@ -7,6 +7,7 @@ import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { COVERAGE_OPTIONS } from './insuranceShared'
 import { todayIso } from '@/lib/dates'
 import { clickAway } from '@/components/ui/clickAway'
+import PendingButton from '@/components/ui/PendingButton'
 
 interface Props {
   open: boolean
@@ -70,11 +71,11 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
     ? { title: 'Thêm thành viên BH', name: 'Họ tên', namePh: 'VD. Linh Nguyễn',
         coverage: 'Mối quan hệ', premium: 'Phí bảo hiểm năm (₫)',
         start: 'Ngày đóng phí', monthly: 'Đóng góp hàng tháng',
-        save: 'Thêm thành viên', cancel: 'Hủy' }
+        save: 'Thêm thành viên', saving: 'Đang lưu...', cancel: 'Hủy' }
     : { title: 'Add insurance member', name: 'Full name', namePh: 'e.g. Linh Nguyen',
         coverage: 'Relationship', premium: 'Annual premium (₫)',
         start: 'Payment date', monthly: 'Monthly contribution',
-        save: 'Add member', cancel: 'Cancel' }
+        save: 'Add member', saving: 'Saving...', cancel: 'Cancel' }
 
   async function handleSubmit() {
     if (!canSubmit) return
@@ -195,16 +196,19 @@ export default function AddInsuranceMemberModal({ open, onClose, onCreated, loca
         >
           {t.cancel}
         </button>
-        <button
-          type="button"
+        {/* Full opacity while submitting so the loader stays legible against
+            the filled primary — dimming reads as "disabled", not "working". */}
+        <PendingButton
+          pending={submitting}
+          pendingLabel={t.saving}
+          icon={<Plus size={14} strokeWidth={2.4} />}
           onClick={handleSubmit}
           disabled={!canSubmit}
           className="cn-btn primary"
-          style={{ flex: 2, justifyContent: 'center', gap: 6, opacity: canSubmit ? 1 : 0.6 }}
+          style={{ flex: 2, justifyContent: 'center', gap: 6, opacity: canSubmit || submitting ? 1 : 0.6 }}
         >
-          <Plus size={14} strokeWidth={2.4} />
           {t.save}
-        </button>
+        </PendingButton>
       </div>
     </div>
   )

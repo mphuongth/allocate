@@ -11,6 +11,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import DialogShell from '@/components/ui/DialogShell'
+import PendingButton from '@/components/ui/PendingButton'
 import { fmtCompact } from '@/lib/formatters'
 import { todayIso } from '@/lib/dates'
 
@@ -121,7 +122,18 @@ export default function RecurringBookTopUpSheet({
         {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg)' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--c-line)', background: 'var(--c-card)', color: 'var(--c-ink)', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{isVi ? 'Huỷ' : 'Cancel'}</button>
-          <button type="button" data-testid="recurring-topup-submit" onClick={submit} disabled={saving || !(amt > 0)} style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: saving || !(amt > 0) ? 0.6 : 1 }}>{isVi ? 'Nạp & ghi nhận' : 'Top up & record'}</button>
+          {/* Not dimmed while saving: the button keeps its filled navy so the
+              loader stays legible and it reads as "processing", not disabled. */}
+          <PendingButton
+            pending={saving}
+            pendingLabel={isVi ? 'Đang xử lý...' : 'Processing...'}
+            data-testid="recurring-topup-submit"
+            onClick={submit}
+            disabled={!(amt > 0)}
+            style={{ flex: 2, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit', opacity: !(amt > 0) ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+          >
+            {isVi ? 'Nạp & ghi nhận' : 'Top up & record'}
+          </PendingButton>
         </div>
     </DialogShell>
   )

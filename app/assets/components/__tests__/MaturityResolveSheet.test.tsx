@@ -83,6 +83,33 @@ describe('MaturityResolveBody', () => {
     })
   })
 
+  it('answers the confirm click with a loader, a busy label and no second write', async () => {
+    // The renewal confirm used to keep its icon and its label perfectly still
+    // for the whole request — indistinguishable from a click that did nothing,
+    // which is exactly how a deposit gets renewed twice.
+    const user = userEvent.setup()
+    let release: (v: unknown) => void = () => {}
+    const inFlight = new Promise((resolve) => { release = resolve })
+    const fetchMock = vi.fn().mockReturnValue(inFlight)
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { container } = render(
+      <MaturityResolveBody inv={maturedDeposit} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />,
+    )
+    const confirm = screen.getByRole('button', { name: /Confirm renewal/i })
+    await user.click(confirm)
+
+    await waitFor(() => expect(container.querySelectorAll('.cairn-loader .stone')).toHaveLength(3))
+    const busy = screen.getByRole('button', { name: /Processing/i })
+    expect(busy).toHaveAttribute('aria-busy', 'true')
+    expect(busy).toBeDisabled()
+
+    await user.click(busy)
+    expect(writeCalls(fetchMock)).toHaveLength(1)
+
+    release({ ok: true, json: async () => ({}) })
+  })
+
   it('blocks renewal for a not-yet-matured deposit (wider reminder window) and shows a hint', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
     vi.stubGlobal('fetch', fetchMock)

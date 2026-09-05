@@ -30,6 +30,9 @@ export const primaryBtn: CSSProperties = {
   flex: 2, padding: '10px 0', borderRadius: 10, border: 'none',
   background: 'var(--c-btn-primary)', color: '#fff', fontSize: 14, fontWeight: 600,
   cursor: 'pointer', fontFamily: 'inherit',
+  // Centred as a row, not as text: these are PendingButtons, and a pending one
+  // puts a loader beside the label.
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
 }
 
 // ─── the effective-month range ───────────────────────────────────────────────

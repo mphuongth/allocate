@@ -16,6 +16,7 @@ import { iconHit } from './iconHit'
 import { fmt } from '@/lib/formatters'
 import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import { CairnLoader } from '@/components/ui/CairnLoader'
+import PendingButton from '@/components/ui/PendingButton'
 import { useDialogMount, useResetOnOpen } from '@/components/ui/useDialogMount'
 import { useManagedTimeout } from '@/components/ui/useManagedTimeout'
 import { TypeIcon } from './goalDetailShared'
@@ -209,6 +210,7 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
     unitPrice: isVI ? 'Giá bán mỗi chỉ' : 'Sale price per chỉ',
     total: isVI ? 'Tổng thực nhận' : 'Total realized',
     confirm: isVI ? 'Tất toán & hoàn thành' : 'Liquidate & finish',
+    confirming: isVI ? 'Đang xử lý...' : 'Processing...',
     archived: isVI
       ? 'Mục tiêu sẽ được lưu trữ ở mức 100% và giữ nguyên toàn bộ lịch sử giao dịch.'
       : 'The goal will be archived at 100% and keeps its full transaction history.',
@@ -344,20 +346,25 @@ export function FinishGoalSheet({ open, goalId, goalName, rows, onClose, onFinis
               )}
               {error && <div style={{ fontSize: 12, color: 'var(--c-neg)' }}>{error}</div>}
 
-              <button
+              {/* Keep the active green while saving so the loader stays legible
+                  and the button reads as "processing", not disabled. */}
+              <PendingButton
+                pending={saving}
+                pendingLabel={t.confirming}
                 data-testid="finish-goal-confirm"
                 onClick={handleConfirm}
-                disabled={!complete || saving}
+                disabled={!complete}
                 style={{
                   width: '100%', padding: '14px 16px', borderRadius: 12, border: 'none',
-                  background: !complete || saving ? 'var(--c-card-2)' : 'var(--c-pos)',
-                  color: !complete || saving ? 'var(--c-muted)' : '#fff',
+                  background: !complete ? 'var(--c-card-2)' : 'var(--c-pos)',
+                  color: !complete ? 'var(--c-muted)' : '#fff',
                   fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
                   cursor: !complete || saving ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
               >
                 {t.confirm}
-              </button>
+              </PendingButton>
             </div>
           )}
         </div>

@@ -111,6 +111,7 @@
     "loading": "Loading...",
     "saving": "Saving...",
     "deleting": "Deleting...",
+    "processing": "Processing...",
     "error": "An error occurred.",
     "tryAgain": "Try again",
     "unassign": "Unassign",
