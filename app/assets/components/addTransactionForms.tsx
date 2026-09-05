@@ -102,7 +102,7 @@ export function BuyFundFields({
 export function BuyBankFields({
   banks, bankCode, setBankCode, depositType, setDepositType,
   bankAmount, setBankAmount, rate, setRate, maturity, setMaturity, topUpLockDays, setTopUpLockDays, date,
-  inputStyle, labelStyle,
+  lockType = false, inputStyle, labelStyle,
 }: {
   banks: Bank[]
   bankCode: string
@@ -118,6 +118,10 @@ export function BuyBankFields({
   topUpLockDays: string
   setTopUpLockDays: (v: string) => void
   date: string
+  /** Editing a book: the savings type and its lock window are fixed — the PUT
+   *  has no way to group or ungroup a deposit, so offering the switch would
+   *  promise a change that silently never happens. */
+  lockType?: boolean
   inputStyle: React.CSSProperties
   labelStyle: React.CSSProperties
 }) {
@@ -151,13 +155,16 @@ export function BuyBankFields({
                 key={opt}
                 type="button"
                 data-testid={`deposit-type-${opt}`}
+                aria-pressed={active}
+                disabled={lockType && !active}
                 onClick={() => setDepositType(opt)}
                 style={{
                   padding: '9px 6px', borderRadius: 10,
                   background: active ? 'var(--c-navy-tint)' : 'var(--c-card-2)',
                   color: active ? 'var(--c-navy)' : 'var(--c-muted)',
                   border: `1px solid ${active ? 'var(--c-navy)' : 'var(--c-line)'}`,
-                  cursor: 'pointer', fontFamily: 'inherit',
+                  opacity: lockType && !active ? 0.5 : 1,
+                  cursor: lockType && !active ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                   fontSize: 12, fontWeight: 500, transition: 'all 120ms',
                 }}
               >
@@ -207,7 +214,7 @@ export function BuyBankFields({
       {depositType === 'accumulating' && (
         <div>
           <label style={labelStyle}>{t('topUpLockDays')}</label>
-          <input type="number" min="0" step="1" value={topUpLockDays} onChange={(e) => setTopUpLockDays(e.target.value)} placeholder="30" style={inputStyle} />
+          <input type="number" min="0" step="1" value={topUpLockDays} onChange={(e) => setTopUpLockDays(e.target.value)} disabled={lockType} placeholder="30" style={{ ...inputStyle, ...(lockType ? { opacity: 0.6 } : null) }} />
           <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('topUpLockHint')}</div>
         </div>
       )}

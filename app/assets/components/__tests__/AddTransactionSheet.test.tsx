@@ -623,3 +623,61 @@ describe('AddTransactionSheet — a holding filed under a finished goal', () => 
     expect(within(select).queryByRole('option', { name: 'Car' })).toBeNull()
   })
 })
+
+describe('AddTransactionSheet — edit mode savings type', () => {
+  const banks = [{ code: 'NCB', name: 'NCB' }]
+  const withBanks = () =>
+    vi.fn((url: string) => {
+      if (String(url).includes('/api/v1/banks')) return Promise.resolve({ ok: true, json: () => Promise.resolve(banks) })
+      if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    })
+
+  const deposit = {
+    transaction_id: 'tx1', asset_type: 'bank', investment_date: '2026-09-04',
+    amount_vnd: 9_500_000, unit_price: null, units: null, interest_rate: 4.75,
+    expiry_date: '2026-09-03', notes: null, fund_id: null, goal_id: null, bank_code: 'NCB',
+  }
+  // A book — anchor or tranche — is the rows that carry a deposit_group_id.
+  const book = { ...deposit, deposit_group_id: 'tx1', top_up_lock_days: 30 }
+
+  it('prefills "accumulating" for a deposit book, not the term fallback', async () => {
+    vi.stubGlobal('fetch', withBanks())
+
+    render(<AddTransactionSheet open onClose={vi.fn()} existing={book} />)
+
+    const accumulating = await screen.findByTestId('deposit-type-accumulating')
+    expect(accumulating).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('deposit-type-term')).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('prefills the book top-up lock window', async () => {
+    vi.stubGlobal('fetch', withBanks())
+
+    render(<AddTransactionSheet open onClose={vi.fn()} existing={book} />)
+
+    await screen.findByTestId('deposit-type-accumulating')
+    expect((screen.getByPlaceholderText('30') as HTMLInputElement).value).toBe('30')
+  })
+
+  it('does not offer converting a book to another savings type — the PUT cannot do it', async () => {
+    vi.stubGlobal('fetch', withBanks())
+
+    render(<AddTransactionSheet open onClose={vi.fn()} existing={book} />)
+
+    const term = await screen.findByTestId('deposit-type-term')
+    expect(term).toBeDisabled()
+    fireEvent.click(term)
+    expect(screen.getByTestId('deposit-type-accumulating')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('still prefills "term" for a plain deposit, and leaves the type editable', async () => {
+    vi.stubGlobal('fetch', withBanks())
+
+    render(<AddTransactionSheet open onClose={vi.fn()} existing={deposit} />)
+
+    const term = await screen.findByTestId('deposit-type-term')
+    expect(term).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('deposit-type-flex')).toBeEnabled()
+  })
+})
