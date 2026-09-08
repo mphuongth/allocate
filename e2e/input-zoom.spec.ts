@@ -52,7 +52,7 @@ test.describe('Settings — no field triggers iOS zoom', () => {
     await page.goto('/settings')
     await page.waitForLoadState('networkidle')
     await page.getByRole('button', { name: /profile/i }).click()
-    await expect(page.getByRole('textbox').first()).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByLabel(/full name/i)).toBeVisible({ timeout: 5_000 })
     await expectNoZoomFields(page)
   })
 })

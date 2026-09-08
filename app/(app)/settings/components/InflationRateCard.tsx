@@ -98,10 +98,13 @@ export default function InflationRateCard() {
             placeholder={String(DEFAULT_INFLATION_RATE_PCT)}
             aria-invalid={invalid}
             style={{
-              width: 68, padding: '7px 10px', textAlign: 'right',
+              // 16px, not the 13px the row's other text uses: iOS Safari zooms
+              // the viewport on a focused field below 16px and never zooms back
+              // out (#265). The width grows with it so the value still fits.
+              width: 76, padding: '7px 10px', textAlign: 'right',
               background: 'var(--c-card-2)', color: 'var(--c-ink)',
               border: `1px solid ${invalid ? 'var(--c-neg)' : 'var(--c-line)'}`,
-              borderRadius: 8, fontSize: 13, fontWeight: 600,
+              borderRadius: 8, fontSize: 16, fontWeight: 600,
               fontFamily: 'inherit', fontVariantNumeric: 'tabular-nums', outline: 'none',
             }}
           />

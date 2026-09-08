@@ -110,10 +110,11 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
       ) : (
         <div style={{ display: 'grid', gap: 14 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 6 }}>
+            <label htmlFor="profile-full-name" style={{ display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 6 }}>
               {t('fullName')}
-            </div>
+            </label>
             <input
+              id="profile-full-name"
               value={name}
               onChange={e => setName(e.target.value)}
               style={{
@@ -125,10 +126,11 @@ function ProfileSheet({ open, onClose, onSave, displayName, email }: {
             />
           </div>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 6 }}>
+            <label htmlFor="profile-email" style={{ display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', marginBottom: 6 }}>
               {t('email')}
-            </div>
+            </label>
             <input
+              id="profile-email"
               type="email"
               defaultValue={email}
               readOnly
