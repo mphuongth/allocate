@@ -1,9 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
-import { toast } from 'sonner'
+import { usePathname } from 'next/navigation'
 import { NavigationProvider, useNavigation } from '../navigation/NavigationContext'
 import Sidebar from '../navigation/Sidebar'
 import Header from '../navigation/Header'
@@ -11,6 +8,7 @@ import MobileBottomTabs from '../navigation/MobileBottomTabs'
 import MobileTopBar from '../navigation/MobileTopBar'
 import OfflineBanner from '@/components/layout/OfflineBanner'
 import CacheOwnerAnnouncer from '@/components/layout/CacheOwnerAnnouncer'
+import SessionExpiredGate from '@/components/layout/SessionExpiredGate'
 
 function getInitials(email: string): string {
   const parts = email.split('@')[0].split(/[._-]/)
@@ -85,31 +83,14 @@ function AuthenticatedLayoutInner({ children, email, initials, overlays }: { chi
 }
 
 export default function AuthenticatedLayout({ children, userId, email, displayName, overlays }: { children: React.ReactNode; userId: string; email: string; displayName?: string; overlays?: React.ReactNode }) {
-  const router = useRouter()
-
-  // Watch for session expiry (e.g. token revoked or expired)
-  useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session && event !== 'INITIAL_SESSION' && event !== 'SIGNED_OUT') {
-        toast.error('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.', { duration: 5000 })
-        router.push('/auth/login')
-      }
-    })
-
-    return () => subscription.unsubscribe()
-  }, [router])
-
   const initials = getInitials(email)
   const userName = displayName || getDisplayName(email)
 
   return (
     <NavigationProvider userName={userName}>
       <CacheOwnerAnnouncer userId={userId} />
+      {/* Session expiry is answered in one place, for every tab and every fetch. */}
+      <SessionExpiredGate />
       <AuthenticatedLayoutInner email={email} initials={initials} overlays={overlays}>
         {children}
       </AuthenticatedLayoutInner>

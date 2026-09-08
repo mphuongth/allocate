@@ -42,6 +42,16 @@ vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => ({ auth: { signOut: signOutMock, updateUser: updateUserMock } }),
 }))
 
+const { markSelfSignOutMock, cancelSelfSignOutMock } = vi.hoisted(() => ({
+  markSelfSignOutMock: vi.fn(),
+  cancelSelfSignOutMock: vi.fn(),
+}))
+
+vi.mock('@/lib/sessionExpiry', () => ({
+  markSelfSignOut: markSelfSignOutMock,
+  cancelSelfSignOut: cancelSelfSignOutMock,
+}))
+
 const { refreshPricesMock, fetchLastSyncMock, fetchOverviewMock, exportReportMock, clearAppCachesMock, setLocaleCookieMock } = vi.hoisted(() => ({
   refreshPricesMock: vi.fn(),
   fetchLastSyncMock: vi.fn().mockResolvedValue(null),
@@ -363,11 +373,35 @@ describe('useSettingsController — sign out', () => {
     expect(pushMock).toHaveBeenCalledWith('/auth/login')
   })
 
+  // Signing out of this browser must not reach into the user's phone: `scope`
+  // defaults to 'global' in supabase-js, which revokes every device's session.
+  it('ends only this device\'s session', async () => {
+    const { result } = await mounted()
+
+    await act(async () => { await result.current.signOut() })
+
+    expect(signOutMock).toHaveBeenCalledWith({ scope: 'local' })
+  })
+
+  // The sibling tabs get the "session ended" dialog; the tab that asked for this
+  // is already on its way to the login page and must not be told twice.
+  it('marks itself so it does not show itself the session-ended dialog', async () => {
+    const { result } = await mounted()
+
+    await act(async () => { await result.current.signOut() })
+
+    expect(markSelfSignOutMock).toHaveBeenCalled()
+  })
+
   it('keeps the user in place and reports the error when sign-out fails', async () => {
     signOutMock.mockResolvedValueOnce({ error: { message: 'nope' } })
     const { result } = await mounted()
 
     await act(async () => { await result.current.signOut() })
+
+    // The session is still live, so this tab has to stay able to report a later
+    // expiry of its own.
+    expect(cancelSelfSignOutMock).toHaveBeenCalled()
 
     // Clearing caches on a failed sign-out would log the user out locally while
     // the session is still live on the server.

@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { buildContentSecurityPolicy, localSupabaseConnectExtra } from '@/lib/csp'
+import { safeNextPath } from '@/lib/nextPath'
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -29,8 +30,16 @@ export async function proxy(request: NextRequest) {
     return res
   }
 
-  // Public routes (landing + auth): no session gate, but still nonce'd + CSP'd.
-  if (pathname === '/' || pathname.startsWith('/auth/')) {
+  // The two doors into the app. They are reachable signed out, but a visitor who
+  // already has a session has no business being shown a sign-in form — so unlike
+  // the rest of the public routes these still cost a getUser() below.
+  const isAuthEntry = pathname === '/auth/login' || pathname === '/auth/signup'
+
+  // Public routes (landing + the rest of the auth flow): no session gate, but
+  // still nonce'd + CSP'd. /auth/callback in particular must run its code
+  // exchange even when a session is already present, and /auth/auth-code-error
+  // has to stay reachable to explain why one wasn't.
+  if (pathname === '/' || (pathname.startsWith('/auth/') && !isAuthEntry)) {
     return withCsp(NextResponse.next({ request: { headers: requestHeaders } }))
   }
 
@@ -58,6 +67,16 @@ export async function proxy(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  if (isAuthEntry) {
+    // Signed out: the form is exactly what they came for.
+    if (!user) return withCsp(response)
+    // Signed in: refreshing /auth/login used to re-render the form forever,
+    // because nothing on the server ever looked. `next` carries the page they
+    // were on when a session ended, so honour it over the default landing.
+    const target = safeNextPath(request.nextUrl.searchParams.get('next')) ?? '/dashboard'
+    return withCsp(NextResponse.redirect(new URL(target, request.url)))
+  }
 
   if (!user) {
     const loginUrl = request.nextUrl.clone()

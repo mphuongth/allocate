@@ -2,12 +2,17 @@
 
 import { RefreshCw } from 'lucide-react'
 import PendingButton from '@/components/ui/PendingButton'
+import { useSessionExpired } from '@/lib/sessionExpiry'
 
 /**
  * Inline "couldn't load — try again" state for sheets/panels that fetch their
  * own data. Use this instead of falling back to an empty list on a failed
  * fetch, so a transient network error never reads as "you have no data".
  * The retry button re-runs the loader.
+ *
+ * Renders nothing once the session has ended: a 401 is not a load that failed,
+ * retrying it can only 401 again, and the session-ended dialog is already
+ * saying what actually happened (#719).
  *
  * `isVI` is passed explicitly (not read via useLocale) so this works in the
  * desktop panels that thread locale through props and render without an intl
@@ -24,6 +29,9 @@ export default function LoadError({
   retrying?: boolean
   compact?: boolean
 }) {
+  const sessionExpired = useSessionExpired()
+  if (sessionExpired) return null
+
   return (
     <div
       data-testid="load-error"

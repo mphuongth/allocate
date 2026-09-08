@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useState, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useTranslations } from 'next-intl'
+import { safeNextPath } from '@/lib/nextPath'
 import { Eye, EyeOff } from 'lucide-react'
 import { AuthLayout } from '../AuthLayout'
 import PendingButton from '@/components/ui/PendingButton'
@@ -22,6 +23,9 @@ function LoginForm() {
   const t = useTranslations('auth')
   const searchParams = useSearchParams()
   const expired = searchParams.get('expired') === 'true'
+  // Where the user was when the session ended, so signing back in resumes the
+  // task instead of dropping them on the dashboard (#719).
+  const next = safeNextPath(searchParams.get('next')) ?? '/dashboard'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -60,7 +64,7 @@ function LoginForm() {
         // can race with auth-cookie propagation and get bounced straight back
         // to /auth/login by getUser() — especially when a stale/expired session
         // cookie was already present — leaving the button stuck on "redirecting".
-        window.location.assign('/dashboard')
+        window.location.assign(next)
       }
     } catch {
       setError(t('cannotConnect'))

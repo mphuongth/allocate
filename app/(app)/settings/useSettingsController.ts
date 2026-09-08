@@ -9,6 +9,7 @@ import { useTheme, type ThemeChoice } from '@/components/layout/ThemeProvider'
 import { useNavigation } from '@/components/navigation/NavigationContext'
 import type { DashboardData } from '@/features/dashboard/contracts'
 import { useManagedTimeout } from '@/components/ui/useManagedTimeout'
+import { cancelSelfSignOut, markSelfSignOut } from '@/lib/sessionExpiry'
 import {
   clearAppCaches, setLocaleCookie, refreshPrices, fetchOverview,
   exportPortfolioReport, fetchLastSync, formatLastSync,
@@ -224,10 +225,18 @@ export function useSettingsController({ initials, displayName }: {
   // ─── Session ──────────────────────────────────────────────────────────────
 
   const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut()
+    // Before the call, not after: signOut() broadcasts SIGNED_OUT the moment it
+    // clears the session, and this tab must already know the sign-out is its own
+    // doing — otherwise it shows itself the "session ended" dialog meant for the
+    // sibling tabs (#719).
+    markSelfSignOut()
+    // 'local', not supabase-js's default 'global': the user asked to leave this
+    // browser, not to be signed out of their phone as well.
+    const { error } = await supabase.auth.signOut({ scope: 'local' })
     if (error) {
       // Clearing caches here would log the user out locally while the session
       // is still live on the server.
+      cancelSelfSignOut()
       toast.error(t('signOutFailed'))
       return
     }
