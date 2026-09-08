@@ -3,8 +3,9 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import LoginPage from '../page'
 
-const { signInMock, pushMock, refreshMock, announceCacheOwnerMock } = vi.hoisted(() => ({
+const { signInMock, pushMock, refreshMock, announceCacheOwnerMock, searchParams } = vi.hoisted(() => ({
   signInMock: vi.fn(),
+  searchParams: {} as Record<string, string | undefined>,
   pushMock: vi.fn(),
   refreshMock: vi.fn(),
   announceCacheOwnerMock: vi.fn(async () => {}),
@@ -20,7 +21,7 @@ vi.mock('next-intl', () => ({
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock, refresh: refreshMock }),
-  useSearchParams: () => ({ get: () => null }),
+  useSearchParams: () => ({ get: (key: string) => searchParams[key] ?? null }),
 }))
 
 vi.mock('@supabase/ssr', () => ({
@@ -39,6 +40,7 @@ describe('LoginPage — navigation after successful sign-in', () => {
   let assignMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
+    for (const key of Object.keys(searchParams)) delete searchParams[key]
     signInMock.mockReset()
     pushMock.mockReset()
     refreshMock.mockReset()
@@ -98,6 +100,30 @@ describe('LoginPage — navigation after successful sign-in', () => {
   it('still navigates when the worker cannot be told who signed in', async () => {
     signInMock.mockResolvedValue({ data: { user: { id: 'user-b' } }, error: null })
     announceCacheOwnerMock.mockRejectedValueOnce(new Error('no service worker'))
+
+    render(<LoginPage />)
+    await submitLogin()
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/dashboard'))
+  })
+
+  // Signing in again after a session ended mid-task should put the user back
+  // where they were, not on the dashboard with their place lost (#719).
+  it('returns to the page recorded in ?next', async () => {
+    searchParams.next = '/assets?goal=g1'
+    signInMock.mockResolvedValue({ error: null })
+
+    render(<LoginPage />)
+    await submitLogin()
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/assets?goal=g1'))
+  })
+
+  // ?next is attacker-controllable in a link, so it may only ever name a path
+  // inside this app.
+  it('ignores a ?next pointing off this site', async () => {
+    searchParams.next = 'https://evil.example/phish'
+    signInMock.mockResolvedValue({ error: null })
 
     render(<LoginPage />)
     await submitLogin()
