@@ -5,7 +5,6 @@ import {
   markSelfSignOut,
   reportSessionExpired,
   resetSessionExpiry,
-  safeNextPath,
   useSessionExpired,
   watchApiUnauthorized,
 } from '../sessionExpiry'
@@ -122,17 +121,4 @@ describe('sessionExpiry — watching API responses', () => {
 
     expect(global.fetch).toBe(spy)
   })
-})
-
-describe('safeNextPath', () => {
-  it('keeps an in-app path', () => {
-    expect(safeNextPath('/assets?goal=g1')).toBe('/assets?goal=g1')
-  })
-
-  it.each(['//evil.example', 'https://evil.example', 'assets', '/\\evil.example', null, ''])(
-    'refuses %s',
-    (candidate) => {
-      expect(safeNextPath(candidate)).toBeNull()
-    },
-  )
 })

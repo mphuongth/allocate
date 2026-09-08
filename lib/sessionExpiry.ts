@@ -112,14 +112,3 @@ export function watchApiUnauthorized(): () => void {
     watching = false
   }
 }
-
-/**
- * Where to send the user back to after they sign in again — or null when the
- * candidate is not a path within this app. `//host` and `/\host` are both
- * protocol-relative URLs to browsers, so a bare "starts with /" is not enough.
- */
-export function safeNextPath(candidate: string | null): string | null {
-  if (!candidate || !candidate.startsWith('/')) return null
-  if (candidate.startsWith('//') || candidate.startsWith('/\\')) return null
-  return candidate
-}
