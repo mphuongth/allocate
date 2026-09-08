@@ -101,6 +101,17 @@ describe('MobileSettingsView — profile sheet', () => {
     expect(nameInput).toBeInTheDocument()
   })
 
+  // The field had a styled <div> for a label and no id, so nothing tied the two
+  // together: a screen reader announced an unnamed text box, and the e2e specs
+  // had to reach for it positionally — which broke the moment another input
+  // landed earlier on the settings page.
+  it('names the field, so it can be found by its label', async () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /profile/i }))
+
+    expect(screen.getByLabelText(/full name/i)).toHaveValue('Phuong')
+  })
+
   it('shows email input prefilled with email', async () => {
     render(<MobileSettingsView {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /profile/i }))

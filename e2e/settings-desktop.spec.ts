@@ -38,7 +38,8 @@ test('desktop: saving a new name updates the sidebar avatar/name without a refre
 
   await page.getByRole('button', { name: /^edit$/i }).click()
   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
-  const nameInput = page.getByRole('textbox').first()
+  // By label, not by position — see the note in settings.spec.ts.
+  const nameInput = page.getByLabel(/full name/i)
   await nameInput.fill('Sidebar Sync Test')
   await page.getByRole('button', { name: /^save$/i }).click()
 

@@ -348,10 +348,11 @@ export default function DesktopSettingsView({ email, initials, displayName }: Se
         ) : (
           <div style={{ display: 'grid', gap: 14 }}>
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>
+              <label htmlFor="profile-full-name-desktop" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>
                 {t('fullName')}
               </label>
               <input
+                id="profile-full-name-desktop"
                 value={profile.name}
                 onChange={e => profile.setName(e.target.value)}
                 autoFocus
@@ -366,10 +367,11 @@ export default function DesktopSettingsView({ email, initials, displayName }: Se
               />
             </div>
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>
+              <label htmlFor="profile-email-desktop" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-muted)', display: 'block', marginBottom: 6 }}>
                 {t('email')}
               </label>
               <input
+                id="profile-email-desktop"
                 type="email"
                 defaultValue={email}
                 readOnly

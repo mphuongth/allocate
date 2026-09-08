@@ -101,6 +101,15 @@ describe('DesktopSettingsView — profile modal', () => {
     expect(screen.getByDisplayValue('phuong.tran@example.com')).toBeInTheDocument()
   })
 
+  // The <label> next to the field named nothing — no htmlFor, no id — so the
+  // text box was announced unnamed and could only be reached positionally.
+  it('names the field, so it can be found by its label', async () => {
+    render(<DesktopSettingsView {...defaultProps} />)
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+    expect(screen.getByLabelText(/full name/i)).toHaveValue('Phuong')
+  })
+
   it('closes the dialog when Cancel is clicked', async () => {
     render(<DesktopSettingsView {...defaultProps} />)
     await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))

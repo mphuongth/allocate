@@ -22,7 +22,9 @@ test.beforeEach(async ({ page }) => {
 
 test('saving a new display name updates the profile card', async ({ page }) => {
   await page.getByRole('button', { name: /profile/i }).click()
-  const nameInput = page.getByRole('textbox').first()
+  // By label, not by position: the settings page now carries other text fields
+  // (the inflation rate), and `.first()` silently picked one of those instead.
+  const nameInput = page.getByLabel(/full name/i)
   await expect(nameInput).toBeVisible({ timeout: 5_000 })
   await nameInput.fill('E2E Test User')
   await page.getByRole('button', { name: /^save$/i }).click()

@@ -107,6 +107,16 @@ describe('InflationRateCard', () => {
     expect(hint.textContent).toMatch(/4\.5%/)
   })
 
+  // iOS Safari zooms the viewport when a focused native field is under 16px and
+  // never zooms back out (#265). This card sits on the settings page, which the
+  // e2e zoom guard sweeps whole — but the rule belongs here, next to the field.
+  it('renders the rate field at >=16px so focusing it cannot zoom iOS', async () => {
+    render(<InflationRateCard />)
+    const input = await screen.findByRole('textbox', { name: /assumed rate/i })
+
+    expect(parseFloat(getComputedStyle(input).fontSize)).toBeGreaterThanOrEqual(16)
+  })
+
   it('survives a settings read that fails, rather than blocking the page', async () => {
     fetchMock.mockRejectedValueOnce(new Error('offline'))
     render(<InflationRateCard />)
