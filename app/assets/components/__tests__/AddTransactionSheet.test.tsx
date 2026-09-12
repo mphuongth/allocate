@@ -681,3 +681,72 @@ describe('AddTransactionSheet — edit mode savings type', () => {
     expect(screen.getByTestId('deposit-type-flex')).toBeEnabled()
   })
 })
+
+// ─── Saving onto a row the server no longer has (#721) ────────────────────────
+//
+// A pending DCA row's transaction_id is not stable: seed_and_sync_plan_dca
+// deletes it when the month is skipped or the fund's DCA goes off, and re-inserts
+// a brand-new row when that reverses. Any page still holding the old id saves
+// onto a row that no longer exists — and the answer used to be the server's raw
+// English "Transaction not found" painted into a Vietnamese form, above a Save
+// button that could only ever fail again.
+
+describe('AddTransactionSheet — the row is gone', () => {
+  const banks = [{ code: 'MB', name: 'MB Bank' }, { code: 'VCB', name: 'Vietcombank' }]
+  const gone = vi.fn((url: string, init?: RequestInit) => {
+    if (String(url).includes('/api/v1/banks')) return Promise.resolve({ ok: true, json: () => Promise.resolve(banks) })
+    if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [] }) })
+    if ((init as RequestInit)?.method === 'PUT') {
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ error: 'Transaction not found' }) })
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+  })
+
+  const existing = {
+    transaction_id: 'tx-gone', asset_type: 'bank' as const, investment_date: '2026-06-01',
+    amount_vnd: 10_000_000, unit_price: null, units: null, interest_rate: 6,
+    expiry_date: '2026-12-01', notes: 'Sổ A', fund_id: null, goal_id: null, bank_code: 'VCB',
+  }
+
+  // Returns once the PUT has actually been answered — a bare waitFor on "the
+  // English is absent" passes on the first tick, before the request resolves.
+  async function saveOntoMissingRow(props: Record<string, unknown> = {}) {
+    gone.mockClear()
+    vi.stubGlobal('fetch', gone)
+    render(<AddTransactionSheet open onClose={vi.fn()} existing={existing} {...props} />)
+    const sel = await screen.findByTestId('bank-select') as HTMLSelectElement
+    await waitFor(() => expect(sel.value).toBe('VCB'))
+    fireEvent.click(screen.getByText('saveChanges'))
+    await waitFor(() =>
+      expect(gone.mock.calls.some((c) => (c[1] as RequestInit)?.method === 'PUT')).toBe(true),
+    )
+  }
+
+  it('never shows the server its own English back to the user', async () => {
+    await saveOntoMissingRow({ onStale: vi.fn() })
+
+    expect(screen.queryByText('Transaction not found')).not.toBeInTheDocument()
+  })
+
+  // The list this sheet was opened from is the thing that is out of date, so the
+  // sheet cannot fix itself by staying open: it hands the screen back and asks
+  // for a reload.
+  it('closes and asks its opener to reload, rather than offering a save that cannot work', async () => {
+    const onClose = vi.fn()
+    const onStale = vi.fn()
+    await saveOntoMissingRow({ onClose, onStale })
+
+    await waitFor(() => expect(onStale).toHaveBeenCalled())
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  // Success is a different story and must not be told here.
+  it('does not report a save that never happened', async () => {
+    const onSaved = vi.fn()
+    const onStale = vi.fn()
+    await saveOntoMissingRow({ onSaved, onStale })
+
+    await waitFor(() => expect(onStale).toHaveBeenCalled())
+    expect(onSaved).not.toHaveBeenCalled()
+  })
+})

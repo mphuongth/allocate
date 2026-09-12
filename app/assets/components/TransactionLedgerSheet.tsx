@@ -905,6 +905,9 @@ export default function TransactionLedgerSheet({ open, desktop, locale, onClose,
         existing={editExisting}
         desktop={desktop}
         onClose={() => { setShowAdd(false); setEditExisting(null) }}
+        // Gone rather than saved: reload the ledger instead of reporting a save
+        // that never happened (#721).
+        onStale={() => { setShowAdd(false); setEditExisting(null); fetchTransactions(); notifyChanged() }}
         onSaved={() => { fetchTransactions(); notifyChanged() }}
       />
 

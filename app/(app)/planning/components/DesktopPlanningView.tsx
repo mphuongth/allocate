@@ -746,6 +746,9 @@ export default function DesktopPlanningView({
         prefill={prefillTx}
         desktop
         onClose={() => { setBuyEdit(null); setPrefillTx(null) }}
+        // The buy we were editing is gone: reload the plan so the list stops
+        // offering a row the server no longer has (#721).
+        onStale={() => { setBuyEdit(null); setPrefillTx(null); onRefresh() }}
         onSaved={() => {
           const wasBuy = !!buyEdit
           setBuyEdit(null); setPrefillTx(null); onRefresh()
