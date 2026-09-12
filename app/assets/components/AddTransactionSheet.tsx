@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { X, TrendingUp, Building2, Coins, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { iconHit } from './iconHit'
 import { useLocale, useTranslations } from 'next-intl'
+import { toast } from 'sonner'
 import DialogShell from '@/components/ui/DialogShell'
 import PendingButton from '@/components/ui/PendingButton'
 import { todayIso } from '@/lib/dates'
@@ -121,6 +122,12 @@ interface Props {
   open: boolean
   onClose: () => void
   onSaved?: () => void
+  /**
+   * The row being edited turned out to be gone: this sheet's opener is holding a
+   * list that is out of date and needs to reload it. Distinct from `onSaved` —
+   * nothing was saved — and from `onClose`, which is the user leaving.
+   */
+  onStale?: () => void
   desktop?: boolean
   existing?: EditableTransaction | null
   prefill?: PrefillTransaction | null
@@ -152,7 +159,7 @@ type AssetType = typeof ASSET_TYPES[number]['v']
 // wrappers: only ever one of them is on screen.
 const TITLE_ID = 'add-transaction-title'
 
-export default function AddTransactionSheet({ open, onClose, onSaved, desktop, existing, prefill }: Props) {
+export default function AddTransactionSheet({ open, onClose, onSaved, onStale, desktop, existing, prefill }: Props) {
   const t = useTranslations('addTx')
   const tc = useTranslations('common')
   const isVI = useLocale() === 'vi'
@@ -403,6 +410,19 @@ export default function AddTransactionSheet({ open, onClose, onSaved, desktop, e
         method, headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
+      // A 404 on an edit is not a failure the user can retry: the row is gone.
+      // A pending DCA row's transaction_id is not stable — seed_and_sync_plan_dca
+      // deletes it when the month is skipped or the fund's DCA goes off, and
+      // re-inserts a *new* row when that reverses — so any page still holding the
+      // old id saves onto nothing (#721). Keeping the form open over the server's
+      // English "Transaction not found" offered a Save button that could only fail
+      // again; hand the screen back and have the opener reload instead.
+      if (res.status === 404 && existing) {
+        onClose()
+        onStale?.()
+        toast.error(t('goneReload'))
+        return
+      }
       if (!res.ok) { const d = await res.json(); setError(d.error ?? tc('error')); return }
       onClose()
       onSaved?.()

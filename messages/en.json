@@ -7,6 +7,7 @@
   "addTx": {
     "title": "Add transaction",
     "editTitle": "Edit transaction",
+    "goneReload": "This entry no longer exists — the list has been refreshed. Open it again to edit.",
     "saveChanges": "Save changes",
     "assetType": "Asset type",
     "direction": "Transaction",

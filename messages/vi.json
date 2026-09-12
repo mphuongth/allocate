@@ -7,6 +7,7 @@
   "addTx": {
     "title": "Thêm giao dịch",
     "editTitle": "Sửa giao dịch",
+    "goneReload": "Mục này không còn nữa — danh sách đã được tải lại. Hãy mở lại để sửa.",
     "saveChanges": "Lưu thay đổi",
     "assetType": "Loại tài sản",
     "direction": "Giao dịch",
