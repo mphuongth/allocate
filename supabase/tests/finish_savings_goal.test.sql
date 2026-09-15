@@ -122,14 +122,31 @@ begin
   update public.funds set dca_goal_id = null, is_dca = false, dca_monthly_amount_vnd = null
    where id = v_fund;
 
-  -- An ENDED recurring saving blocks too: the dashboard keeps synthesizing its
-  -- realized months into the goal's value forever, and no withdrawal can remove
-  -- them (there is no transaction to withdraw).
+  -- An ENDED recurring saving does NOT block (#722). It cannot feed the goal
+  -- another month, which is what the blockers are for; the months it DID run are
+  -- frozen into the completion snapshot and stop being synthesized once the goal
+  -- is finished (lib/finance.ts), so nothing is counted twice.
+  --
+  -- It used to block, on the grounds that those synthesized months live on in the
+  -- goal's value forever. True at the time, but the remedy the app named —
+  -- unassign the saving from the goal — deleted a true record of what fed the
+  -- goal and left the same money counted under "Unallocated" anyway. The user
+  -- could not archive a goal they had genuinely finished.
   insert into public.recurring_savings (user_id, goal_id, name, amount_vnd, effective_to)
-    values (v_user, v_goal, 'Đã dừng', 1000000, current_date - 1);
+    values (v_user, v_goal, 'Đã dừng', 1000000, (public.business_today() - interval '1 month')::date);
+  if exists (select 1 from public.savings_goal_finish_blockers(v_goal)
+              where code = 'recurring_saving' and label = 'Đã dừng') then
+    raise exception 'a recurring saving that ended before this month must not block the finish';
+  end if;
+  delete from public.recurring_savings where user_id = v_user;
+
+  -- Ending THIS month is not ended: the month is inside the window, so it can
+  -- still contribute, and the goal would be archived while being fed.
+  insert into public.recurring_savings (user_id, goal_id, name, amount_vnd, effective_to)
+    values (v_user, v_goal, 'Hết tháng này', 1000000, public.business_today());
   if not exists (select 1 from public.savings_goal_finish_blockers(v_goal)
-                  where code = 'recurring_saving' and label = 'Đã dừng') then
-    raise exception 'an ended recurring saving must still block the finish';
+                  where code = 'recurring_saving' and label = 'Hết tháng này') then
+    raise exception 'a saving still effective this month must block the finish';
   end if;
   delete from public.recurring_savings where user_id = v_user;
 

@@ -45,9 +45,14 @@ interface Props {
 // says WHERE — a message that only says "blocked" leaves them hunting.
 function blockerCopy(code: string, isVI: boolean): string {
   if (code === 'recurring_saving') {
+    // Only a saving that can still run reaches here (#722), so the remedy is to
+    // close its window or send it elsewhere. "Stop it" was the old wording and
+    // named nothing the user could actually do: an ended saving blocked just the
+    // same, so the only way through was to unassign the goal — which erased the
+    // record that this saving had fed it.
     return isVI
-      ? 'Tiết kiệm định kỳ đang chảy vào mục tiêu này. Dừng hoặc đổi mục tiêu cho nó trong Kế hoạch.'
-      : 'A recurring saving still feeds this goal. Stop it or point it elsewhere in Planning.'
+      ? 'Một khoản tiết kiệm định kỳ vẫn còn hiệu lực cho tháng này. Đặt ngày kết thúc cho nó, hoặc đổi mục tiêu, trong Kế hoạch.'
+      : 'A recurring saving is still effective this month. Give it an end date, or point it at another goal, in Planning.'
   }
   if (code === 'dca_plan') {
     return isVI
