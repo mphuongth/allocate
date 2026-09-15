@@ -166,6 +166,14 @@ export function realizedRecurringContributions(
   overrides: RecurringSavingOverrideRow[],
   loggedDeposits: LoggedRecurringDeposit[] = [],
   fulfillments: RecurringFulfillmentRow[] = [],
+  /**
+   * Goals already finished. A saving pointed at one of them stops contributing
+   * (#722): the finish froze what the goal achieved — these months included —
+   * into its completion snapshot, and there is no transaction row for the finish
+   * to liquidate, so continuing to synthesize them would count the same money
+   * twice, once in the archived result and once in net worth, forever.
+   */
+  completedGoalIds: ReadonlySet<string> = new Set(),
 ): RealizedRecurringContribution[] {
   // (saving, month) pairs already settled via a maturity-combine renewal.
   const fulfilledSet = new Set<string>()
@@ -189,6 +197,8 @@ export function realizedRecurringContributions(
     if (!isPlanMonthRealized(p.year, p.month)) continue
     const ym = `${p.year}-${String(p.month).padStart(2, '0')}`
     for (const s of savings) {
+      // The goal this feeds is finished and archived — see completedGoalIds.
+      if (s.goal_id && completedGoalIds.has(s.goal_id)) continue
       // Effective window is inclusive and compared at month (YYYY-MM) granularity.
       if (s.effective_from && s.effective_from.slice(0, 7) > ym) continue
       if (s.effective_to && s.effective_to.slice(0, 7) < ym) continue
