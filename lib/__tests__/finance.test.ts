@@ -327,3 +327,47 @@ describe('business-day boundaries (Asia/Ho_Chi_Minh)', () => {
     expect(insuranceStatus('2025-06-15')).toBe('upcoming')
   })
 })
+
+// ─── A finished goal stops being fed (#722) ───────────────────────────────────
+//
+// These contributions are synthesized, not stored: for every realized plan month
+// inside a saving's window the goal's value gains the monthly amount, forever,
+// with no investment_transactions row behind it. A finish liquidates rows, so it
+// cannot liquidate these — and the goal's completion snapshot has already frozen
+// them into what the goal achieved. Keeping them after the finish would count the
+// same money twice: once in the archived result, once in net worth, for good.
+
+describe('realizedRecurringContributions — a goal that has been finished', () => {
+  afterEach(() => vi.useRealTimers())
+
+  const saving = { saving_id: 's1', goal_id: 'g1', name: 'Vikki', amount_vnd: 2_000_000, effective_from: null, effective_to: '2026-08-01' }
+  const plan = { id: 'p1', year: 2026, month: 5 }
+
+  it('stops synthesizing once the goal it feeds is finished', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 8, 15)) // September 2026
+
+    const out = realizedRecurringContributions([saving], [plan], [], [], [], new Set(['g1']))
+
+    expect(out).toHaveLength(0)
+  })
+
+  it('keeps synthesizing while the goal is still open', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 8, 15))
+
+    const out = realizedRecurringContributions([saving], [plan], [], [], [], new Set(['other-goal']))
+
+    expect(out).toHaveLength(1)
+  })
+
+  // Unallocated is not a goal and cannot be finished, so a saving with no goal is
+  // never swept up by an unrelated finish.
+  it('leaves an unallocated saving alone', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 8, 15))
+
+    const out = realizedRecurringContributions(
+      [{ ...saving, goal_id: null }], [plan], [], [], [], new Set(['g1']),
+    )
+
+    expect(out).toHaveLength(1)
+  })
+})

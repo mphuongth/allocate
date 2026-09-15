@@ -489,6 +489,9 @@ export async function buildDashboardOverview(
     recOverridesRes.data ?? [],
     loggedRecurringDeposits,
     recFulfillmentsRes.data ?? [],
+    // A finished goal is no longer fed: its completion snapshot already froze
+    // these months into what it achieved (#722).
+    new Set(goals.filter((g) => g.completed_at).map((g) => g.goal_id)),
   )
   for (const c of recContributions) {
     totalAssets += c.amount
