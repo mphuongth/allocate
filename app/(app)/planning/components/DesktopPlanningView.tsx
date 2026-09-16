@@ -13,6 +13,7 @@ import { formatIntVN, parseIntVN } from '@/lib/numberFormat'
 import PendingButton from '@/components/ui/PendingButton'
 import { DesktopPlanningSkeleton } from './PlanningSkeleton'
 import FixedExpenseManager from './FixedExpenseManager'
+import SavingsChallengeCard from '@/components/challenge/SavingsChallengeCard'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
@@ -32,6 +33,7 @@ import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
 } from '@/features/planning/contracts'
+import type { SavingsChallengeState } from '@/features/challenge/useSavingsChallenge'
 
 // ─── Shared button style ──────────────────────────────────────────────────────
 
@@ -74,6 +76,7 @@ interface Props {
   onPlanDeleted: () => void
   onRefresh: () => void
   onToast: (msg: string) => void
+  challenge: SavingsChallengeState
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -81,7 +84,7 @@ interface Props {
 export default function DesktopPlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers,
   otherExpenses, recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, loading, error,
-  onRetry, onPrev, onNext, onToday, onPlanCreated, onPlanDeleted, onRefresh, onToast,
+  onRetry, onPrev, onNext, onToday, onPlanCreated, onPlanDeleted, onRefresh, onToast, challenge,
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
@@ -589,6 +592,13 @@ export default function DesktopPlanningView({
               </PlanTable>
             </>
           )}
+
+          {/* Outside the `plan &&` block on purpose: the challenge is a habit
+              rather than a line of the budget, so a month with no income entered
+              still runs one. */}
+          <div style={{ marginTop: 16 }}>
+            <SavingsChallengeCard year={year} month={month} state={challenge} />
+          </div>
         </div>
 
         {/* Right — allocation sidebar */}
