@@ -276,9 +276,12 @@ function TierChoices({
         >
           <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{t('tier', { tier })}</span>
           {/* The month's real total, not a generic one: it is what actually
-              differs between a 28-day February and a 31-day October. */}
+              differs between a 28-day February and a 31-day October. Labelled
+              per-month because the bare figure reads just as easily as a daily
+              step or a year's worth, and those differ by two orders of
+              magnitude — which is the one thing a tier choice turns on. */}
           <span style={{ display: 'block', marginTop: 3, fontSize: 11.5, color: 'var(--c-muted)' }}>
-            {fmt(challengeTotalVnd(year, month, tier))}
+            {t('tierTotal', { total: fmt(challengeTotalVnd(year, month, tier)) })}
           </span>
         </button>
       ))}

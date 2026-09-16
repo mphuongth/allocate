@@ -67,12 +67,19 @@ afterEach(() => {
 })
 
 describe('before a tier is picked', () => {
-  it('offers the three tiers with THIS month’s totals', () => {
+  it('offers the three tiers with THIS month’s totals, per month', () => {
     show(stateFor({ tier: null }))
-    // September has 30 days: 465,000 / 2,325,000 / 4,650,000.
-    expect(screen.getByRole('button', { name: /Mức 1/ })).toHaveTextContent('465.000')
-    expect(screen.getByRole('button', { name: /Mức 2/ })).toHaveTextContent('2.325.000')
-    expect(screen.getByRole('button', { name: /Mức 3/ })).toHaveTextContent('4.650.000')
+    // September has 30 days: 465,000 / 2,325,000 / 4,650,000. The figure is a
+    // MONTHLY total — on its own it reads just as easily as a daily step or a
+    // yearly one, and the three differ by two orders of magnitude.
+    expect(screen.getByRole('button', { name: /Mức 1/ })).toHaveTextContent('₫ 465.000/tháng')
+    expect(screen.getByRole('button', { name: /Mức 2/ })).toHaveTextContent('₫ 2.325.000/tháng')
+    expect(screen.getByRole('button', { name: /Mức 3/ })).toHaveTextContent('₫ 4.650.000/tháng')
+  })
+
+  it('says per-month on the running tier’s own line too', () => {
+    show(stateFor({ tier: 2 }))
+    expect(screen.getByText('Mức 2 · ₫ 2.325.000/tháng')).toBeInTheDocument()
   })
 
   it('offers no picker for a month that has not begun', () => {
