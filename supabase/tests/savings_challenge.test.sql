@@ -20,6 +20,14 @@
 --   4. A day has to exist in its month. Day 31 of a 30-day month, or day 30 of
 --      February, is not a day the user can set money aside on.
 --
+-- And a fifth, which is really a property of the other four: each has to hold
+-- FOR THE ROLE THE APP ACTUALLY USES. A guard that works as superuser and raises
+-- `permission denied` as `authenticated` is not a guard, it is an outage — which
+-- is exactly what the first version of the lock was, because it consults
+-- auth.users and `authenticated` cannot read that table. So the lock is also
+-- exercised under `set role authenticated` below, the way a request from the
+-- browser reaches it.
+--
 -- Runs against the local stack in a rolled-back transaction. Run via
 -- `npm run test:db`.
 
@@ -32,6 +40,7 @@ declare
   v_sep      uuid;  -- September 2026 — 30 days
   v_oct      uuid;  -- October 2026 — 31 days
   v_feb      uuid;  -- February 2027 — 28 days
+  v_dec      uuid;  -- December 2026 — an untouched month, abandoned below
   v_amount   bigint;
   v_tier     smallint;
   v_seen     int;
@@ -200,6 +209,90 @@ begin
   -- shrinks with the month rather than always topping out at 30.
   insert into public.savings_challenge_days (challenge_id, day, amount_vnd)
   values (v_feb, 1, 28000);
+
+  -- ── The lock holds for the role the app signs in as ───────────────────────
+  --
+  -- Everything above ran as the test's own (super)user, which is not who touches
+  -- these rows in production. `authenticated` is, and it cannot read auth.users
+  -- — so a guard that consults it has to reach it as its owner or the DELETE
+  -- fails with 42501 before the lock is ever consulted. The un-ticked month is
+  -- abandonable and the ticked one is not, under that role.
+  insert into public.savings_challenges (user_id, year, month, tier)
+  values (v_owner, 2026, 12, 2) returning challenge_id into v_dec;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_owner::text)::text, true);
+  begin
+    set local role authenticated;
+
+    -- Ticking a day, too: the schedule trigger reads the parent challenge, and
+    -- the same lesson applies to it — a guard is only proven under the role that
+    -- actually reaches it. (This one is fine as invoker: RLS on
+    -- savings_challenges admits exactly the owner, so it fails CLOSED if that
+    -- ever changes, rather than letting a wrong amount through.)
+    insert into public.savings_challenge_days (challenge_id, day, amount_vnd)
+    values (v_dec, 1, 155000);  -- December has 31 days, at tier 2: 31 x 5,000
+
+    v_failed := false;
+    begin
+      insert into public.savings_challenge_days (challenge_id, day, amount_vnd)
+      values (v_dec, 2, 1000);
+    exception when check_violation then
+      v_failed := true;
+    end;
+    if not v_failed then
+      raise exception 'a wrong amount must still be refused for authenticated';
+    end if;
+
+    -- ...and that tick locks the month, for this role as much as any other.
+    v_failed := false;
+    begin
+      update public.savings_challenges set tier = 1 where challenge_id = v_dec;
+    exception
+      when check_violation then v_failed := true;
+      when insufficient_privilege then
+        raise exception 'the lock must reach auth.users as its owner, not as the caller';
+    end;
+    if not v_failed then
+      raise exception 'a ticked month must lock for authenticated too';
+    end if;
+
+    -- Un-tick it, and an untouched month is re-tierable and then abandonable.
+    delete from public.savings_challenge_days where challenge_id = v_dec and day = 1;
+    update public.savings_challenges set tier = 3 where challenge_id = v_dec;
+
+    delete from public.savings_challenges where challenge_id = v_dec;
+    if exists (select 1 from public.savings_challenges where challenge_id = v_dec) then
+      raise exception 'an untouched challenge must be abandonable as authenticated';
+    end if;
+
+    -- A month with days ticked: still locked, and refused as a check violation
+    -- rather than a privilege error.
+    v_failed := false;
+    begin
+      update public.savings_challenges set tier = 2 where challenge_id = v_sep;
+    exception
+      when check_violation then v_failed := true;
+      when insufficient_privilege then
+        raise exception 'the lock must reach auth.users as its owner, not as the caller';
+    end;
+    if not v_failed then
+      raise exception 'the tier must stay locked for authenticated too';
+    end if;
+
+    v_failed := false;
+    begin
+      delete from public.savings_challenges where challenge_id = v_sep;
+    exception
+      when check_violation then v_failed := true;
+      when insufficient_privilege then
+        raise exception 'the delete guard must reach auth.users as its owner, not as the caller';
+    end;
+    if not v_failed then
+      raise exception 'a ticked challenge must stay undeletable for authenticated too';
+    end if;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
 
   -- ── One user's challenge is invisible to another ──────────────────────────
   perform set_config('request.jwt.claims', json_build_object('sub', v_intruder::text)::text, true);
