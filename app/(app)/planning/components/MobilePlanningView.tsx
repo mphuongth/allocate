@@ -5,6 +5,7 @@ import { useLocale } from 'next-intl'
 import { Target, Shield, ShoppingCart, Plus, Settings } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import FixedExpenseManager from './FixedExpenseManager'
+import SavingsChallengeCard from '@/components/challenge/SavingsChallengeCard'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
@@ -24,6 +25,7 @@ import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense,
   InsuranceMember, OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
 } from '@/features/planning/contracts'
+import type { SavingsChallengeState } from '@/features/challenge/useSavingsChallenge'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,7 @@ interface Props {
   onPlanDeleted: () => void
   onRefresh: () => void
   onToast: (msg: string) => void
+  challenge: SavingsChallengeState
 }
 
 type SheetState =
@@ -67,7 +70,7 @@ type SheetState =
 export default function MobilePlanningView({
   month, year, plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
   recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, loading, error,
-  onRetry, onPlanCreated, onPlanDeleted, onRefresh, onToast,
+  onRetry, onPlanCreated, onPlanDeleted, onRefresh, onToast, challenge,
 }: Props) {
   const locale = useLocale()
   const isVI = locale === 'vi'
@@ -410,6 +413,12 @@ export default function MobilePlanningView({
             </BudgetSection>
           </>
         )}
+
+        {/* The savings challenge stands outside the plan: it is a habit, not a
+            line of the budget, so a month with no salary entered still runs one. */}
+        <div style={{ marginTop: 16 }}>
+          <SavingsChallengeCard year={year} month={month} state={challenge} />
+        </div>
       </div>
 
       {/* ─── Salary sheet ──────────────────────────────────────────────────── */}

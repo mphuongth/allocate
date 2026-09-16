@@ -9,6 +9,7 @@ import MobilePlanningView from './components/MobilePlanningView'
 import DesktopPlanningView from './components/DesktopPlanningView'
 import { useAdoptCacheOnce } from '@/lib/useHydrated'
 import { businessYearMonth } from '@/lib/dates'
+import { useSavingsChallenge } from '@/features/challenge/useSavingsChallenge'
 import { monthLabel } from '@/features/planning/planModel'
 // The plan's data shapes live in a layer-neutral contract module (#603) so the
 // shared derivations, actions and row model don't have to import a type out of
@@ -103,6 +104,11 @@ export default function PlanningClient() {
   // Surface confirmations through the globally-mounted sonner Toaster (neutral —
   // onToast carries both confirmations and the "book has matured" warning).
   const showToast = useCallback((msg: string) => { toast(msg) }, [])
+
+  // One subscription for the whole page. Both viewport views are always
+  // mounted (CSS hides one), so a hook inside each would fetch the month twice
+  // and let the two copies drift apart after a tick.
+  const challenge = useSavingsChallenge(year, month, showToast)
 
   const fetchPlan = useCallback(async (opts?: { force?: boolean }) => {
     if (opts?.force) bustPlanCache(month, year)
@@ -304,6 +310,7 @@ export default function PlanningClient() {
         }}
         onRefresh={refetch}
         onToast={showToast}
+        challenge={challenge}
       />
 
       {/* Desktop view — hidden on mobile */}
@@ -339,6 +346,7 @@ export default function PlanningClient() {
         }}
         onRefresh={refetch}
         onToast={showToast}
+        challenge={challenge}
       />
     </>
   )

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { challengeMonthState } from '@/lib/savingsChallenge'
 import { render, screen, within, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import DesktopPlanningView from '../DesktopPlanningView'
@@ -38,7 +39,25 @@ const recurringSavings: RecurringSaving[] = [
   },
 ]
 
+// A challenge the planning views can render without a network: no tier picked,
+// so the card shows its picker and nothing else. These specs are about the plan,
+// not the challenge — components/challenge has its own.
+const challengeStub = {
+  challenge: null,
+  days: [] as number[],
+  view: challengeMonthState({ year: 2026, month: 5, tier: null, checkedDays: [] }),
+  loading: false,
+  error: false,
+  busy: false,
+  reload: vi.fn(),
+  start: vi.fn(async () => true),
+  retier: vi.fn(async () => true),
+  abandon: vi.fn(async () => true),
+  toggleDay: vi.fn(async () => true),
+}
+
 const defaultProps = {
+  challenge: challengeStub,
   month: 5,
   year: 2026,
   plan: null as MonthlyPlan | null,

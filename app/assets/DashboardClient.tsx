@@ -19,6 +19,9 @@ import DownloadReportSheet from './components/DownloadReportSheet'
 import AddTransactionSheet, { type PrefillTransaction } from './components/AddTransactionSheet'
 import RecentActivityCard from './components/RecentActivityCard'
 import MaturityActionCard from './components/MaturityActionCard'
+import ChallengeTodayCard from '@/components/challenge/ChallengeTodayCard'
+import { useSavingsChallenge } from '@/features/challenge/useSavingsChallenge'
+import { businessYearMonth } from '@/lib/dates'
 import { MaturityResolveSheet, MaturityResolveModal } from './components/MaturityResolveSheet'
 import { MATURING_COUNT_EVENT } from '@/lib/maturity'
 import { collapseUnallocatedBooks } from '@/features/dashboard/unallocatedBooks'
@@ -81,6 +84,13 @@ export default function DashboardClient({ userId }: { userId: string }) {
   const [nonFundPickerTxId, setNonFundPickerTxId] = useState<string | null>(null)
   const [nonFundPickerItem, setNonFundPickerItem] = useState<{ name: string; value: number; type: string } | null>(null)
   const [goalSort, setGoalSort] = useState<SortValue>('manual')
+
+  // Today's step of the savings challenge. The business month, not the browser's
+  // — between 00:00 and 06:59 Vietnam time a UTC-derived month is still the
+  // previous one on the 1st, which would ask the user to tick a day of a month
+  // the rest of the app has already left (#591).
+  const businessMonth = businessYearMonth()
+  const challenge = useSavingsChallenge(businessMonth.year, businessMonth.month)
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [sellItem, setSellItem] = useState<SellItem | null>(null)
   const [sellSheetOpen, setSellSheetOpen] = useState(false)
@@ -372,6 +382,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   onMergeCluster={resolveById}
                   style={{ marginBottom: 24 }}
                 />
+                {/* Today's savings-challenge step — the one daily action of a
+                    feature whose monthly decision lives on Planning. */}
+                <ChallengeTodayCard state={challenge} style={{ marginBottom: 24 }} />
                 {/* Goals */}
                 {sortedGoals.length > 0 && (
                   <section style={{ marginBottom: 24 }}>
@@ -552,6 +565,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 clusters={mergeClusters}
                 onMergeCluster={resolveById}
               />
+
+              {/* Today's savings-challenge step */}
+              <ChallengeTodayCard state={challenge} />
 
               {/* Goals */}
               {sortedGoals.length > 0 && (
