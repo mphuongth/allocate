@@ -11,8 +11,9 @@ import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ValidationError, validateAmount } from '@/lib/validation'
 import { isFundCodePriceable, normalizeFundCode } from '@/lib/fmarket-nav'
+import { isEtfSymbolPriceable } from '@/lib/hose-price'
 
-const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold'] as const
+const FUND_TYPES = ['balanced', 'equity', 'debt', 'gold', 'etf'] as const
 type FundType = (typeof FUND_TYPES)[number]
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -215,11 +216,19 @@ export async function unpriceableFundCodeError(
     return null
   }
 
-  const priceable = await isFundCodePriceable(fields.code)
+  // Which source has to recognise the code depends on what kind of fund it is.
+  // An ETF is priced off the exchange and does not appear in Fmarket's feed at
+  // all, so checking an ETF ticker there would reject every correct ticker a
+  // user could type. Both checks fail OPEN — null means "couldn't ask".
+  const isEtf = fields.fund_type === 'etf'
+  const priceable = isEtf
+    ? await isEtfSymbolPriceable(fields.code)
+    : await isFundCodePriceable(fields.code)
+
   if (priceable === false) {
-    return badRequest(
-      `Automatic NAV updates need a fund code the price feed lists. "${fields.code}" isn't one — check the code, or turn automatic updates off.`,
-    )
+    return badRequest(isEtf
+      ? `Automatic price updates need a ticker the exchange lists. "${fields.code}" isn't one — check the code, or turn automatic updates off.`
+      : `Automatic NAV updates need a fund code the price feed lists. "${fields.code}" isn't one — check the code, or turn automatic updates off.`)
   }
   return null
 }
