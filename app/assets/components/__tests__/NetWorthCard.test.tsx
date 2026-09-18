@@ -52,6 +52,32 @@ describe('NetWorthCard', () => {
     expect(screen.getByText(/40\.0M/)).toBeInTheDocument()
   })
 
+  it('gives ETFs their own slice, separate from funds and from legacy stock', () => {
+    // The point of holding an ETF is seeing it as its own line. Folded into
+    // "Quỹ" it is invisible; folded into "Cổ phiếu" it sits under the retired
+    // asset type, whose value is a number the user typed once and nothing
+    // refreshes.
+    render(<NetWorthCard {...baseProps} allocationBar={{
+      fund: 300_000_000, bank: 0, gold: 0, stock: 40_000_000, etf: 25_000_000,
+    }} />)
+
+    expect(screen.getByText('ETF')).toBeInTheDocument()
+    expect(screen.getByText(/25\.0M/)).toBeInTheDocument()
+    expect(screen.getByText(/300\.0M/)).toBeInTheDocument()
+    expect(screen.getByText(/40\.0M/)).toBeInTheDocument()
+  })
+
+  it('leaves the ETF row out when nothing is held in one', () => {
+    render(<NetWorthCard {...baseProps} allocationBar={{ fund: 300_000_000, bank: 0, gold: 0, stock: 0, etf: 0 }} />)
+    expect(screen.queryByText('ETF')).not.toBeInTheDocument()
+  })
+
+  it('counts ETFs toward the percentages the other slices are measured against', () => {
+    // An ETF worth as much as the fund holding makes each of them half the bar.
+    render(<NetWorthCard {...baseProps} allocationBar={{ fund: 50_000_000, bank: 0, gold: 0, stock: 0, etf: 50_000_000 }} />)
+    expect(screen.getAllByText('50%')).toHaveLength(2)
+  })
+
   it('does not render the allocation bar when there is no allocation data', () => {
     render(<NetWorthCard {...baseProps} />)
     expect(screen.queryByTestId('allocation-bar')).not.toBeInTheDocument()

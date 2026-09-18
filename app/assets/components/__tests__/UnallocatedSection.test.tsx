@@ -29,6 +29,37 @@ const baseProps = {
   onSellNonFund: vi.fn(),
 }
 
+const fundItem = (over: Record<string, unknown> = {}) => ({
+  fundId: 'f1', fundName: 'VESAF', fundType: 'equity', quantity: 1234.5678,
+  currentNAV: 31_214, currentValue: 38_000_000, purchasePrice: 30_000,
+  costBasis: 37_000_000, profitLoss: 1_000_000, profitLossPercentage: 2.7, goalId: null,
+  ...over,
+}) as never
+
+describe('UnallocatedSection — an ETF row says what its price is', () => {
+  it('calls an ETF’s price a market price, not a NAV', () => {
+    // The stored number is the exchange's closing price. An ETF has a NAV too,
+    // published by its manager — a different number on the same day — so "NAV"
+    // here labels one figure with the other's name.
+    render(<UnallocatedSection {...baseProps} funds={[fundItem({ fundName: 'DIAMOND', fundType: 'etf', currentNAV: 34_380 })]} />)
+    const row = screen.getByText(/34,380|34\.380/)
+    expect(row.textContent).not.toMatch(/NAV/)
+  })
+
+  it('still calls an open-ended fund’s price a NAV', () => {
+    render(<UnallocatedSection {...baseProps} funds={[fundItem()]} />)
+    expect(screen.getByText(/NAV/)).toBeInTheDocument()
+  })
+
+  it('counts ETF certificates whole', () => {
+    // HOSE trades ETF certificates in whole units; "100.00" is a quantity that
+    // cannot exist.
+    render(<UnallocatedSection {...baseProps} funds={[fundItem({ fundType: 'etf', quantity: 100 })]} />)
+    expect(screen.getByText(/\b100\b/)).toBeInTheDocument()
+    expect(screen.queryByText(/100[.,]00/)).not.toBeInTheDocument()
+  })
+})
+
 describe('UnallocatedSection — explains what "Unallocated" means', () => {
   it('shows a one-line hint when the section is expanded (mobile)', () => {
     render(<UnallocatedSection {...baseProps} />)

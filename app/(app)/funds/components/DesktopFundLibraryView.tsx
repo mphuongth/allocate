@@ -22,7 +22,7 @@ import { useFundMutations } from './useFundMutations'
 // Fund/Goal/FundType are shared with the mobile view via useFundsData.
 
 import type { SortKey, TypeFilter } from '@/features/funds/contracts'
-import { TYPE_META, TYPE_FILTERS, FORM_TYPES, filterAndSortFunds, nextSort } from '@/features/funds/fundListModel'
+import { TYPE_META, TYPE_FILTERS, FORM_TYPES, filterAndSortFunds, nextSort, priceTerm } from '@/features/funds/fundListModel'
 
 // ─── Design constants ─────────────────────────────────────────────────────────
 
@@ -327,6 +327,9 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
   const [formName, setFormName] = useState('')
   const [formCode, setFormCode] = useState('')
   const [formType, setFormType] = useState<FundType | ''>('')
+  // An ETF's price is the exchange's, not the manager's published NAV, and the
+  // form has to ask for the number it is actually going to store.
+  const pricesAtMarket = priceTerm(formType) === 'marketPrice'
   const [formNav, setFormNav] = useState('')
   const [formAutoSync, setFormAutoSync] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -394,7 +397,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
     if (!formCode.trim()) { setFormError(t('codeRequired')); return }
     if (!formType) { setFormError(t('typeRequired')); return }
     const navNum = Number(formNav)
-    if (!formNav || isNaN(navNum) || navNum < 0.01) { setFormError(t('navRequired')); return }
+    if (!formNav || isNaN(navNum) || navNum < 0.01) { setFormError(t(pricesAtMarket ? 'priceRequired' : 'navRequired')); return }
     setSaving(true)
     try {
       const url = modalMode === 'edit' ? `/api/funds/${editTarget!.id}` : '/api/funds'
@@ -602,7 +605,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
                 <tr style={{ borderBottom: '1px solid var(--c-line)', background: 'var(--c-card-2)' }}>
                   <SortTh label={t('colFund')} sortKey="code" active={sortKey === 'code'} asc={sortAsc} onSort={handleSort} align="left" />
                   <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', whiteSpace: 'nowrap' }}>{t('colType')}</th>
-                  <SortTh label={t('colNav')} sortKey="nav" active={sortKey === 'nav'} asc={sortAsc} onSort={handleSort} />
+                  <SortTh label={t('colPricePerUnit')} sortKey="nav" active={sortKey === 'nav'} asc={sortAsc} onSort={handleSort} />
                   <th style={{ padding: '10px 12px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--c-muted)', textAlign: 'center', whiteSpace: 'nowrap' }}>{t('colDca')}</th>
                   <th style={{ padding: '10px 12px', width: 64 }} />
                 </tr>
@@ -768,7 +771,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
                 </select>
               </FormField>
             </div>
-            <FormField label={t('navLabel')}>
+            <FormField label={t(pricesAtMarket ? 'marketPriceLabel' : 'navLabel')}>
               <input
                 type="text"
                 inputMode="decimal"
@@ -787,7 +790,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
                 style={{ marginTop: 2, width: 16, height: 16, accentColor: 'var(--c-navy)', cursor: 'pointer' }}
               />
               <span style={{ display: 'grid', gap: 2 }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{t('navAutoSyncLabel')}</span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{t(pricesAtMarket ? 'priceAutoSyncLabel' : 'navAutoSyncLabel')}</span>
                 <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{t('navAutoSyncHint')}</span>
               </span>
             </label>

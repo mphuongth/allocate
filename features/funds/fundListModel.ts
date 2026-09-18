@@ -16,6 +16,9 @@ export const TYPE_META: Record<FundType, { label: string; labelVi: string; color
   debt:     { label: 'Bond',     labelVi: 'Trái phiếu', color: 'var(--c-fund-debt)',     bg: 'var(--c-fund-debt-bg)' },
   balanced: { label: 'Balanced', labelVi: 'Cân bằng',   color: 'var(--c-fund-balanced)', bg: 'var(--c-fund-balanced-bg)' },
   gold:     { label: 'Gold',     labelVi: 'Vàng',       color: 'var(--c-fund-gold)',     bg: 'var(--c-fund-gold-bg)' },
+  // Left as "ETF" in both languages on purpose: it is the name printed on the
+  // listing, the one brokers use, and the one a user searches for.
+  etf:      { label: 'ETF',      labelVi: 'ETF',        color: 'var(--c-fund-etf)',      bg: 'var(--c-fund-etf-bg)' },
 }
 
 export const TYPE_FILTERS: { v: TypeFilter; label: string; labelVi: string }[] = [
@@ -23,6 +26,7 @@ export const TYPE_FILTERS: { v: TypeFilter; label: string; labelVi: string }[] =
   { v: 'equity',   label: 'Stock',    labelVi: 'Cổ phiếu' },
   { v: 'debt',     label: 'Bond',     labelVi: 'Trái phiếu' },
   { v: 'balanced', label: 'Balanced', labelVi: 'Cân bằng' },
+  { v: 'etf',      label: 'ETF',      labelVi: 'ETF' },
 ]
 
 /**
@@ -30,6 +34,24 @@ export const TYPE_FILTERS: { v: TypeFilter; label: string; labelVi: string }[] =
  * tracked via byType, not created as a user fund.
  */
 export const FORM_TYPES = (Object.keys(TYPE_META) as FundType[]).filter((ft) => ft !== 'gold')
+
+/**
+ * What a fund's price is called on screen.
+ *
+ * An ETF has two prices at once: the NAV per certificate its manager publishes,
+ * and the market price the exchange sets — different numbers on the same day,
+ * because an ETF trades at a premium or a discount to its own NAV. `funds.nav`
+ * holds whichever one prices the holding, so for an ETF that column is the
+ * MARKET price and labelling it "NAV" puts one number's name over another's
+ * value.
+ *
+ * Anything that is not an ETF is a NAV, including a type this build has not
+ * heard of: every fund that existed before ETFs is priced that way, and an
+ * unrecognised type is likelier to be another open-ended fund than a listing.
+ */
+export function priceTerm(fundType: string | null | undefined): 'marketPrice' | 'nav' {
+  return fundType === 'etf' ? 'marketPrice' : 'nav'
+}
 
 export interface FundListControls {
   query: string

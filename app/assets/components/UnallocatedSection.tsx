@@ -328,7 +328,14 @@ export default function UnallocatedSection({
                   {fund.fundName}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
-                  {fund.quantity.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {tt('unitsDefault')} · NAV {fmtNav(fund.currentNAV)}
+                  {/* An ETF is counted in whole certificates (HOSE trades them
+                      that way), and the price beside it is the exchange's, not
+                      the NAV its manager publishes — two different numbers on
+                      the same day, so the NAV label belongs only to a fund. */}
+                  {fund.quantity.toLocaleString('vi-VN', {
+                    minimumFractionDigits: fund.fundType === 'etf' ? 0 : 2,
+                    maximumFractionDigits: 2,
+                  })} {tt('unitsDefault')} · {fund.fundType === 'etf' ? '' : 'NAV '}{fmtNav(fund.currentNAV)}
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>

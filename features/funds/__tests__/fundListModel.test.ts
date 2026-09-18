@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Fund } from '../contracts'
-import { filterAndSortFunds, nextSort, TYPE_META, TYPE_FILTERS, FORM_TYPES } from '../fundListModel'
+import { filterAndSortFunds, nextSort, priceTerm, TYPE_META, TYPE_FILTERS, FORM_TYPES } from '../fundListModel'
 
 // The fund library's list derivation (#603). Desktop and mobile each had their
 // own copy of the filter+sort — same behavior, written twice, free to drift.
@@ -79,16 +79,37 @@ describe('nextSort', () => {
   })
 })
 
+describe('what a fund’s price is called', () => {
+  // An ETF has BOTH a NAV its manager publishes and a market price the exchange
+  // sets, and they are different numbers on the same day. The app stores the
+  // market price, so calling it "NAV" on screen is not loose wording — it is the
+  // label of one number over the value of another.
+  it('calls an ETF’s price a market price and a fund’s a NAV', () => {
+    expect(priceTerm('etf')).toBe('marketPrice')
+    expect(priceTerm('equity')).toBe('nav')
+    expect(priceTerm('balanced')).toBe('nav')
+  })
+
+  it('calls an unknown or missing type a NAV', () => {
+    // Every fund that existed before ETFs is priced by NAV, and a type this
+    // build has not heard of is likelier to be another open-ended fund than an
+    // exchange listing.
+    expect(priceTerm(null)).toBe('nav')
+    expect(priceTerm(undefined)).toBe('nav')
+    expect(priceTerm('money_market')).toBe('nav')
+  })
+})
+
 describe('type metadata', () => {
   it('offers every fund type except gold in the create/edit form', () => {
     // Gold is tracked via byType, not as a user-created fund.
     expect(FORM_TYPES).not.toContain('gold')
-    expect(FORM_TYPES.sort()).toEqual(['balanced', 'debt', 'equity'])
+    expect(FORM_TYPES.sort()).toEqual(['balanced', 'debt', 'equity', 'etf'])
   })
 
   it('has a label and colours for every fund type', () => {
     const types = Object.keys(TYPE_META)
-    expect(types.sort()).toEqual(['balanced', 'debt', 'equity', 'gold'])
+    expect(types.sort()).toEqual(['balanced', 'debt', 'equity', 'etf', 'gold'])
     types.forEach((t) => {
       const meta = TYPE_META[t as keyof typeof TYPE_META]
       expect(meta.label).toBeTruthy()
@@ -99,6 +120,6 @@ describe('type metadata', () => {
   })
 
   it('offers "all" plus the non-gold types as filters', () => {
-    expect(TYPE_FILTERS.map((f) => f.v)).toEqual(['all', 'equity', 'debt', 'balanced'])
+    expect(TYPE_FILTERS.map((f) => f.v)).toEqual(['all', 'equity', 'debt', 'balanced', 'etf'])
   })
 })

@@ -145,8 +145,11 @@ describe('DesktopFundLibraryView — modals', () => {
     render(<Harness initial={[makeFund()]} />)
     await userEvent.click(within(screen.getByTestId('desktop-funds-toolbar')).getByRole('button', { name: 'add' }))
     const select = within(screen.getByTestId('fund-modal')).getByRole('combobox')
-    expect(within(select).getAllByRole('option')).toHaveLength(3)
+    // Gold is tracked via byType, never created as a fund. Everything else is
+    // offered, ETF included.
+    expect(within(select).getAllByRole('option')).toHaveLength(4)
     expect(select.querySelector('option[value="gold"]')).toBeNull()
+    expect(select.querySelector('option[value="etf"]')).not.toBeNull()
   })
 
   it('opens the edit modal prefilled with the fund name', async () => {

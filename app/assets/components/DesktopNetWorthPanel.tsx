@@ -16,6 +16,10 @@ const ALLOC_COLORS: Record<string, { color: string; label: string; labelVi: stri
   bank:  { color: '#047857', label: 'Savings', labelVi: 'Tiết kiệm' },
   gold:  { color: 'var(--c-fund-gold)', label: 'Gold',    labelVi: 'Vàng' },
   stock: { color: '#7c3aed', label: 'Stock',   labelVi: 'Cổ phiếu' },
+  // Named "ETF" in both languages — the listing's own name, and the one the
+  // broker app uses. Separate from `fund` (that is the point of the slice) and
+  // from `stock`, the retired asset type nothing refreshes.
+  etf:   { color: 'var(--c-fund-etf)', label: 'ETF', labelVi: 'ETF' },
 }
 
 interface Props {
@@ -41,6 +45,7 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits
   const segments = allocationTotals ? (() => {
     const raw: Record<string, number> = {
       fund: allocationTotals.fundTotal,
+      etf: allocationTotals.etfTotal,
       bank: allocationTotals.bankTotal,
       gold: allocationTotals.goldTotal,
       stock: allocationTotals.stockTotal,

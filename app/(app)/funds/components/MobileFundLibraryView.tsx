@@ -10,7 +10,7 @@ import { fmtNav, fmtCompact } from '@/lib/formatters'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 // Shared dialog a11y (Esc-to-close + focus trap + focus restore). Lives under
 // the Plan feature today; reused here so Funds sheets behave the same.
-import { TYPE_META, TYPE_FILTERS, FORM_TYPES, filterAndSortFunds, nextSort } from '@/features/funds/fundListModel'
+import { TYPE_META, TYPE_FILTERS, FORM_TYPES, filterAndSortFunds, nextSort, priceTerm } from '@/features/funds/fundListModel'
 import type { TypeFilter } from '@/features/funds/contracts'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import PendingButton from '@/components/ui/PendingButton'
@@ -42,9 +42,9 @@ type SortKey = 'code' | 'nav' | 'name'
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 // i18n key (in the `funds` namespace) for each sort option's label.
-const SORT_OPTIONS: Array<{ v: SortKey; key: 'colCode' | 'colNav' | 'colName' }> = [
+const SORT_OPTIONS: Array<{ v: SortKey; key: 'colCode' | 'colPricePerUnit' | 'colName' }> = [
   { v: 'code', key: 'colCode' },
-  { v: 'nav',  key: 'colNav' },
+  { v: 'nav',  key: 'colPricePerUnit' },
   { v: 'name', key: 'colName' },
 ]
 
@@ -118,6 +118,7 @@ function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: Fund
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         type="button"
+        data-testid="fund-form-type"
         onClick={() => setOpen((v) => !v)}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 12px', fontSize: 13, background: 'var(--c-card)', color: 'var(--c-ink)', border: '1px solid var(--c-line)', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', boxSizing: 'border-box' }}
       >
@@ -136,6 +137,7 @@ function TypeDropdown({ value, onChange }: { value: FundType; onChange: (v: Fund
               <button
                 key={ft}
                 type="button"
+                data-testid={`fund-form-type-${ft}`}
                 onClick={() => { onChange(ft); setOpen(false) }}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '11px 12px', fontSize: 13, fontWeight: active ? 600 : 400, color: active ? 'var(--c-navy)' : 'var(--c-ink)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', gap: 8 }}
               >
@@ -220,6 +222,9 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
   const [type, setType] = useState<FundType>(existing?.fund_type ?? 'equity')
   const [nav, setNav] = useState(existing ? String(existing.nav) : '')
   const [autoSync, setAutoSync] = useState(existing?.nav_auto_sync ?? false)
+  // Tracks the dropdown, not the row the sheet was opened from: converting a
+  // fund to an ETF has to change which number the form asks for.
+  const pricesAtMarket = priceTerm(type) === 'marketPrice'
 
   // Incompleteness alone greys the button out. A save in flight is blocked by
   // PendingButton itself, and leaving it out of `incomplete` keeps the navy fill
@@ -252,7 +257,7 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
         </div>
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
-        <label style={labelStyle}>{t('navLabel')}</label>
+        <label style={labelStyle}>{t(pricesAtMarket ? 'marketPriceLabel' : 'navLabel')}</label>
         <input type="text" inputMode="decimal" value={formatDecimalVN(nav)} onChange={(e) => setNav(parseDecimalVN(e.target.value))} placeholder={t('navPlaceholder')} style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
       </div>
       <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -263,7 +268,7 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
           style={{ marginTop: 2, width: 18, height: 18, accentColor: 'var(--c-navy)' }}
         />
         <span style={{ display: 'grid', gap: 2 }}>
-          <span style={{ ...labelStyle, marginBottom: 0 }}>{t('navAutoSyncLabel')}</span>
+          <span style={{ ...labelStyle, marginBottom: 0 }}>{t(pricesAtMarket ? 'priceAutoSyncLabel' : 'navAutoSyncLabel')}</span>
           <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>{t('navAutoSyncHint')}</span>
         </span>
       </label>
