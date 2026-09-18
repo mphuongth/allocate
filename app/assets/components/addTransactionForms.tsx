@@ -467,7 +467,13 @@ export function SellForm({
                               // The amount is principal, so the prefill adds the
                               // interest accrued on that slice back on top (#578).
                               if (assetType === 'bank') setReceived(n ? String(bankReceivedPrefill(selectedHolding, n)) : '')
+                              // Fund: the cash starts equal to the sale value and
+                              // is edited down to what the broker paid. Its own
+                              // field, because the amount is what decides how
+                              // many units go (lib/fundWithdrawal).
+                              if (assetType === 'fund') setReceived(v)
                             }}
+                            data-testid="sell-amount-input"
                             placeholder="0"
                             style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: sellOverMax ? 'var(--c-neg)' : 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
                           />
@@ -476,6 +482,7 @@ export function SellForm({
                           setSellAmount(String(Math.round(sellMax)))
                           if (assetType === 'fund') setFundSellUnits(selectedHolding?.units != null ? selectedHolding.units.toFixed(2) : '')
                           if (assetType === 'bank') setReceived(String(bankReceivedPrefill(selectedHolding, sellMax)))
+                          if (assetType === 'fund') setReceived(String(Math.round(sellMax)))
                         }} style={{ padding: '8px 12px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>{t('all')}</button>
                       </div>
                       {sellOverMax && (
@@ -499,7 +506,11 @@ export function SellForm({
                               const v = parseDecimalVN(e.target.value)
                               setFundSellUnits(v)
                               const u = Number(v) || 0
-                              setSellAmount(sellNav && u ? String(Math.round(u * sellNav)) : '')
+                              {
+                                const gross = sellNav && u ? String(Math.round(u * sellNav)) : ''
+                                setSellAmount(gross)
+                                setReceived(gross)
+                              }
                             }}
                             placeholder="0,00"
                             style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
@@ -510,8 +521,11 @@ export function SellForm({
                       </div>
                     )}
 
-                    {/* Bank: editable cash received (early withdrawal can cut interest) */}
-                    {assetType === 'bank' && (
+                    {/* Editable cash received. A bank can cut the interest on an
+                        early withdrawal; a fund sale loses the brokerage fee and,
+                        on a listed certificate, the 0.1% sale tax. Only the
+                        confirmation knows the real figure. */}
+                    {(assetType === 'bank' || assetType === 'fund') && (
                       <div>
                         <label style={labelStyle}>{t('amountReceived')}</label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1.5px solid var(--c-navy)', borderRadius: 10 }}>
@@ -526,7 +540,9 @@ export function SellForm({
                             style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', fontSize: 16, fontWeight: 600, fontFamily: 'inherit', background: 'transparent', color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums' }}
                           />
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('receivedHint')}</div>
+                        <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>
+                          {t(assetType === 'bank' ? 'receivedHint' : 'receivedFundHint')}
+                        </div>
                       </div>
                     )}
 

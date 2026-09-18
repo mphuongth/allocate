@@ -7,7 +7,7 @@
 
 import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
 import { goldCostBasis, goldUnitCost } from '@/lib/goldWithdrawal'
-import { fundCostBasis } from '@/lib/fundWithdrawal'
+import { fundSaleFigures } from '@/lib/fundWithdrawal'
 
 export type AssetType = 'fund' | 'bank' | 'gold'
 
@@ -331,18 +331,18 @@ export function buildSellPayload(
   if (holding.type === 'fund' && holding.fundId) {
     if (!preview.numSell) return { ok: false, errorKey: 'amountRequired' }
     if (preview.sellOverMax) return { ok: false, errorKey: 'exceedsBalance' }
-    // Round the units FIRST: they are what the basis is allocated from, so a
-    // mismatch at the 4th decimal is a đồng the holding may not have (#587).
-    const unitsWithdrawn = parseFloat(
-      (preview.sellNav ? preview.numSell / preview.sellNav : (holding.units ?? 0)).toFixed(4))
-    const principalWithdrawn = fundCostBasis({
-      totalBasis: holding.costBasis, totalUnits: holding.units, sellUnits: unitsWithdrawn,
-    }) ?? Math.round(preview.numSell)
+    // Quantity from the gross, basis from the quantity, cash from what the user
+    // says arrived — three figures, not one (lib/fundWithdrawal).
+    const sale = fundSaleFigures({
+      gross: preview.numSell, navPerUnit: preview.sellNav,
+      heldUnits: holding.units, totalBasis: holding.costBasis,
+      received: preview.numReceived,
+    })
     return { ok: true, payload: {
       transaction_type: 'withdrawal', asset_type: 'fund', fund_id: holding.fundId,
-      investment_date: date, amount_vnd: Math.round(preview.numSell),
-      units_withdrawn: unitsWithdrawn,
-      principal_withdrawn: principalWithdrawn,
+      investment_date: date, amount_vnd: sale.proceeds,
+      units_withdrawn: sale.units,
+      principal_withdrawn: sale.principal,
       goal_id: holding.goalId ?? null, notes: note || null,
     } }
   }

@@ -420,3 +420,88 @@ describe('SellWithdrawSheet — a payout carried over from the maturity sheet (#
     expect((screen.getByTestId('sell-received-input') as HTMLInputElement).value).toBe('')
   })
 })
+
+// Selling a fund posts three numbers that are not the same number: the units
+// that left, the basis that went with them, and the cash that arrived. They used
+// to come from one field, so a user correcting the cash to match their broker's
+// confirmation was silently correcting the quantity too.
+describe('SellWithdrawSheet — a fund sale records the cash separately from the units', () => {
+  const etf = {
+    type: 'fund' as const, name: 'DCVFM VN DIAMOND',
+    currentValue: 6_876_000, units: 200, navPerUnit: 34_380,
+    fundId: 'f1', purchasePrice: 30_000, costBasis: 6_000_000,
+  }
+
+  const postBody = (fetchMock: ReturnType<typeof vi.fn>) => {
+    const post = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions'))
+    expect(post).toBeTruthy()
+    return JSON.parse(String((post![1] as RequestInit).body))
+  }
+
+  it('sells the quantity the amount bought, whatever the cash is edited to', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SellWithdrawSheet item={etf} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    // 100 certificates at 34,380 → 3,438,000 gross; the broker pays 3,430,000
+    // after its fee and the 0.1% tax.
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '3438000' } })
+    fireEvent.change(screen.getByTestId('sell-received-input'), { target: { value: '3430000' } })
+    fireEvent.click(screen.getByTestId('sell-confirm-btn'))
+
+    await waitFor(() => {
+      const body = postBody(fetchMock)
+      expect(body.units_withdrawn).toBe(100)     // NOT 99.767…
+      expect(body.amount_vnd).toBe(3_430_000)    // the cash that arrived
+      expect(body.principal_withdrawn).toBe(3_000_000) // half the basis, by units
+    })
+  })
+
+  it('prefills the cash with the full sale value, so an untouched field changes nothing', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SellWithdrawSheet item={etf} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '3438000' } })
+    expect(Number((screen.getByTestId('sell-received-input') as HTMLInputElement).value.replace(/\./g, '')))
+      .toBe(3_438_000)
+
+    fireEvent.click(screen.getByTestId('sell-confirm-btn'))
+    await waitFor(() => expect(postBody(fetchMock).amount_vnd).toBe(3_438_000))
+  })
+
+  it('tracks the cash when the quantity is what was typed', async () => {
+    render(<SellWithdrawSheet item={etf} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    fireEvent.change(screen.getByTestId('sell-units-input'), { target: { value: '100' } })
+    expect(Number((screen.getByTestId('sell-received-input') as HTMLInputElement).value.replace(/\./g, '')))
+      .toBe(3_438_000)
+  })
+
+  it('takes the fee and tax out of the gain, since that is what they cost', async () => {
+    render(<SellWithdrawSheet item={etf} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '3438000' } })
+    fireEvent.change(screen.getByTestId('sell-received-input'), { target: { value: '3430000' } })
+
+    // 3,430,000 received against 3,000,000 of basis.
+    expect(screen.getByTestId('sell-summary-strip')).toHaveTextContent('430.000')
+  })
+
+  it('leaves a bank withdrawal alone', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+    const bank = {
+      type: 'bank' as const, name: 'Techcombank', currentValue: 5_200_000,
+      interestRate: 6, transactionId: 't1', purchasePrice: 5_000_000,
+    }
+    render(<SellWithdrawSheet item={bank} open context="unallocated" onClose={vi.fn()} onSuccess={vi.fn()} />)
+
+    fireEvent.click(screen.getByTestId('sell-all-btn'))
+    fireEvent.click(screen.getByTestId('sell-confirm-btn'))
+
+    await waitFor(() => {
+      const body = postBody(fetchMock)
+      expect(body.amount_vnd).toBe(5_200_000)
+      expect(body.principal_withdrawn).toBe(5_000_000)
+    })
+  })
+})

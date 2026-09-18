@@ -95,6 +95,7 @@
     "navLinkHint": "Enter an amount or units — they stay in sync",
     "amountReceived": "Amount you'll receive",
     "receivedHint": "Estimated from the current value — verify it against the bank's actual payout, especially for an early withdrawal.",
+    "receivedFundHint": "Adjust to match your confirmation after fees and tax. The quantity sold is unchanged.",
     "principalPortion": "Principal",
     "gainLoss": "Gain / Loss",
     "principalToWithdraw": "Principal amount to withdraw",
