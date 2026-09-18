@@ -35,12 +35,12 @@ describe('DesktopFundLibraryView — sortable column headers are keyboard-operab
   it('renders the Fund and NAV sort controls as real buttons', () => {
     render(<Harness />)
     expect(screen.getByRole('button', { name: /colFund/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /colNav/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /colPricePerUnit/i })).toBeInTheDocument()
   })
 
   it('activating the NAV header sorts by NAV and reflects it via aria-sort', async () => {
     render(<Harness />)
-    const navBtn = screen.getByRole('button', { name: /colNav/i })
+    const navBtn = screen.getByRole('button', { name: /colPricePerUnit/i })
     await userEvent.click(navBtn)
     expect(navBtn.closest('th')).toHaveAttribute('aria-sort', 'ascending')
   })

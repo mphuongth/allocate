@@ -549,6 +549,7 @@ export default function DashboardClient({ userId }: { userId: string }) {
                   onRangeChange={setTimeRange}
                   allocationBar={allocationTotals ? {
                     fund: allocationTotals.fundTotal,
+                    etf: allocationTotals.etfTotal,
                     bank: allocationTotals.bankTotal,
                     gold: allocationTotals.goldTotal,
                     stock: allocationTotals.stockTotal,

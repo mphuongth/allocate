@@ -85,6 +85,43 @@ describe('computeAllocationTotals', () => {
     expect(computeAllocationTotals(data).fundTotal).toBe(90)
   })
 
+  it('gives ETFs their own bucket instead of folding them into fundTotal', () => {
+    // An ETF is a `funds` row so that it can reuse the purchase ledger, but on
+    // the allocation bar it is not "a fund": it is the listed thing the user
+    // bought on the exchange, and the whole reason they asked for it is to see
+    // it as its own slice.
+    const data: DashboardData = {
+      ...base,
+      unallocated: { totalValue: 0, funds: [fund('equity', 100), fund('etf', 40)], nonFunds: [] },
+    }
+    const t = computeAllocationTotals(data)
+    expect(t.fundTotal).toBe(100)
+    expect(t.etfTotal).toBe(40)
+  })
+
+  it('counts ETFs held under a goal as well as unallocated ones', () => {
+    const data: DashboardData = {
+      ...base,
+      goals: [{ ...({} as DashboardData['goals'][number]), funds: [fund('etf', 60)] }],
+      unallocated: { totalValue: 0, funds: [fund('etf', 30)], nonFunds: [] },
+    }
+    expect(computeAllocationTotals(data).etfTotal).toBe(90)
+  })
+
+  it('keeps an ETF out of the legacy stock bucket', () => {
+    // `byType.stock` is the retired `asset_type='stock'` holding — priced off its
+    // own stored unit_price, never synced. Folding the two together would put a
+    // live price and a frozen one under one label.
+    const data: DashboardData = {
+      ...base,
+      byType: { bank: 0, gold: 0, stock: 33 },
+      unallocated: { totalValue: 0, funds: [fund('etf', 40)], nonFunds: [] },
+    }
+    const t = computeAllocationTotals(data)
+    expect(t.stockTotal).toBe(33)
+    expect(t.etfTotal).toBe(40)
+  })
+
   it('passes bank/gold/stock through from byType', () => {
     const data: DashboardData = { ...base, byType: { bank: 200, gold: 80, stock: 33 } }
     const t = computeAllocationTotals(data)

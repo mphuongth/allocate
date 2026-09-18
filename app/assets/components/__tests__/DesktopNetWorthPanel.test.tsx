@@ -55,6 +55,18 @@ describe('DesktopNetWorthPanel', () => {
     expect(screen.queryByTestId('allocation-bar')).not.toBeInTheDocument()
   })
 
+  it('gives ETFs their own slice', () => {
+    // Same rule as the mobile card: an ETF is stored as a fund so it can reuse
+    // the ledger, but on the bar it is the listed thing the user bought — its
+    // own line, and never merged with the retired `stock` bucket.
+    renderPanel({ allocationTotals: {
+      fundTotal: 60_000_000, bankTotal: 0, goldTotal: 0, stockTotal: 0, etfTotal: 20_000_000,
+    } as unknown as AllocationTotals })
+
+    expect(screen.getByText('ETF')).toBeInTheDocument()
+    expect(screen.getByText('25%')).toBeInTheDocument()
+  })
+
   it('renders the download report button and fires onDownloadReport when clicked', () => {
     const onDownloadReport = vi.fn()
     renderPanel({ onDownloadReport })

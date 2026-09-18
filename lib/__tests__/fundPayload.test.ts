@@ -83,6 +83,41 @@ describe('parseFundPayload — common fields', () => {
     expect(parse({ ...valid, nav: '0.01' }).ok).toBe(true)  // numeric strings still coerce
   })
 
+  // Asking someone to type a price the app is about to fetch anyway is asking
+  // them to go and look it up. When automatic pricing is on, the price is the
+  // source's to supply — the caller may leave it out and the route resolves it.
+  it('lets a priced-automatically fund be created without a price', () => {
+    const result = parse({ ...valid, nav: undefined, nav_auto_sync: true })
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.fund.nav).toBeNull()
+  })
+
+  it('treats an empty string the same as absent', () => {
+    // The form sends '' for an untouched field, not undefined.
+    const result = parse({ ...valid, nav: '', nav_auto_sync: true })
+    expect(result.ok && result.fund.nav).toBeNull()
+  })
+
+  it('still demands a price when nothing is going to fetch one', async () => {
+    expect((await rejection({ ...valid, nav: undefined, nav_auto_sync: false })).status).toBe(400)
+    expect((await rejection({ ...valid, nav: undefined })).status).toBe(400)
+  })
+
+  it('still rejects a price that was typed and is wrong', async () => {
+    // Omission is the only thing that became legal. A value the caller did send
+    // is checked exactly as before, whether or not sync is on.
+    expect((await rejection({ ...valid, nav: 0, nav_auto_sync: true })).status).toBe(400)
+    expect((await rejection({ ...valid, nav: 'Infinity', nav_auto_sync: true })).status).toBe(400)
+  })
+
+  it('leaves a stored price alone when an update omits it', () => {
+    // Partial-update semantics, the same rule nav_auto_sync already follows: a
+    // field the caller did not send is not a field the caller cleared.
+    const result = parseFundPayload({ ...valid, nav: undefined }, 'update')
+    expect(result.ok).toBe(true)
+    expect(result.ok && 'nav' in result.fund).toBe(false)
+  })
+
   it('rejects a dca_goal_id that is not a UUID', async () => {
     expect(await rejection({ ...valid, is_dca: true, dca_goal_id: 'not-a-uuid' }))
       .toEqual({ status: 400, error: 'Invalid goal' })

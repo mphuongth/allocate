@@ -46,13 +46,24 @@ export function setCachedOverview(userId: string, data: DashboardData) {
 
 export interface AllocationTotals {
   /**
-   * Every fund holding's value, regardless of `fund_type`. We deliberately sum
-   * ALL fund items (not just equity/debt/balanced) so a fund with an unexpected
-   * type — e.g. money_market/cash — still lands in the "Fund" bucket of the
-   * allocation bar instead of silently disappearing from it while still
-   * counting toward net worth (#363 review #3).
+   * Every non-ETF fund holding's value, regardless of `fund_type`. We
+   * deliberately sum ALL of them (not just equity/debt/balanced) so a fund with
+   * an unexpected type — e.g. money_market/cash — still lands in the "Fund"
+   * bucket of the allocation bar instead of silently disappearing from it while
+   * still counting toward net worth (#363 review #3).
    */
   fundTotal: number
+  /**
+   * ETF certificates. An ETF is stored as a `funds` row so it can reuse the
+   * purchase ledger, the sale invariants and goal assignment — but on the
+   * allocation bar it is not "a fund": it is the listed thing bought on the
+   * exchange, and seeing it as its own slice is the point of holding it.
+   *
+   * Kept apart from `stockTotal` too. That bucket is the retired
+   * `asset_type='stock'` holding, priced off its own stored unit_price and never
+   * synced; one label over a live price and a frozen one would explain neither.
+   */
+  etfTotal: number
   bankTotal: number
   goldTotal: number
   stockTotal: number
@@ -61,9 +72,11 @@ export interface AllocationTotals {
 /** Build the allocation-bar buckets from the overview payload. Pure + testable. */
 export function computeAllocationTotals(data: DashboardData): AllocationTotals {
   const allFundItems = [...data.goals.flatMap((g) => g.funds), ...data.unallocated.funds]
-  const fundTotal = allFundItems.reduce((sum, f) => sum + f.currentValue, 0)
+  const sum = (items: typeof allFundItems) => items.reduce((total, f) => total + f.currentValue, 0)
+  const fundTotal = sum(allFundItems.filter((f) => f.fundType !== 'etf'))
+  const etfTotal = sum(allFundItems.filter((f) => f.fundType === 'etf'))
   const { bank: bankTotal, gold: goldTotal, stock: stockTotal } = data.byType
-  return { fundTotal, bankTotal, goldTotal, stockTotal }
+  return { fundTotal, etfTotal, bankTotal, goldTotal, stockTotal }
 }
 
 export interface OverviewLoadResult {

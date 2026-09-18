@@ -46,6 +46,7 @@
   --c-fund-debt: #2563eb;     --c-fund-debt-bg: #eff6ff;
   --c-fund-balanced: #7c3aed; --c-fund-balanced-bg: #f5f3ff;
   --c-fund-gold: #b45309;     --c-fund-gold-bg: #fef7e6;
+  --c-fund-etf: #0891b2;      --c-fund-etf-bg: #ecfeff;
   /* Primary button fill — stays dark navy in both modes so white text is always legible */
   --c-btn-primary: #0F2A4A;
   --c-btn-primary-hover: #1e3a63;
@@ -166,6 +167,7 @@
   --c-fund-debt: #60a5fa;     --c-fund-debt-bg: rgba(37, 99, 235, 0.18);
   --c-fund-balanced: #a78bfa; --c-fund-balanced-bg: rgba(124, 58, 237, 0.18);
   --c-fund-gold: #fbbf24;     --c-fund-gold-bg: rgba(180, 83, 9, 0.22);
+  --c-fund-etf: #22d3ee;      --c-fund-etf-bg: rgba(8, 145, 178, 0.18);
   /* Tab bar goes dark in dark mode */
   --c-tab-bg: rgba(22, 22, 22, 0.92);
   /* Skeleton shimmer — lighter sweep over the dark card-2 surface */

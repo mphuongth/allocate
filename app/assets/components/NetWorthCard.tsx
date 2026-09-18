@@ -15,14 +15,20 @@ const ALLOC_COLORS = {
   bank:  '#047857',
   gold:  'var(--c-fund-gold)',
   stock: '#7c3aed',
+  etf:   'var(--c-fund-etf)',
 } as const
 
-function AllocationBar({ fund, bank, gold, stock, goldUnits, locale }: { fund: number; bank: number; gold: number; stock: number; goldUnits?: number; locale: string }) {
+function AllocationBar({ fund, bank, gold, stock, etf = 0, goldUnits, locale }: { fund: number; bank: number; gold: number; stock: number; etf?: number; goldUnits?: number; locale: string }) {
   const isVi = locale === 'vi'
-  const total = fund + bank + gold + stock
+  const total = fund + bank + gold + stock + etf
   if (total <= 0) return null
   const segments = [
     { key: 'fund',  value: fund,  color: ALLOC_COLORS.fund,  label: isVi ? 'Quỹ'       : 'Fund' },
+    // "ETF" in both languages: it is what the listing is called and what the
+    // broker app calls it. Its own slice rather than part of "Quỹ" — that is the
+    // thing the user wanted to see — and never merged into "Cổ phiếu", which is
+    // the retired asset type whose value nothing refreshes.
+    { key: 'etf',   value: etf,   color: ALLOC_COLORS.etf,   label: 'ETF' },
     { key: 'bank',  value: bank,  color: ALLOC_COLORS.bank,  label: isVi ? 'Tiết kiệm' : 'Bank' },
     { key: 'gold',  value: gold,  color: ALLOC_COLORS.gold,  label: isVi ? 'Vàng'      : 'Gold' },
     { key: 'stock', value: stock, color: ALLOC_COLORS.stock, label: isVi ? 'Cổ phiếu'  : 'Stock' },
@@ -93,7 +99,7 @@ interface Props {
   currentValue: number
   overallProfitLoss: number
   overallProfitLossPercentage: number
-  allocationBar?: { fund: number; bank: number; gold: number; stock: number; goldUnits?: number }
+  allocationBar?: { fund: number; bank: number; gold: number; stock: number; etf?: number; goldUnits?: number }
   refreshing?: boolean
   // History + range are owned by the parent so the selected range survives a
   // desktop↔mobile breakpoint switch (#5). Optional with safe defaults so the

@@ -5,7 +5,7 @@
 // docs/architecture.md. `useFundsData` re-exports them, so existing imports
 // keep working.
 
-export type FundType = 'balanced' | 'equity' | 'debt' | 'gold'
+export type FundType = 'balanced' | 'equity' | 'debt' | 'gold' | 'etf'
 
 export type Fund = {
   id: string
@@ -27,4 +27,4 @@ export type Goal = { goal_id: string; goal_name: string }
 export type SortKey = 'code' | 'nav' | 'name'
 
 /** Fund-type filter chip; 'all' clears the filter. */
-export type TypeFilter = 'all' | 'equity' | 'debt' | 'balanced'
+export type TypeFilter = 'all' | 'equity' | 'debt' | 'balanced' | 'etf'
