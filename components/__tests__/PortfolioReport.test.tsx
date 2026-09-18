@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 import type { DashboardData, GoalData } from '@/features/dashboard/contracts'
+import { PortfolioReport } from '@/components/report/PortfolioReport'
 
 vi.mock('@react-pdf/renderer', () => ({
   Document: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
@@ -105,62 +106,78 @@ describe('PortfolioReport — unallocated holdings', () => {
     goalId: null,
   }
 
-  it('prints the unallocated total and its profit, without a row per holding', async () => {
-    const { PortfolioReport } = await import('@/components/report/PortfolioReport')
+  const deposit = {
+    transactionId: 't1',
+    type: 'bank',
+    amount: 1_000_000,
+    currentValue: 800_000,
+    interestRate: null,
+    expiryDate: null,
+    investmentDate: '2026-01-01',
+    notes: 'Sổ VCB',
+    units: null,
+  }
+
+  it('prints a row per holding — name, value and its own profit/loss', () => {
     const data: DashboardData = {
       ...mockData,
-      unallocated: { totalValue: 1_200_000, funds: [unallocatedFund], nonFunds: [] },
+      unallocated: { totalValue: 2_000_000, funds: [unallocatedFund], nonFunds: [deposit] },
     }
     render(React.createElement(PortfolioReport, { data, locale: 'vi' }))
 
     expect(screen.getByText('Đầu tư chưa phân bổ')).toBeInTheDocument()
-    // Once in the asset-allocation total, once as the unallocated total.
-    expect(screen.getAllByText('₫ 1.200.000')).toHaveLength(2)
+
+    // The fund, at a profit.
+    expect(screen.getByText('VESAF')).toBeInTheDocument()
     expect(screen.getByText('+₫ 200.000 (+20.00%)')).toBeInTheDocument()
-    // Only the total — the fund's own name never appears.
-    expect(screen.queryByText('VESAF')).not.toBeInTheDocument()
+
+    // The deposit, at a loss, named by its note.
+    expect(screen.getByText('Sổ VCB')).toBeInTheDocument()
+    expect(screen.getByText('₫ -200.000 (-20.00%)')).toBeInTheDocument()
+
+    // Each holding's own current value.
+    expect(screen.getAllByText('₫ 1.200.000').length).toBeGreaterThan(0)
+    expect(screen.getByText('₫ 800.000')).toBeInTheDocument()
   })
 
-  it('prints a loss on the unallocated total', async () => {
-    const { PortfolioReport } = await import('@/components/report/PortfolioReport')
+  it('closes the section with the combined total and profit/loss', () => {
     const data: DashboardData = {
       ...mockData,
-      unallocated: {
-        totalValue: 800_000,
-        funds: [],
-        nonFunds: [{
-          transactionId: 't1',
-          type: 'bank',
-          amount: 1_000_000,
-          currentValue: 800_000,
-          interestRate: null,
-          expiryDate: null,
-          investmentDate: '2026-01-01',
-          notes: null,
-          units: null,
-        }],
-      },
+      unallocated: { totalValue: 2_000_000, funds: [unallocatedFund], nonFunds: [deposit] },
     }
     render(React.createElement(PortfolioReport, { data, locale: 'vi' }))
 
-    expect(screen.getByText('₫ -200.000 (-20.00%)')).toBeInTheDocument()
+    expect(screen.getByText('Tổng cộng')).toBeInTheDocument()
+    // 1.200.000 + 800.000 against 2.000.000 invested = flat.
+    expect(screen.getByText('₫ 2.000.000')).toBeInTheDocument()
+    expect(screen.getByText('+₫ 0 (+0.00%)')).toBeInTheDocument()
   })
 
-  it('omits the section entirely when nothing is unallocated', async () => {
-    const { PortfolioReport } = await import('@/components/report/PortfolioReport')
+  it('names a note-less deposit rather than leaving the row blank', () => {
+    const data: DashboardData = {
+      ...mockData,
+      unallocated: { totalValue: 800_000, funds: [], nonFunds: [{ ...deposit, notes: null }] },
+    }
+    render(React.createElement(PortfolioReport, { data, locale: 'vi' }))
+
+    expect(screen.getByText('Tiền gửi')).toBeInTheDocument()
+  })
+
+  it('omits the section entirely when nothing is unallocated', () => {
     render(React.createElement(PortfolioReport, { data: mockData, locale: 'vi' }))
 
     expect(screen.queryByText('Đầu tư chưa phân bổ')).not.toBeInTheDocument()
   })
 
-  it('labels the section in English', async () => {
-    const { PortfolioReport } = await import('@/components/report/PortfolioReport')
+  it('labels the section and a note-less deposit in English', () => {
     const data: DashboardData = {
       ...mockData,
-      unallocated: { totalValue: 1_200_000, funds: [unallocatedFund], nonFunds: [] },
+      unallocated: { totalValue: 800_000, funds: [], nonFunds: [{ ...deposit, notes: null }] },
     }
     render(React.createElement(PortfolioReport, { data, locale: 'en' }))
 
     expect(screen.getByText('Unallocated Investments')).toBeInTheDocument()
+    expect(screen.getByText('Bank deposit')).toBeInTheDocument()
+    expect(screen.getByText('Total')).toBeInTheDocument()
   })
 })
