@@ -95,6 +95,7 @@
     "navLinkHint": "Nhập số tiền hoặc số phần — tự động đồng bộ",
     "amountReceived": "Số tiền thực nhận",
     "receivedHint": "Ước tính từ giá trị hiện tại — hãy đối chiếu với số tiền ngân hàng thực trả, nhất là khi rút trước hạn.",
+    "receivedFundHint": "Sửa cho khớp sổ xác nhận lệnh sau phí và thuế. Số CCQ bán không đổi.",
     "principalPortion": "Tiền gốc",
     "gainLoss": "Lãi/Lỗ",
     "principalToWithdraw": "Số tiền gốc muốn rút",

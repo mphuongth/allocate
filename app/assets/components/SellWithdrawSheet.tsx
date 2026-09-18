@@ -14,7 +14,7 @@ import type { SellItem } from '@/features/dashboard/contracts'
 export type { SellItem } from '@/features/dashboard/contracts'
 import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
 import { goldCostBasis, goldUnitCost } from '@/lib/goldWithdrawal'
-import { fundCostBasis } from '@/lib/fundWithdrawal'
+import { fundSaleFigures } from '@/lib/fundWithdrawal'
 import { clickAway } from '@/components/ui/clickAway'
 const fmtVND = (n: number, _locale?: string) => fmt(n)
 
@@ -175,9 +175,20 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
       : (numAmount > 0 && !isOverMax && !saving)
 
   const gainLoss = useMemo(() => {
-    if (!numAmount || isBank || item?.gainPct == null) return null
+    if (!numAmount || isBank) return null
+    // A fund sale knows both real figures — the cash the user says arrived and
+    // the basis leaving the bucket — so the gain is those two subtracted rather
+    // than the holding's average percentage applied to the amount. That average
+    // cannot see the brokerage fee or the sale tax, which are a real loss.
+    if (isFund && item?.costBasis != null) {
+      return fundSaleFigures({
+        gross: numAmount, navPerUnit, heldUnits: item.units,
+        totalBasis: item.costBasis, received: numReceived,
+      }).gain
+    }
+    if (item?.gainPct == null) return null
     return numAmount * item.gainPct / (100 + item.gainPct)
-  }, [numAmount, isBank, item?.gainPct])
+  }, [numAmount, isBank, isFund, navPerUnit, numReceived, item])
 
   const taxAmount = useMemo(() => {
     if (!isFund || !numAmount) return null
@@ -217,6 +228,11 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
         ? String(estimateReceivedForPrincipal({ currentPrincipal: bankPrincipal, currentValue: maxAmount, amount: Number(raw) }))
         : '')
     }
+    // Fund: the cash starts out equal to the amount being sold and the user
+    // edits it down to whatever the broker actually paid. It has to be its own
+    // field rather than the amount itself, because the amount is what decides
+    // how many units go — see lib/fundWithdrawal.fundSaleFigures.
+    if (isFund) setReceived(raw)
     if (navPerUnit && raw) {
       const u = Number(raw) / navPerUnit
       setUnits(u > 0 ? u.toFixed(2) : '')
@@ -231,9 +247,12 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
     setError('')
     if (navPerUnit && v) {
       const a = Number(v) * navPerUnit
-      setAmount(a > 0 ? Math.round(a).toString() : '')
+      const rounded = a > 0 ? Math.round(a).toString() : ''
+      setAmount(rounded)
+      if (isFund) setReceived(rounded)
     } else {
       setAmount('')
+      if (isFund) setReceived('')
     }
   }
 
@@ -250,6 +269,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
     if (isBank) {
       setReceived(String(estimateReceivedForPrincipal({ currentPrincipal: bankPrincipal, currentValue: maxAmount, amount: bankPrincipal })))
     }
+    if (isFund) setReceived(String(maxAmount))
     if (navPerUnit && item?.units != null) setUnits(item.units.toFixed(2))
     setError('')
   }
@@ -287,11 +307,10 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
         // The units posted are the ones the basis is allocated from, so round them
         // FIRST — otherwise the two disagree at the 4th decimal and a full sale can
         // claim a đồng the holding doesn't have (#587, lib/fundWithdrawal).
-        const unitsWithdrawn = parseFloat(
-          (navPerUnit ? numAmount / navPerUnit : (item.units ?? 0)).toFixed(4))
-        const principalWithdrawn = fundCostBasis({
-          totalBasis: item.costBasis, totalUnits: item.units, sellUnits: unitsWithdrawn,
-        }) ?? Math.round(numAmount)
+        const sale = fundSaleFigures({
+          gross: numAmount, navPerUnit, heldUnits: item.units,
+          totalBasis: item.costBasis, received: numReceived,
+        })
         const res = await fetch('/api/v1/investment-transactions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -300,9 +319,12 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
             asset_type: 'fund',
             fund_id: item.fundId,
             investment_date: today,
-            amount_vnd: Math.round(numAmount),
-            units_withdrawn: unitsWithdrawn,
-            principal_withdrawn: principalWithdrawn,
+            // Cash from the received field, quantity from the amount. The two
+            // diverge by the brokerage fee and the 0.1% sale tax on a listed
+            // certificate, and conflating them sells fewer units than left.
+            amount_vnd: sale.proceeds,
+            units_withdrawn: sale.units,
+            principal_withdrawn: sale.principal,
             goal_id: withdrawalGoalId,
             affects_progress: context === 'goal' ? affectsProgress : true,
           }),
@@ -516,8 +538,12 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
               )}
             </div>
 
-            {/* Bank: editable cash received (early withdrawal can cut interest) */}
-            {isBank && (
+            {/* Editable cash received. A bank can cut the interest on an early
+                withdrawal; a fund sale loses the brokerage fee and, on a listed
+                certificate, the 0.1% sale tax. Either way only the confirmation
+                slip knows the real figure, so the app asks instead of guessing
+                at a fee schedule it cannot see. */}
+            {(isBank || isFund) && (
               <div>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVI ? 'Số tiền thực nhận' : "Amount you'll receive"}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1.5px solid var(--c-navy, #1e3a5f)', borderRadius: 10 }}>
@@ -533,11 +559,17 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
                   />
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>
-                  {/* Not the whole current value any more: the prefill is the
-                      principal entered plus the interest accrued on that slice. */}
-                  {isVI
-                    ? 'Ước tính từ giá trị hiện tại — hãy đối chiếu với số tiền ngân hàng thực trả, nhất là khi rút trước hạn.'
-                    : "Estimated from the current value — verify it against the bank's actual payout, especially for an early withdrawal."}
+                  {/* Bank: not the whole current value any more — the prefill is
+                      the principal entered plus the interest accrued on that
+                      slice. Fund: the prefill is the full sale value, and
+                      editing it changes only the cash, never the units sold. */}
+                  {isBank
+                    ? (isVI
+                      ? 'Ước tính từ giá trị hiện tại — hãy đối chiếu với số tiền ngân hàng thực trả, nhất là khi rút trước hạn.'
+                      : "Estimated from the current value — verify it against the bank's actual payout, especially for an early withdrawal.")
+                    : (isVI
+                      ? 'Sửa cho khớp sổ xác nhận lệnh sau phí và thuế. Số CCQ bán không đổi.'
+                      : 'Adjust to match your confirmation after fees and tax. The quantity sold is unchanged.')}
                 </div>
               </div>
             )}
@@ -548,6 +580,7 @@ export function SellWithdrawSheet({ item, open, context, goalId, goalProgressVal
                 <div style={{ fontSize: 11, color: 'var(--c-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{isVI ? 'Số phần' : 'Units'}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 10 }}>
                   <input
+                    data-testid="sell-units-input"
                     type="text"
                     inputMode="decimal"
                     value={formatDecimalVN(units)}

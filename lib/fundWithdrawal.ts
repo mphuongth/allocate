@@ -45,3 +45,49 @@ export function fundCostBasis(input: {
   if (sellUnits >= totalUnits) return Math.round(totalBasis)
   return Math.round((sellUnits * totalBasis) / totalUnits)
 }
+
+/**
+ * The three figures a fund sale posts, which are three different numbers:
+ *
+ *   units_withdrawn   — how many units left the holding
+ *   principal_withdrawn — how much of the cost basis went with them
+ *   amount_vnd        — how much cash actually arrived
+ *
+ * Both sell surfaces used to derive all three from one field, the amount typed
+ * into "sell". That is fine while the cash equals units × price, and wrong the
+ * moment it does not: a brokerage fee and the 0.1% sale tax on a listed
+ * certificate, or an open-ended fund's early-redemption fee, all make the cash
+ * smaller than the units are worth. A user correcting the amount to match their
+ * broker's confirmation was silently correcting the QUANTITY too — selling 100
+ * certificates and recording 99.77, leaving a quarter of a certificate in the
+ * holding that nothing would ever clear.
+ *
+ * So the quantity comes from the gross (units × current price, the field that
+ * decides how much of the holding is going), the basis comes from the quantity,
+ * and only the cash comes from what the user says they received. The app does
+ * not compute the fee or the tax: brokerage rates are tiered, odd lots fill at
+ * their own price, and only the confirmation slip knows the real figure — the
+ * same reason a bank withdrawal has had an editable "received" since #578.
+ */
+export function fundSaleFigures(input: {
+  /** Cash value of the units being sold, at the current price. */
+  gross: number
+  /** Current price per unit; null when unknown, and then the whole holding goes. */
+  navPerUnit: number | null | undefined
+  /** Units the bucket still holds. */
+  heldUnits: number | null | undefined
+  /** Remaining cost basis of the bucket. */
+  totalBasis: number | null | undefined
+  /** Cash actually received, net of fees and tax. Absent or zero = the gross. */
+  received?: number | null
+}): { units: number; principal: number; proceeds: number; gain: number } {
+  const { gross, navPerUnit, heldUnits, totalBasis, received } = input
+
+  // Rounded FIRST: these are the units the basis is allocated from and the units
+  // that get posted, so the two must not disagree at the 4th decimal (#587).
+  const units = parseFloat((navPerUnit ? gross / navPerUnit : (heldUnits ?? 0)).toFixed(4))
+  const principal = fundCostBasis({ totalBasis, totalUnits: heldUnits, sellUnits: units }) ?? Math.round(gross)
+  const proceeds = Math.round(received ? received : gross)
+
+  return { units, principal, proceeds, gain: proceeds - principal }
+}

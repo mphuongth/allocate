@@ -128,7 +128,9 @@ describe('AddTransactionSheet — sell flow (issue #232)', () => {
 
     fireEvent.click(screen.getByText('sell'))   // direction = sell → lazy-loads holdings
     await screen.findAllByText(/VESAF/)          // holding picker + summary populated
-    fireEvent.change(screen.getByPlaceholderText('0'), { target: { value: '1000000' } })
+    // By testid, not by placeholder: a fund sale now also has a "cash received"
+    // field, and both are empty-with-a-zero-placeholder.
+    fireEvent.change(screen.getByTestId('sell-amount-input'), { target: { value: '1000000' } })
     fireEvent.click(screen.getByText('confirmSale'))
 
     await waitFor(() => {
