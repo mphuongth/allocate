@@ -1,6 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 import type { DashboardData, GoalData } from '@/features/dashboard/contracts'
+import { PortfolioReport } from '@/components/report/PortfolioReport'
 
 vi.mock('@react-pdf/renderer', () => ({
   Document: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
@@ -84,5 +86,98 @@ describe('PortfolioReport', () => {
       netWorth: { ...baseNetWorth, overallProfitLoss: -50_000_000, overallProfitLossPercentage: -10 },
     }
     expect(() => React.createElement(PortfolioReport, { data: lossData })).not.toThrow()
+  })
+})
+
+describe('PortfolioReport — unallocated holdings', () => {
+  afterEach(cleanup)
+
+  const unallocatedFund = {
+    fundId: 'f1',
+    fundName: 'VESAF',
+    fundType: 'equity',
+    quantity: 100,
+    currentNAV: 12_000,
+    currentValue: 1_200_000,
+    purchasePrice: 10_000,
+    costBasis: 1_000_000,
+    profitLoss: 200_000,
+    profitLossPercentage: 20,
+    goalId: null,
+  }
+
+  const deposit = {
+    transactionId: 't1',
+    type: 'bank',
+    amount: 1_000_000,
+    currentValue: 800_000,
+    interestRate: null,
+    expiryDate: null,
+    investmentDate: '2026-01-01',
+    notes: 'Sổ VCB',
+    units: null,
+  }
+
+  it('prints a row per holding — name, value and its own profit/loss', () => {
+    const data: DashboardData = {
+      ...mockData,
+      unallocated: { totalValue: 2_000_000, funds: [unallocatedFund], nonFunds: [deposit] },
+    }
+    render(React.createElement(PortfolioReport, { data, locale: 'vi' }))
+
+    expect(screen.getByText('Đầu tư chưa phân bổ')).toBeInTheDocument()
+
+    // The fund, at a profit.
+    expect(screen.getByText('VESAF')).toBeInTheDocument()
+    expect(screen.getByText('+₫ 200.000 (+20.00%)')).toBeInTheDocument()
+
+    // The deposit, at a loss, named by its note.
+    expect(screen.getByText('Sổ VCB')).toBeInTheDocument()
+    expect(screen.getByText('₫ -200.000 (-20.00%)')).toBeInTheDocument()
+
+    // Each holding's own current value.
+    expect(screen.getAllByText('₫ 1.200.000').length).toBeGreaterThan(0)
+    expect(screen.getByText('₫ 800.000')).toBeInTheDocument()
+  })
+
+  it('closes the section with the combined total and profit/loss', () => {
+    const data: DashboardData = {
+      ...mockData,
+      unallocated: { totalValue: 2_000_000, funds: [unallocatedFund], nonFunds: [deposit] },
+    }
+    render(React.createElement(PortfolioReport, { data, locale: 'vi' }))
+
+    expect(screen.getByText('Tổng cộng')).toBeInTheDocument()
+    // 1.200.000 + 800.000 against 2.000.000 invested = flat.
+    expect(screen.getByText('₫ 2.000.000')).toBeInTheDocument()
+    expect(screen.getByText('+₫ 0 (+0.00%)')).toBeInTheDocument()
+  })
+
+  it('names a note-less deposit rather than leaving the row blank', () => {
+    const data: DashboardData = {
+      ...mockData,
+      unallocated: { totalValue: 800_000, funds: [], nonFunds: [{ ...deposit, notes: null }] },
+    }
+    render(React.createElement(PortfolioReport, { data, locale: 'vi' }))
+
+    expect(screen.getByText('Tiền gửi')).toBeInTheDocument()
+  })
+
+  it('omits the section entirely when nothing is unallocated', () => {
+    render(React.createElement(PortfolioReport, { data: mockData, locale: 'vi' }))
+
+    expect(screen.queryByText('Đầu tư chưa phân bổ')).not.toBeInTheDocument()
+  })
+
+  it('labels the section and a note-less deposit in English', () => {
+    const data: DashboardData = {
+      ...mockData,
+      unallocated: { totalValue: 800_000, funds: [], nonFunds: [{ ...deposit, notes: null }] },
+    }
+    render(React.createElement(PortfolioReport, { data, locale: 'en' }))
+
+    expect(screen.getByText('Unallocated Investments')).toBeInTheDocument()
+    expect(screen.getByText('Bank deposit')).toBeInTheDocument()
+    expect(screen.getByText('Total')).toBeInTheDocument()
   })
 })
