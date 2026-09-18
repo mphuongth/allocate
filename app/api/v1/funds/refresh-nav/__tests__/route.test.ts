@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // most 1 is the stronger form of the old de-duplication guarantee.
 const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
-  funds: [] as { id: string; name: string; code: string }[],
+  funds: [] as { id: string; name: string; code: string; fund_type?: string }[],
   fundsError: null as unknown,
   rate: { allowed: true, retry_after_seconds: 0 } as { allowed: boolean; retry_after_seconds: number },
   rateError: null as unknown,
@@ -17,6 +17,8 @@ const h = vi.hoisted(() => ({
   upstreamError: null as Error | null,
   upstreamCalls: 0,
   updateError: null as unknown,
+  etfPrices: {} as Record<string, number | null>,
+  etfCalls: [] as string[],
 }))
 
 // The upstream feed is mocked so the route test controls which codes resolve and
@@ -29,6 +31,20 @@ vi.mock('@/lib/fmarket-nav', async (importOriginal) => {
       h.upstreamCalls += 1
       if (h.upstreamError) throw h.upstreamError
       return new Map(Object.entries(h.navByCode))
+    }),
+  }
+})
+
+// The exchange, the other source. Mocked the same way so the test controls
+// which tickers resolve and can count what was asked for.
+vi.mock('@/lib/hose-price', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/hose-price')>()
+  return {
+    ...actual,
+    fetchEtfMarketPrice: vi.fn(async (symbol: unknown) => {
+      const key = actual.normalizeSymbol(symbol)
+      h.etfCalls.push(key)
+      return h.etfPrices[key] ?? null
     }),
   }
 })
@@ -85,6 +101,8 @@ beforeEach(() => {
   h.upstreamError = null
   h.upstreamCalls = 0
   h.updateError = null
+  h.etfPrices = {}
+  h.etfCalls = []
 })
 
 describe('POST /api/v1/funds/refresh-nav — rate limit (#515)', () => {
@@ -201,5 +219,50 @@ describe('POST /api/v1/funds/refresh-nav — partial failure (#515)', () => {
     expect(res.status).toBe(200)
     expect((await res.json()).results).toEqual([])
     expect(h.upstreamCalls).toBe(0)
+  })
+})
+
+// An ETF is priced off the exchange, not off Fmarket's feed — which lists no ETF
+// at all, so the old single-source route could only ever have reported every
+// ETF as unlisted.
+describe('POST /api/v1/funds/refresh-nav — ETFs price off the exchange', () => {
+  it('refreshes an ETF from its ticker', async () => {
+    h.funds = [{ id: 'e', name: 'DCVFM VN DIAMOND', code: 'FUEVFVND', fund_type: 'etf' }]
+    h.etfPrices = { FUEVFVND: 34_380 }
+
+    const res = await POST()
+
+    expect(res.status).toBe(200)
+    expect((await res.json()).results[0].nav).toBe(34_380)
+    expect(h.etfCalls).toEqual(['FUEVFVND'])
+    // An all-ETF portfolio has no reason to pull the fund feed down as well.
+    expect(h.upstreamCalls).toBe(0)
+  })
+
+  it('leaves ETFs priced when the fund feed is down, and funds priced when a ticker is not', async () => {
+    h.funds = [
+      { id: 'a', name: 'A', code: 'DCDS', fund_type: 'equity' },
+      { id: 'e', name: 'E', code: 'FUEVFVND', fund_type: 'etf' },
+    ]
+    h.upstreamError = new Error('Upstream responded 503 for api.fmarket.vn')
+    h.etfPrices = { FUEVFVND: 34_380 }
+
+    const body = await (await POST()).json()
+    const byCode = Object.fromEntries(body.results.map((r: { code: string }) => [r.code, r]))
+    expect(byCode.DCDS.error).toMatch(/503/)
+    expect(byCode.FUEVFVND.nav).toBe(34_380)
+  })
+
+  it('reports an unlisted ticker against that ETF alone', async () => {
+    h.funds = [
+      { id: 'a', name: 'A', code: 'DCDS', fund_type: 'equity' },
+      { id: 'e', name: 'E', code: 'NOTATICKER', fund_type: 'etf' },
+    ]
+    h.navByCode = { DCDS: 93_915.08 }
+
+    const body = await (await POST()).json()
+    const byCode = Object.fromEntries(body.results.map((r: { code: string }) => [r.code, r]))
+    expect(byCode.DCDS.nav).toBe(93_915.08)
+    expect(byCode.NOTATICKER.error).toMatch(/NOTATICKER/)
   })
 })

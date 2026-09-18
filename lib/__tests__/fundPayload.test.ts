@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const priceable = vi.hoisted(() => ({ result: true as boolean | null }))
+const priceable = vi.hoisted(() => ({ result: true as boolean | null, etf: true as boolean | null }))
 
 // Only the network call is stubbed; code normalization is pure and is what
 // decides whether a code "changed", so the real one has to run here.
 vi.mock('@/lib/fmarket-nav', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/fmarket-nav')>()),
   isFundCodePriceable: async () => priceable.result,
+}))
+
+vi.mock('@/lib/hose-price', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/hose-price')>()),
+  isEtfSymbolPriceable: async () => priceable.etf,
 }))
 
 const { parseFundPayload, unpriceableFundCodeError } = await import('../fundPayload')
@@ -61,7 +66,7 @@ describe('parseFundPayload — common fields', () => {
   })
 
   it('requires a known fund type', async () => {
-    for (const fund_type of ['balanced', 'equity', 'debt', 'gold']) {
+    for (const fund_type of ['balanced', 'equity', 'debt', 'gold', 'etf']) {
       expect(parse({ ...valid, fund_type }).ok, fund_type).toBe(true)
     }
     expect(await rejection({ ...valid, fund_type: 'crypto' })).toEqual({ status: 400, error: 'Fund type is required' })
@@ -208,7 +213,38 @@ describe('parseFundPayload — nav_auto_sync', () => {
 describe('unpriceableFundCodeError', () => {
   const fields = { name: 'A', code: 'DCDS', fund_type: 'equity' as const, nav: 1 }
 
-  beforeEach(() => { priceable.result = true })
+  beforeEach(() => { priceable.result = true; priceable.etf = true })
+
+  // An ETF is not listed where an open-ended fund is listed — Fmarket's feed
+  // carries no ETF at all — so checking an ETF ticker against it would reject
+  // every correct ticker a user could type.
+  it('checks an ETF against the exchange, not against the fund feed', async () => {
+    priceable.result = false
+    priceable.etf = true
+    expect(await unpriceableFundCodeError({
+      ...fields, code: 'FUEVFVND', fund_type: 'etf', nav_auto_sync: true,
+    })).toBeNull()
+  })
+
+  it('rejects an ETF ticker the exchange does not list, naming it', async () => {
+    priceable.result = true
+    priceable.etf = false
+    const res = await unpriceableFundCodeError({
+      ...fields, code: 'NOTATICKER', fund_type: 'etf', nav_auto_sync: true,
+    })
+
+    expect(res?.status).toBe(400)
+    expect((await res!.json()).error).toMatch(/NOTATICKER/)
+  })
+
+  it('fails open for an ETF when the exchange cannot be reached', async () => {
+    // Same contract as the fund feed: an unverifiable ticker is no reason to
+    // block someone saving their own fund.
+    priceable.etf = null
+    expect(await unpriceableFundCodeError({
+      ...fields, code: 'FUEVFVND', fund_type: 'etf', nav_auto_sync: true,
+    })).toBeNull()
+  })
 
   it('allows a code the feed can price', async () => {
     expect(await unpriceableFundCodeError({ ...fields, nav_auto_sync: true })).toBeNull()

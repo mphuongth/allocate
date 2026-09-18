@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { fetchFmarketNavIndex, lookupFundNav } from '@/lib/fmarket-nav'
+import { priceAutoSyncFunds } from '@/lib/fundPricing'
 
 // Bound the user-triggered NAV refresh (#515): rate-limit per user, then read
 // every fund's NAV from a single upstream request.
@@ -8,7 +8,7 @@ import { fetchFmarketNavIndex, lookupFundNav } from '@/lib/fmarket-nav'
 // from here, so a client calling the RPC directly can't weaken it.
 const RATE_LIMIT_WINDOW_SECONDS = 60
 
-type FundRow = { id: string; name: string; code: string }
+type FundRow = { id: string; name: string; code: string; fund_type: string | null }
 type Result = { id: string; name: string; code: string; nav?: number; updatedAt?: string; error?: string }
 
 export async function POST() {
@@ -44,12 +44,13 @@ export async function POST() {
     )
   }
 
-  // nav_auto_sync is the per-fund opt-in; the NAV itself comes from the Fmarket
-  // feed matched on funds.code (see lib/fmarket-nav.ts for why the per-provider
-  // scrapers were retired).
+  // nav_auto_sync is the per-fund opt-in. `fund_type` decides which source
+  // prices the row — an ETF off the exchange, everything else off the Fmarket
+  // feed (see lib/fundPricing.ts, and lib/fmarket-nav.ts for why the
+  // per-provider scrapers were retired).
   const { data: funds, error: fetchError } = await supabase
     .from('funds')
-    .select('id, name, code')
+    .select('id, name, code, fund_type')
     .eq('user_id', user.id)
     .eq('nav_auto_sync', true)
 
@@ -63,38 +64,30 @@ export async function POST() {
 
   const rows = funds as FundRow[]
 
-  // One request covers every fund, so an upstream failure is total rather than
-  // per-fund. Report it against each fund anyway: the client renders per-fund
-  // rows, and a 200 with visible errors keeps a provider outage from looking
-  // like a broken app.
-  let index
-  try {
-    index = await fetchFmarketNavIndex()
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch fund prices'
-    return NextResponse.json({
-      results: rows.map((f) => ({ id: f.id, name: f.name, code: f.code, error: message })),
-    })
-  }
+  // Every outcome is per fund, including a whole source being unreachable: the
+  // client renders per-fund rows, and a 200 with visible errors keeps a provider
+  // outage from looking like a broken app. It also means one source's bad minute
+  // no longer hides the other source's good prices.
+  const priced = await priceAutoSyncFunds(rows)
 
-  // Group by resolved NAV so funds sharing a price update in one statement,
-  // and collect the unmatched ones as per-fund errors.
+  // Group by resolved price so funds sharing one update in a single statement,
+  // and collect the rest as per-fund errors.
   const results: Result[] = []
   const byNav = new Map<number, FundRow[]>()
   for (const fund of rows) {
-    const nav = lookupFundNav(index, fund.code)
-    if (nav === null) {
+    const outcome = priced.get(fund)
+    if (!outcome || !outcome.ok) {
       results.push({
         id: fund.id,
         name: fund.name,
         code: fund.code,
-        error: `No fund matching code "${fund.code}" is listed upstream`,
+        error: outcome?.error ?? 'Failed to fetch fund prices',
       })
       continue
     }
-    const group = byNav.get(nav) ?? []
+    const group = byNav.get(outcome.price) ?? []
     group.push(fund)
-    byNav.set(nav, group)
+    byNav.set(outcome.price, group)
   }
 
   for (const [nav, group] of byNav) {
