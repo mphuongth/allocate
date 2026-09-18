@@ -23,7 +23,18 @@ export interface FundFields {
   name: string
   code: string
   fund_type: FundType
-  nav: number
+  /**
+   * The price per unit, when the caller stated one.
+   *
+   * `null` means "the source will supply it": a create with automatic pricing
+   * on may leave the price out, because asking someone to type a number the app
+   * is about to fetch anyway is asking them to go and look it up. The route
+   * resolves it before the insert.
+   *
+   * ABSENT means unchanged — the same partial-update rule `nav_auto_sync`
+   * follows. A field the caller did not send is not a field they cleared.
+   */
+  nav?: number | null
   /**
    * Absent on an update that didn't send the flag — the column is then left
    * alone rather than written. Silently switching automatic pricing off because
@@ -83,27 +94,42 @@ export function parseFundPayload(
     return { ok: false, response: badRequest('Fund type is required') }
   }
 
-  const navNum = Number(nav)
-  // Number('Infinity') is Infinity and would slip past a bare `< 0.01` check —
-  // require a finite value so it can't reach the DB numeric column.
-  if (!Number.isFinite(navNum) || navNum < 0.01) {
+  // Whether this fund is priced automatically from its source. Read before the
+  // price itself, because it decides whether a missing price is legal.
+  if (nav_auto_sync !== undefined && typeof nav_auto_sync !== 'boolean') {
+    return { ok: false, response: badRequest('nav_auto_sync must be a boolean') }
+  }
+
+  // The form sends '' for a field nobody typed in, so absent covers both.
+  const navOmitted = nav === undefined || nav === null || nav === ''
+  let navNum: number | null = null
+  if (!navOmitted) {
+    navNum = Number(nav)
+    // Number('Infinity') is Infinity and would slip past a bare `< 0.01` check —
+    // require a finite value so it can't reach the DB numeric column. Applies
+    // whether or not sync is on: omission is what became legal, not a wrong
+    // number.
+    if (!Number.isFinite(navNum) || navNum < 0.01) {
+      return { ok: false, response: badRequest('NAV must be greater than 0') }
+    }
+  } else if (mode === 'create' && nav_auto_sync !== true) {
+    // Nothing is going to fetch one, so there would be no price at all.
     return { ok: false, response: badRequest('NAV must be greater than 0') }
   }
   if (dca_goal_id != null && dca_goal_id !== '' && (typeof dca_goal_id !== 'string' || !UUID_RE.test(dca_goal_id))) {
     return { ok: false, response: badRequest('Invalid goal') }
   }
 
-  // Whether this fund is priced automatically from the upstream feed.
-  if (nav_auto_sync !== undefined && typeof nav_auto_sync !== 'boolean') {
-    return { ok: false, response: badRequest('nav_auto_sync must be a boolean') }
-  }
-
   const fund: FundFields = {
     name: name.trim(),
     code: code.trim().toUpperCase(),
     fund_type: fund_type as FundType,
-    nav: navNum,
   }
+
+  // On create the key is always present — null when the source is to supply it.
+  // On update it is present only when the caller sent a value, so an omitted
+  // price leaves the stored one alone.
+  if (!navOmitted || mode === 'create') fund.nav = navNum
 
   // Create defaults to off; update writes the column only when the flag was
   // actually sent, so a partial write can't turn someone's sync off behind them.

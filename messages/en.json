@@ -635,6 +635,7 @@
     "selectType": "Select type",
     "navLabel": "NAV",
     "marketPriceLabel": "Market price",
+    "pricePlaceholderAuto": "Leave blank to fetch the latest price",
     "navAutoSyncLabel": "Update NAV automatically",
     "priceAutoSyncLabel": "Update price automatically",
     "navAutoSyncHint": "Fetches the price daily, matched on the fund code above.",

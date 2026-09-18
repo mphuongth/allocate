@@ -635,6 +635,7 @@
     "selectType": "Chọn loại",
     "navLabel": "NAV",
     "marketPriceLabel": "Thị giá",
+    "pricePlaceholderAuto": "Để trống để tự lấy giá mới nhất",
     "navAutoSyncLabel": "Tự động cập nhật NAV",
     "priceAutoSyncLabel": "Tự động cập nhật giá",
     "navAutoSyncHint": "Lấy giá hằng ngày theo mã quỹ ở trên.",

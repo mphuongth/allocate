@@ -82,6 +82,30 @@ describe('MobileFundLibraryView — ETFs', () => {
     expect(screen.queryByText('marketPriceLabel')).not.toBeInTheDocument()
   })
 
+  it('does not ask for a price it is about to fetch', async () => {
+    // Same rule as desktop: automatic pricing on means the app knows the number,
+    // so the form must not send the user to a broker app to copy it back in.
+    render(<Harness initial={[makeFund({ id: 'e1', code: 'FUEVFVND', fund_type: 'etf', nav_auto_sync: true })]} />)
+    await openEdit('e1')
+
+    const price = screen.getByPlaceholderText('pricePlaceholderAuto')
+    await userEvent.clear(price)
+    await userEvent.click(screen.getByRole('button', { name: 'saveBtn' }))
+
+    const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string)
+    expect(body.nav).toBeUndefined()
+    expect(body.nav_auto_sync).toBe(true)
+  })
+
+  it('keeps the save disabled with no price and nothing to fetch one', async () => {
+    render(<Harness initial={[makeFund({ id: 'e1', code: 'FUEVFVND', fund_type: 'etf', nav_auto_sync: false })]} />)
+    await openEdit('e1')
+
+    await userEvent.clear(screen.getByPlaceholderText('navPlaceholder'))
+
+    expect(screen.getByRole('button', { name: 'saveBtn' })).toBeDisabled()
+  })
+
   it('follows the type the user picks in the open sheet', async () => {
     // The label tracks the dropdown, not the row it was opened from — otherwise
     // converting a fund to an ETF leaves the form asking for the wrong number.

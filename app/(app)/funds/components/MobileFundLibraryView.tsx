@@ -204,7 +204,9 @@ function TypeChip({ type }: { type: FundType }) {
 // ─── FundForm ────────────────────────────────────────────────────────────────
 
 interface SavePayload {
-  name: string; code: string; fund_type: FundType; nav: number; nav_auto_sync: boolean
+  // `nav` is omitted when the price is the source's to supply — absent is what
+  // tells the route to go and fetch it, and zero would be a price.
+  name: string; code: string; fund_type: FundType; nav?: number; nav_auto_sync: boolean
 }
 
 function FundForm({ existing, title, onClose, onSave, saving, formError }: {
@@ -229,7 +231,10 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
   // Incompleteness alone greys the button out. A save in flight is blocked by
   // PendingButton itself, and leaving it out of `incomplete` keeps the navy fill
   // behind the loader instead of turning it into a disabled-looking slab.
-  const incomplete = !name.trim() || !code.trim() || !nav || Number(nav) <= 0
+  // A blank price is fine when something is going to fetch one: the route
+  // resolves it from the same source the nightly refresh uses.
+  const priceFromSource = !nav && autoSync
+  const incomplete = !name.trim() || !code.trim() || (!priceFromSource && (!nav || Number(nav) <= 0))
 
   const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', fontSize: 16, border: '1px solid var(--c-line)', borderRadius: 10, background: 'var(--c-card)', color: 'var(--c-ink)', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
   const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: 'var(--c-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }
@@ -258,7 +263,7 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
         <label style={labelStyle}>{t(pricesAtMarket ? 'marketPriceLabel' : 'navLabel')}</label>
-        <input type="text" inputMode="decimal" value={formatDecimalVN(nav)} onChange={(e) => setNav(parseDecimalVN(e.target.value))} placeholder={t('navPlaceholder')} style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
+        <input type="text" inputMode="decimal" value={formatDecimalVN(nav)} onChange={(e) => setNav(parseDecimalVN(e.target.value))} placeholder={autoSync ? t('pricePlaceholderAuto') : t('navPlaceholder')} style={{ ...inputStyle, fontVariantNumeric: 'tabular-nums' }} />
       </div>
       <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
         <input
@@ -279,7 +284,11 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
         <PendingButton
           pending={saving}
           pendingLabel={tc('saving')}
-          onClick={() => onSave({ name: name.trim(), code: code.trim(), fund_type: type, nav: Number(nav), nav_auto_sync: autoSync })}
+          onClick={() => onSave({
+            name: name.trim(), code: code.trim(), fund_type: type,
+            ...(priceFromSource ? {} : { nav: Number(nav) }),
+            nav_auto_sync: autoSync,
+          })}
           disabled={incomplete}
           style={{ flex: 2, padding: '10px 14px', fontSize: 13, fontWeight: 600, border: 'none', borderRadius: 10, background: incomplete ? 'var(--c-line)' : 'var(--c-navy)', color: incomplete ? 'var(--c-muted)' : '#fff', cursor: incomplete ? 'not-allowed' : saving ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
         >

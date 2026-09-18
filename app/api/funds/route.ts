@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { readJsonBody } from '@/lib/apiBody'
 import { parseFundPayload, dcaGoalOwnershipError, unpriceableFundCodeError } from '@/lib/fundPayload'
+import { priceAutoSyncFunds } from '@/lib/fundPricing'
 
 // Canonical funds-list contract (#470): GET /api/funds → `{ funds: Fund[] }`,
 // each a full fund row (`select('*')`), ordered by name. Every consumer reads
@@ -52,6 +53,24 @@ export async function POST(request: NextRequest) {
 
   const unpriceable = await unpriceableFundCodeError(fields)
   if (unpriceable) return unpriceable
+
+  // A fund that prices itself may be created without a price: the number the
+  // form would have asked for is the one this fetches, so demanding it up front
+  // only sends the user off to look it up. Resolved here rather than left to the
+  // nightly refresh — a fund inserted at zero has nothing to show until then,
+  // and the DB's `nav >= 0.01` check refuses it anyway.
+  if (fields.nav == null) {
+    const [outcome] = [...(await priceAutoSyncFunds([fields])).values()]
+    if (!outcome || !outcome.ok) {
+      // Fails CLOSED, unlike the code check just above. An unverifiable code is
+      // no reason to block a save; an unobtainable price leaves nothing to save.
+      return NextResponse.json(
+        { error: 'Could not fetch a price for this fund right now. Enter one, and automatic updates will take over.' },
+        { status: 400 },
+      )
+    }
+    fields.nav = outcome.price
+  }
 
   if (dca.is_dca && dca.dca_goal_id) {
     const denied = await dcaGoalOwnershipError(supabase, dca.dca_goal_id, user.id)

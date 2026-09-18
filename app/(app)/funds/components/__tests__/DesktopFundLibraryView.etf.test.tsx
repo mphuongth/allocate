@@ -92,6 +92,39 @@ describe('DesktopFundLibraryView — ETFs', () => {
     expect(screen.getByText('priceAutoSyncLabel')).toBeInTheDocument()
   })
 
+  it('does not ask for a price it is about to fetch', async () => {
+    // Automatic pricing on means the app knows the number. Demanding it in the
+    // form sends the user off to a broker app to copy a figure back in.
+    const user = userEvent.setup()
+    render(<Harness initial={[]} />)
+
+    await user.click(within(screen.getByTestId('desktop-funds-toolbar')).getByRole('button', { name: 'add' }))
+    await user.selectOptions(screen.getByRole('combobox'), 'etf')
+    await user.type(screen.getByPlaceholderText('namePlaceholder'), 'DCVFM VN DIAMOND')
+    await user.type(screen.getByPlaceholderText('codePlaceholder'), 'FUEVFVND')
+    await user.click(screen.getByRole('checkbox'))
+    await user.click(within(screen.getByTestId('fund-modal')).getByRole('button', { name: 'add' }))
+
+    expect(screen.queryByText('priceRequired')).not.toBeInTheDocument()
+    const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string)
+    expect(body.nav_auto_sync).toBe(true)
+    expect(body.nav).toBeUndefined()
+  })
+
+  it('still asks for a price when nothing will fetch one', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={[]} />)
+
+    await user.click(within(screen.getByTestId('desktop-funds-toolbar')).getByRole('button', { name: 'add' }))
+    await user.selectOptions(screen.getByRole('combobox'), 'etf')
+    await user.type(screen.getByPlaceholderText('namePlaceholder'), 'By hand')
+    await user.type(screen.getByPlaceholderText('codePlaceholder'), 'MANUAL')
+    await user.click(within(screen.getByTestId('fund-modal')).getByRole('button', { name: 'add' }))
+
+    expect(screen.getByText('priceRequired')).toBeInTheDocument()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
   it('filters the library down to ETFs', async () => {
     const user = userEvent.setup()
     render(<Harness initial={[

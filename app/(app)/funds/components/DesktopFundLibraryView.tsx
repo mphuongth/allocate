@@ -396,8 +396,14 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
     if (!formName.trim()) { setFormError(t('nameRequired')); return }
     if (!formCode.trim()) { setFormError(t('codeRequired')); return }
     if (!formType) { setFormError(t('typeRequired')); return }
+    // A blank price is fine when something is going to fetch one — the route
+    // resolves it from the same source the nightly refresh uses. It is only
+    // required when nothing will.
     const navNum = Number(formNav)
-    if (!formNav || isNaN(navNum) || navNum < 0.01) { setFormError(t(pricesAtMarket ? 'priceRequired' : 'navRequired')); return }
+    const priceFromSource = !formNav && formAutoSync
+    if (!priceFromSource && (!formNav || isNaN(navNum) || navNum < 0.01)) {
+      setFormError(t(pricesAtMarket ? 'priceRequired' : 'navRequired')); return
+    }
     setSaving(true)
     try {
       const url = modalMode === 'edit' ? `/api/funds/${editTarget!.id}` : '/api/funds'
@@ -405,7 +411,14 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formName.trim(), code: formCode.trim(), fund_type: formType, nav: navNum, nav_auto_sync: formAutoSync }),
+        body: JSON.stringify({
+          name: formName.trim(),
+          code: formCode.trim(),
+          fund_type: formType,
+          // Omitted, not zero: absent is what tells the route to go and price it.
+          ...(priceFromSource ? {} : { nav: navNum }),
+          nav_auto_sync: formAutoSync,
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setFormError(res.status === 409 ? t('codeExists') : data.error || t('error')); return }
@@ -779,7 +792,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
                 onChange={e => setFormNav(parseDecimalVN(e.target.value))}
                 className="cn-input"
                 style={{ fontVariantNumeric: 'tabular-nums' }}
-                placeholder={t('navPlaceholder')}
+                placeholder={formAutoSync ? t('pricePlaceholderAuto') : t('navPlaceholder')}
               />
             </FormField>
             <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
