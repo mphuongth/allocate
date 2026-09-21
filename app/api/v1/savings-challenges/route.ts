@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateInteger } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
-import { isChallengeTier } from '@/lib/savingsChallenge'
+import { isChallengeUnitVnd } from '@/lib/savingsChallenge'
 import { CHALLENGE_COLUMNS, isBusinessMonth, notCurrentMonth } from './challengeAccess'
 
 // A month's savings challenge: read one, or start one.
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     .maybeSingle()
 
   // A failed read is not an untouched month. `challenge: null` is what makes the
-  // UI offer the tier picker, so degrading into it would invite the user to
+  // UI offer the step picker, so degrading into it would invite the user to
   // start a month they have already started — and the 409 on submit would be the
   // first they heard of the error (#533).
   if (error) {
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     .eq('challenge_id', challenge.challenge_id)
 
   // Same rule, and this one is sharper: an empty day list reads as "nothing
-  // saved yet" AND unlocks the tier, so a swallowed error would both understate
+  // saved yet" AND unlocks the step, so a swallowed error would both understate
   // the month and offer a change the database is about to refuse.
   if (daysError) {
     console.error('savings challenge days read failed', daysError.message)
@@ -71,17 +71,19 @@ export async function POST(request: NextRequest) {
 
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
-  const { year, month, tier } = parsed.body
+  const { year, month, unit_vnd: unitVnd } = parsed.body
 
   let cleanYear: number
   let cleanMonth: number
   try {
     cleanYear = validateInteger(year, 'year', { min: 2000, max: 2200 })
     cleanMonth = validateInteger(month, 'month', { min: 1, max: 12 })
-    // The tier is the product decision, not a number in a range — naming the
-    // three is what keeps a "4" from reaching the database's own CHECK and
-    // coming back as a 500.
-    if (!isChallengeTier(tier)) throw new ValidationError('tier must be 1, 2 or 3')
+    // The ten steps, checked here so an off-grid amount comes back as a 400
+    // naming the rule rather than as the database's own CHECK surfacing as a
+    // 500.
+    if (!isChallengeUnitVnd(unitVnd)) {
+      throw new ValidationError('unit_vnd must be a multiple of 1,000 between 1,000 and 10,000')
+    }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -91,7 +93,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from('savings_challenges')
-    .insert({ user_id: user.id, year: cleanYear, month: cleanMonth, tier })
+    .insert({ user_id: user.id, year: cleanYear, month: cleanMonth, unit_vnd: unitVnd })
     .select(CHALLENGE_COLUMNS)
     .single()
 

@@ -6,11 +6,13 @@ import { useSavingsChallenge } from '../useSavingsChallenge'
 // would reach:
 //
 //   1. A failed read is not an empty month. `challenge: null` is what makes the
-//      card offer the tier picker, so degrading into it would invite the user to
+//      card offer the step picker, so degrading into it would invite the user to
 //      start a month that may already be running.
 //   2. A tick is optimistic, and a refusal puts back exactly the list that was
 //      there — not a re-derived one, which would lose a second tick that landed
-//      while the first was in flight.
+//      while the first was in flight. Picking the month's step is optimistic for
+//      the same reason: a control that waits for a round trip before it changes
+//      reads as broken.
 //   3. A month's answer may not land on a different month. Stepping through
 //      months faster than the network replies would otherwise paint August's
 //      days onto September.
@@ -34,10 +36,10 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const SEPTEMBER = { challenge_id: 'c-1', year: 2026, month: 9, tier: 1 }
+const SEPTEMBER = { challenge_id: 'c-1', year: 2026, month: 9, unit_vnd: 1000 }
 
 describe('reading a month', () => {
-  it('loads the tier and its ticked days', async () => {
+  it('loads the month’s step and its ticked days', async () => {
     fetchMock.mockReturnValue(json({ challenge: SEPTEMBER, days: [1, 2] }))
     const { result } = renderHook(() => useSavingsChallenge(2026, 9))
 
@@ -71,7 +73,7 @@ describe('reading a month', () => {
     fetchMock.mockImplementation((url: string) =>
       url.includes('month=9')
         ? new Promise(resolve => { settleSeptember = resolve })
-        : json({ challenge: { ...SEPTEMBER, month: 10, tier: 3 }, days: [4] }),
+        : json({ challenge: { ...SEPTEMBER, month: 10, unit_vnd: 10000 }, days: [4] }),
     )
 
     const { result, rerender } = renderHook(
@@ -173,10 +175,10 @@ describe('choosing and abandoning', () => {
     const { result } = renderHook(() => useSavingsChallenge(2026, 9))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    fetchMock.mockReturnValue(json({ ...SEPTEMBER, tier: 2 }, 201))
-    await act(async () => { expect(await result.current.start(2)).toBe(true) })
+    fetchMock.mockReturnValue(json({ ...SEPTEMBER, unit_vnd: 5000 }, 201))
+    await act(async () => { expect(await result.current.start(5000)).toBe(true) })
 
-    expect(result.current.challenge?.tier).toBe(2)
+    expect(result.current.challenge?.unit_vnd).toBe(5000)
     expect(result.current.days).toEqual([])
     expect(result.current.view.targetVnd).toBe(2_325_000)
   })
@@ -188,14 +190,14 @@ describe('choosing and abandoning', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     fetchMock.mockReturnValue(json(
-      { error: 'the tier is locked once a day has been set aside', code: 'challenge_locked' },
+      { error: 'the amount is locked once a day has been set aside', code: 'challenge_locked' },
       409,
     ))
-    await act(async () => { expect(await result.current.retier(3)).toBe(false) })
+    await act(async () => { expect(await result.current.restep(10000)).toBe(false) })
 
-    expect(onError).toHaveBeenCalledWith('the tier is locked once a day has been set aside')
-    // The tier on screen is still the real one.
-    expect(result.current.challenge?.tier).toBe(1)
+    expect(onError).toHaveBeenCalledWith('the amount is locked once a day has been set aside')
+    // The step on screen is still the real one.
+    expect(result.current.challenge?.unit_vnd).toBe(1000)
   })
 
   it('empties the month when it is abandoned', async () => {
@@ -208,5 +210,92 @@ describe('choosing and abandoning', () => {
 
     expect(result.current.challenge).toBeNull()
     expect(result.current.view.targetVnd).toBe(0)
+  })
+})
+
+describe('picking a step is optimistic', () => {
+  // A deferred response, so the state can be read while the request is still in
+  // flight — which is the only moment any of this is about.
+  const deferred = () => {
+    let settle: (r: Response) => void = () => {}
+    const promise = new Promise<Response>(resolve => { settle = resolve })
+    return { promise, ok: (body: unknown, status = 200) => settle({ ok: status < 400, status, json: async () => body } as Response) }
+  }
+
+  it('shows the month at the chosen step before the server answers', async () => {
+    fetchMock.mockReturnValue(json({ challenge: null, days: [] }))
+    const { result } = renderHook(() => useSavingsChallenge(2026, 9))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const d = deferred()
+    fetchMock.mockReturnValue(d.promise)
+    let started: Promise<boolean> = Promise.resolve(false)
+    act(() => { started = result.current.start(5000) })
+
+    // The whole point: the schedule is on screen now, not after the round trip.
+    expect(result.current.unitVnd).toBe(5000)
+    expect(result.current.view.targetVnd).toBe(2_325_000)
+    expect(result.current.view.schedule).toHaveLength(30)
+    // ...but the row has no id yet, so nothing may be ticked against it.
+    expect(result.current.challenge).toBeNull()
+
+    await act(async () => { d.ok({ ...SEPTEMBER, unit_vnd: 5000 }, 201); await started })
+    expect(result.current.challenge?.unit_vnd).toBe(5000)
+    expect(result.current.unitVnd).toBe(5000)
+  })
+
+  it('takes the month back off screen when the start is refused', async () => {
+    const onError = vi.fn()
+    fetchMock.mockReturnValue(json({ challenge: null, days: [] }))
+    const { result } = renderHook(() => useSavingsChallenge(2026, 9, onError))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    fetchMock.mockReturnValue(json({ error: 'This month already has a savings challenge.' }, 409))
+    await act(async () => { expect(await result.current.start(5000)).toBe(false) })
+
+    expect(result.current.unitVnd).toBeNull()
+    expect(result.current.view.schedule).toEqual([])
+    expect(onError).toHaveBeenCalledWith('This month already has a savings challenge.')
+  })
+
+  it('re-prices the month on the press, and puts it back on a refusal', async () => {
+    const onError = vi.fn()
+    fetchMock.mockReturnValue(json({ challenge: SEPTEMBER, days: [] }))
+    const { result } = renderHook(() => useSavingsChallenge(2026, 9, onError))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const d = deferred()
+    fetchMock.mockReturnValue(d.promise)
+    let stepped: Promise<boolean> = Promise.resolve(false)
+    act(() => { stepped = result.current.restep(7000) })
+    expect(result.current.unitVnd).toBe(7000)
+
+    await act(async () => { d.ok({ error: 'nope' }, 409); await stepped })
+    expect(result.current.unitVnd).toBe(1000)
+  })
+
+  it('does not let an overtaken re-price undo the newer one', async () => {
+    // The same trap the day list has: rolling back to what was on screen when
+    // THIS request was sent would wipe a later press that already landed.
+    fetchMock.mockReturnValue(json({ challenge: SEPTEMBER, days: [] }))
+    const { result } = renderHook(() => useSavingsChallenge(2026, 9, vi.fn()))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const first = deferred()
+    const second = deferred()
+    fetchMock.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+
+    let a: Promise<boolean> = Promise.resolve(false)
+    let b: Promise<boolean> = Promise.resolve(false)
+    act(() => { a = result.current.restep(3000) })
+    act(() => { b = result.current.restep(8000) })
+    expect(result.current.unitVnd).toBe(8000)
+
+    await act(async () => { second.ok({ ...SEPTEMBER, unit_vnd: 8000 }); await b })
+    await act(async () => { first.ok({ error: 'nope' }, 409); await a })
+
+    // The stale refusal is reported, but 8,000 is what the user chose last and
+    // what the server confirmed.
+    expect(result.current.unitVnd).toBe(8000)
   })
 })

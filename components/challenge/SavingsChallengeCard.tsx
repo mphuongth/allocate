@@ -1,7 +1,15 @@
 'use client'
 
-// The month's savings challenge, in full — the tier picker before one is
+// The month's savings challenge, in full — the step picker before one is
 // chosen, and the day grid afterwards.
+//
+// Which of the two is showing follows `state.unitVnd`, NOT `state.challenge`.
+// The step is known the instant it is pressed and the schedule is a pure
+// function of it and the calendar, so the month is drawn before the POST
+// answers. Keying off the server row instead is what made pressing a step feel
+// like a dead button. The row still gates everything that needs its id: until it
+// arrives, no day is tickable and neither the re-price nor the cancel is
+// offered.
 //
 // The grid is the feature: thirty-odd cells, heaviest first, each one a button
 // that says what that day asks for and whether it has been set aside. Showing
@@ -18,9 +26,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Check, Lock } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
-import {
-  CHALLENGE_TIERS, challengeTotalVnd, type ChallengeTier,
-} from '@/lib/savingsChallenge'
+import { CHALLENGE_UNITS_VND, challengeTotalVnd } from '@/lib/savingsChallenge'
 import type { SavingsChallengeState } from '@/features/challenge/useSavingsChallenge'
 
 const cardStyle: React.CSSProperties = {
@@ -38,7 +44,7 @@ export default function SavingsChallengeCard({
   state: SavingsChallengeState
 }) {
   const t = useTranslations('challenge')
-  const { challenge, view, loading, error, busy } = state
+  const { challenge, unitVnd, view, loading, error, busy } = state
   const [picking, setPicking] = useState(false)
   const [confirmingCancel, setConfirmingCancel] = useState(false)
 
@@ -69,37 +75,43 @@ export default function SavingsChallengeCard({
   // A month that has already ended never gets the picker: starting a challenge
   // for a month you cannot tick a single day of would only create history that
   // did not happen.
-  if (!challenge) {
+  if (unitVnd === null) {
     return (
       <section style={cardStyle}>
         <Header title={t('title')} subtitle={view.isCurrentMonth ? t('pickPrompt') : t('monthClosedEmpty')} />
         {view.isCurrentMonth && (
-          <TierChoices busy={busy} onPick={tier => state.start(tier)} year={year} month={month} t={t} />
+          <StepChoices busy={busy} onPick={next => state.start(next)} year={year} month={month} t={t} />
         )}
       </section>
     )
   }
 
-  const tier = challenge.tier
-  const canEditTier = view.isCurrentMonth && !view.locked
+  // Everything that needs the row's id waits for the row. The gap is one round
+  // trip on a month with nothing ticked in it yet, so the only controls it
+  // withholds are ones that would have nothing to act on.
+  const confirmed = challenge !== null
+  const canEditStep = confirmed && view.isCurrentMonth && !view.locked
 
   return (
     <section style={cardStyle}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <Header
           title={t('title')}
-          subtitle={t('tierOf', { tier, total: fmt(challengeTotalVnd(year, month, tier)) })}
+          subtitle={t('stepOf', {
+            step: fmt(unitVnd),
+            total: fmt(challengeTotalVnd(year, month, unitVnd)),
+          })}
         />
-        {canEditTier ? (
+        {canEditStep ? (
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button onClick={() => setPicking(p => !p)} disabled={busy} style={ghost}>
-              {t('changeTier')}
+              {t('changeStep')}
             </button>
             <button onClick={() => setConfirmingCancel(true)} disabled={busy} style={ghost}>
               {t('cancelChallenge')}
             </button>
           </div>
-        ) : view.isCurrentMonth ? (
+        ) : confirmed && view.isCurrentMonth ? (
           // The lock is the feature, so it is stated rather than implied by two
           // missing buttons.
           <span
@@ -116,18 +128,21 @@ export default function SavingsChallengeCard({
         ) : null}
       </div>
 
-      {picking && canEditTier && (
-        <TierChoices
+      {picking && canEditStep && (
+        <StepChoices
           busy={busy}
-          current={tier}
+          current={unitVnd}
           year={year}
           month={month}
           t={t}
-          onPick={async next => { if (await state.retier(next)) setPicking(false) }}
+          // Closed on the press, not on the answer: the new step is already on
+          // screen by then, and holding the picker open over a round trip is
+          // the same stall the start path had.
+          onPick={next => { setPicking(false); void state.restep(next) }}
         />
       )}
 
-      {confirmingCancel && canEditTier && (
+      {confirmingCancel && canEditStep && (
         <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: 'var(--c-card-2)' }}>
           <p style={{ margin: '0 0 10px', fontSize: 13 }}>{t('confirmCancel')}</p>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -161,7 +176,7 @@ export default function SavingsChallengeCard({
           const ticked = state.days.includes(day)
           // A ticked day stays pressable all month so a mistake can be undone;
           // an unticked one waits for its turn.
-          const enabled = view.isCurrentMonth && (ticked || view.canTick(day))
+          const enabled = confirmed && view.isCurrentMonth && (ticked || view.canTick(day))
           return (
             <button
               key={day}
@@ -248,43 +263,60 @@ function Progress({
   )
 }
 
-function TierChoices({
+function StepChoices({
   busy, current, year, month, t, onPick,
 }: {
   busy: boolean
-  current?: ChallengeTier
+  current?: number
   year: number
   month: number
   t: ReturnType<typeof useTranslations<'challenge'>>
-  onPick: (tier: ChallengeTier) => void
+  onPick: (unitVnd: number) => void
 }) {
   return (
-    <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-      {CHALLENGE_TIERS.map(tier => (
-        <button
-          key={tier}
-          type="button"
-          disabled={busy || tier === current}
-          aria-current={tier === current}
-          onClick={() => onPick(tier)}
-          style={{
-            padding: '11px 6px', borderRadius: 12, cursor: busy ? 'default' : 'pointer',
-            border: `1px solid ${tier === current ? 'var(--c-accent, #10B981)' : 'var(--c-line)'}`,
-            background: tier === current ? 'var(--c-accent-soft, rgba(16,185,129,0.12))' : 'var(--c-card-2)',
-            color: 'var(--c-ink)', fontFamily: 'inherit',
-          }}
-        >
-          <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>{t('tier', { tier })}</span>
-          {/* The month's real total, not a generic one: it is what actually
-              differs between a 28-day February and a 31-day October. Labelled
-              per-month because the bare figure reads just as easily as a daily
-              step or a year's worth, and those differ by two orders of
-              magnitude — which is the one thing a tier choice turns on. */}
-          <span style={{ display: 'block', marginTop: 3, fontSize: 11.5, color: 'var(--c-muted)' }}>
-            {t('tierTotal', { total: fmt(challengeTotalVnd(year, month, tier)) })}
-          </span>
-        </button>
-      ))}
+    <div
+      role="group"
+      aria-label={t('pickPrompt')}
+      style={{
+        marginTop: 12,
+        display: 'grid',
+        // Ten options rather than three, so they size themselves the way the day
+        // grid does — four or five to a row on a phone, all ten across on a
+        // desktop panel — instead of a fixed column count that would squeeze the
+        // month total out of the narrow case.
+        gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))',
+        gap: 8,
+      }}
+    >
+      {CHALLENGE_UNITS_VND.map(unitVnd => {
+        // The month's real total, not a generic one: it is what actually differs
+        // between a 28-day February and a 31-day October, and it is the figure
+        // the choice really turns on — 1,000 a step and 10,000 a step are two
+        // orders of magnitude apart by the end of the month.
+        const total = challengeTotalVnd(year, month, unitVnd)
+        const chosen = unitVnd === current
+        return (
+          <button
+            key={unitVnd}
+            type="button"
+            disabled={busy || chosen}
+            aria-current={chosen}
+            aria-label={t('stepLabel', { step: fmt(unitVnd), total: fmt(total) })}
+            onClick={() => onPick(unitVnd)}
+            style={{
+              padding: '10px 6px', borderRadius: 12, cursor: busy ? 'default' : 'pointer',
+              border: `1px solid ${chosen ? 'var(--c-accent, #10B981)' : 'var(--c-line)'}`,
+              background: chosen ? 'var(--c-accent-soft, rgba(16,185,129,0.12))' : 'var(--c-card-2)',
+              color: 'var(--c-ink)', fontFamily: 'inherit',
+            }}
+          >
+            <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700 }}>{fmt(unitVnd)}</span>
+            <span style={{ display: 'block', marginTop: 3, fontSize: 11, color: 'var(--c-muted)' }}>
+              {t('stepTotal', { total: fmtCompact(total) })}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }

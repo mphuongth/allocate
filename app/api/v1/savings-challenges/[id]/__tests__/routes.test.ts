@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { NextRequest } from 'next/server'
 
-// Re-tiering a month, abandoning it, and ticking a day off.
+// Re-pricing a month, abandoning it, and ticking a day off.
 //
-// The database is what actually holds the line — the tier freezes at the first
+// The database is what actually holds the line — the step freezes at the first
 // tick, and a day's amount is recomputed and refused if it disagrees. What these
 // routes owe the caller is that its refusals arrive as answers rather than as a
 // 500 with a generic message, and that the one rule the database deliberately
@@ -60,7 +60,7 @@ const { DELETE: UNTICK } = await import('../days/[day]/route')
 // 07:30 on 16 September 2026 in Vietnam — a 30-day month, sixteen days in.
 const NOW = new Date('2026-09-16T00:30:00Z')
 const ID = '11111111-1111-4111-8111-111111111111'
-const SEPTEMBER = { challenge_id: ID, year: 2026, month: 9, tier: 1 }
+const SEPTEMBER = { challenge_id: ID, year: 2026, month: 9, unit_vnd: 1000 }
 
 const params = () => ({ params: Promise.resolve({ id: ID }) })
 const dayParams = (day: string) => ({ params: Promise.resolve({ id: ID, day }) })
@@ -74,7 +74,7 @@ const body = (payload: unknown, method = 'POST') =>
 const bare = (method = 'DELETE') =>
   new Request(`https://app.test/api/v1/savings-challenges/${ID}`, { method }) as unknown as NextRequest
 
-const locked = { message: 'savings challenge: the tier is locked once a day has been set aside' }
+const locked = { message: 'savings challenge: the amount is locked once a day has been set aside' }
 
 beforeEach(() => {
   h.user = { id: 'user-1' }
@@ -95,53 +95,53 @@ afterEach(() => {
 describe('PATCH /api/v1/savings-challenges/[id]', () => {
   it('refuses an unauthenticated write', async () => {
     h.user = null
-    expect((await PATCH(body({ tier: 2 }, 'PATCH'), params())).status).toBe(401)
+    expect((await PATCH(body({ unit_vnd: 5000 }, 'PATCH'), params())).status).toBe(401)
   })
 
   it('rejects an id that is not a uuid', async () => {
-    const res = await PATCH(body({ tier: 2 }, 'PATCH'), { params: Promise.resolve({ id: 'not-a-uuid' }) })
+    const res = await PATCH(body({ unit_vnd: 5000 }, 'PATCH'), { params: Promise.resolve({ id: 'not-a-uuid' }) })
     expect(res.status).toBe(400)
   })
 
-  it('takes one of the three tiers and nothing else', async () => {
-    for (const tier of [0, 4, '2', null]) {
-      expect((await PATCH(body({ tier }, 'PATCH'), params())).status).toBe(400)
+  it('takes a step on the thousand grid and nothing else', async () => {
+    for (const unit_vnd of [0, 500, 2500, 11000, '2000', null]) {
+      expect((await PATCH(body({ unit_vnd }, 'PATCH'), params())).status).toBe(400)
     }
     expect(h.ops.filter(o => o.op === 'update')).toEqual([])
   })
 
   it("does not find someone else's challenge", async () => {
     h.challenge = null
-    expect((await PATCH(body({ tier: 2 }, 'PATCH'), params())).status).toBe(404)
+    expect((await PATCH(body({ unit_vnd: 5000 }, 'PATCH'), params())).status).toBe(404)
   })
 
   it('does not mistake a failed lookup for a missing challenge', async () => {
     h.challenge = null
     h.challengeError = { message: 'boom' }
-    expect((await PATCH(body({ tier: 2 }, 'PATCH'), params())).status).toBe(500)
+    expect((await PATCH(body({ unit_vnd: 5000 }, 'PATCH'), params())).status).toBe(500)
   })
 
-  it('changes the tier while the month is still open', async () => {
-    h.writeResult = { data: { ...SEPTEMBER, tier: 3 }, error: null }
-    const res = await PATCH(body({ tier: 3 }, 'PATCH'), params())
+  it('changes the amount while the month is still open', async () => {
+    h.writeResult = { data: { ...SEPTEMBER, unit_vnd: 7000 }, error: null }
+    const res = await PATCH(body({ unit_vnd: 7000 }, 'PATCH'), params())
     expect(res.status).toBe(200)
     expect(h.ops).toContainEqual({
-      table: 'savings_challenges', op: 'update', payload: { tier: 3, updated_at: expect.any(String) },
+      table: 'savings_challenges', op: 'update', payload: { unit_vnd: 7000, updated_at: expect.any(String) },
     })
   })
 
   it("passes the database's lock refusal through as a conflict, in its own words", async () => {
     h.writeResult = { data: null, error: locked }
-    const res = await PATCH(body({ tier: 3 }, 'PATCH'), params())
+    const res = await PATCH(body({ unit_vnd: 7000 }, 'PATCH'), params())
     expect(res.status).toBe(409)
     const json = await res.json()
     expect(json.code).toBe('challenge_locked')
-    expect(json.error).toBe('the tier is locked once a day has been set aside')
+    expect(json.error).toBe('the amount is locked once a day has been set aside')
   })
 
-  it('will not re-tier a month that has ended', async () => {
+  it('will not re-price a month that has ended', async () => {
     h.challenge = { ...SEPTEMBER, month: 8 }
-    const res = await PATCH(body({ tier: 3 }, 'PATCH'), params())
+    const res = await PATCH(body({ unit_vnd: 7000 }, 'PATCH'), params())
     expect(res.status).toBe(409)
     expect((await res.json()).code).toBe('challenge_month_closed')
     expect(h.ops.filter(o => o.op === 'update')).toEqual([])
@@ -172,7 +172,7 @@ describe('DELETE /api/v1/savings-challenges/[id]', () => {
 
 describe('POST /api/v1/savings-challenges/[id]/days', () => {
   it('derives the amount itself rather than believing the client', async () => {
-    // Day 16 of a 30-day tier-1 month is (30 + 1 - 16) x 1,000.
+    // Day 16 of a 30-day month at a 1,000 step is (30 + 1 - 16) x 1,000.
     const res = await TICK(body({ day: 16, amount_vnd: 999_999 }), params())
     expect(res.status).toBe(201)
     expect(h.ops).toContainEqual({
@@ -230,7 +230,7 @@ describe('DELETE /api/v1/savings-challenges/[id]/days/[day]', () => {
 
   it('un-ticks a day that is no longer tickable but is still in the month', async () => {
     // Nothing about undoing a mistake requires the day to be re-doable, and the
-    // whole month stays undoable until it ends — which is what keeps the tier
+    // whole month stays undoable until it ends — which is what keeps the step
     // lock symmetrical with the tick that set it.
     h.writeResult = { data: null, error: null }
     expect((await UNTICK(bare(), dayParams('1'))).status).toBe(204)

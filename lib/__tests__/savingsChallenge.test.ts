@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  CHALLENGE_TIERS,
-  TIER_UNIT_VND,
-  isChallengeTier,
+  CHALLENGE_UNITS_VND,
+  isChallengeUnitVnd,
   daysInBusinessMonth,
   challengeDayAmount,
   challengeSchedule,
@@ -17,21 +16,26 @@ import {
 // come out one day short.
 const NOW = new Date('2026-09-16T00:30:00Z')
 
-describe('the tiers', () => {
-  it('are three, and are worth 1,000 / 5,000 / 10,000 a step', () => {
-    expect(CHALLENGE_TIERS).toEqual([1, 2, 3])
-    expect(TIER_UNIT_VND).toEqual({ 1: 1000, 2: 5000, 3: 10000 })
+describe('the steps a month can be run at', () => {
+  it('are 1,000 through 10,000, in thousands', () => {
+    expect(CHALLENGE_UNITS_VND).toEqual([
+      1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000,
+    ])
   })
 
   it('recognise their own, and nothing else', () => {
-    expect(isChallengeTier(1)).toBe(true)
-    expect(isChallengeTier(3)).toBe(true)
-    expect(isChallengeTier(0)).toBe(false)
-    expect(isChallengeTier(4)).toBe(false)
-    expect(isChallengeTier(2.5)).toBe(false)
-    expect(isChallengeTier('2')).toBe(false)
-    expect(isChallengeTier(null)).toBe(false)
-    expect(isChallengeTier(undefined)).toBe(false)
+    expect(isChallengeUnitVnd(1000)).toBe(true)
+    expect(isChallengeUnitVnd(10000)).toBe(true)
+    // Off the grid, off the ends, and not a number at all — each one is a value
+    // the database's own CHECK would refuse, caught here so it comes back as a
+    // 400 rather than a 500.
+    expect(isChallengeUnitVnd(2500)).toBe(false)
+    expect(isChallengeUnitVnd(0)).toBe(false)
+    expect(isChallengeUnitVnd(11000)).toBe(false)
+    expect(isChallengeUnitVnd(-1000)).toBe(false)
+    expect(isChallengeUnitVnd('2000')).toBe(false)
+    expect(isChallengeUnitVnd(null)).toBe(false)
+    expect(isChallengeUnitVnd(undefined)).toBe(false)
   })
 })
 
@@ -50,68 +54,73 @@ describe('the length of a month', () => {
 
 describe('the schedule, run backwards', () => {
   it('asks the most on the 1st and the least on the last day', () => {
-    // The picture the feature came from: tier 1, a 30-day month.
-    expect(challengeDayAmount(2026, 9, 1, 1)).toBe(30_000)
-    expect(challengeDayAmount(2026, 9, 1, 2)).toBe(29_000)
-    expect(challengeDayAmount(2026, 9, 1, 29)).toBe(2_000)
-    expect(challengeDayAmount(2026, 9, 1, 30)).toBe(1_000)
+    // The smallest step, a 30-day month.
+    expect(challengeDayAmount(2026, 9, 1000, 1)).toBe(30_000)
+    expect(challengeDayAmount(2026, 9, 1000, 2)).toBe(29_000)
+    expect(challengeDayAmount(2026, 9, 1000, 29)).toBe(2_000)
+    expect(challengeDayAmount(2026, 9, 1000, 30)).toBe(1_000)
   })
 
-  it('scales by the tier', () => {
-    expect(challengeDayAmount(2026, 9, 2, 1)).toBe(150_000)
-    expect(challengeDayAmount(2026, 9, 3, 1)).toBe(300_000)
-    expect(challengeDayAmount(2026, 9, 3, 30)).toBe(10_000)
+  it('scales by the chosen step, including the ones the tiers skipped', () => {
+    expect(challengeDayAmount(2026, 9, 5000, 1)).toBe(150_000)
+    expect(challengeDayAmount(2026, 9, 10000, 1)).toBe(300_000)
+    expect(challengeDayAmount(2026, 9, 10000, 30)).toBe(10_000)
+    // 3,000 and 7,000 had no tier to stand on before — the whole point of the
+    // change is that the middle of the range is now reachable.
+    expect(challengeDayAmount(2026, 9, 3000, 1)).toBe(90_000)
+    expect(challengeDayAmount(2026, 9, 3000, 30)).toBe(3_000)
+    expect(challengeDayAmount(2026, 9, 7000, 15)).toBe(112_000)
   })
 
   it('opens higher in a long month and lower in a short one', () => {
     // A fixed 30-row table would cap October a day short and invent a 29th and
     // 30th of February.
-    expect(challengeDayAmount(2026, 10, 1, 1)).toBe(31_000)
-    expect(challengeDayAmount(2026, 10, 1, 31)).toBe(1_000)
-    expect(challengeDayAmount(2027, 2, 1, 1)).toBe(28_000)
-    expect(challengeDayAmount(2027, 2, 1, 28)).toBe(1_000)
+    expect(challengeDayAmount(2026, 10, 1000, 1)).toBe(31_000)
+    expect(challengeDayAmount(2026, 10, 1000, 31)).toBe(1_000)
+    expect(challengeDayAmount(2027, 2, 1000, 1)).toBe(28_000)
+    expect(challengeDayAmount(2027, 2, 1000, 28)).toBe(1_000)
   })
 
   it('has nothing to say about a day the month does not have', () => {
-    expect(challengeDayAmount(2026, 9, 1, 31)).toBe(0)
-    expect(challengeDayAmount(2027, 2, 1, 29)).toBe(0)
-    expect(challengeDayAmount(2026, 9, 1, 0)).toBe(0)
-    expect(challengeDayAmount(2026, 9, 1, -3)).toBe(0)
-    expect(challengeDayAmount(2026, 9, 1, 1.5)).toBe(0)
+    expect(challengeDayAmount(2026, 9, 1000, 31)).toBe(0)
+    expect(challengeDayAmount(2027, 2, 1000, 29)).toBe(0)
+    expect(challengeDayAmount(2026, 9, 1000, 0)).toBe(0)
+    expect(challengeDayAmount(2026, 9, 1000, -3)).toBe(0)
+    expect(challengeDayAmount(2026, 9, 1000, 1.5)).toBe(0)
   })
 
   it('lays the month out one row per real day', () => {
-    const sep = challengeSchedule(2026, 9, 1)
+    const sep = challengeSchedule(2026, 9, 1000)
     expect(sep).toHaveLength(30)
     expect(sep[0]).toEqual({ day: 1, amountVnd: 30_000 })
     expect(sep[29]).toEqual({ day: 30, amountVnd: 1_000 })
 
-    expect(challengeSchedule(2026, 10, 1)).toHaveLength(31)
-    expect(challengeSchedule(2027, 2, 1)).toHaveLength(28)
+    expect(challengeSchedule(2026, 10, 1000)).toHaveLength(31)
+    expect(challengeSchedule(2027, 2, 1000)).toHaveLength(28)
   })
 
   it('totals the same either way round', () => {
     // 1 + 2 + ... + 30 = 465 steps. Reversing the order cannot change the sum —
     // that is exactly why front-loading it costs the user nothing.
-    expect(challengeTotalVnd(2026, 9, 1)).toBe(465_000)
-    expect(challengeTotalVnd(2026, 9, 2)).toBe(2_325_000)
-    expect(challengeTotalVnd(2026, 9, 3)).toBe(4_650_000)
+    expect(challengeTotalVnd(2026, 9, 1000)).toBe(465_000)
+    expect(challengeTotalVnd(2026, 9, 5000)).toBe(2_325_000)
+    expect(challengeTotalVnd(2026, 9, 10000)).toBe(4_650_000)
 
     // ...and a longer month really does ask for more.
-    expect(challengeTotalVnd(2026, 10, 1)).toBe(496_000)
-    expect(challengeTotalVnd(2027, 2, 1)).toBe(406_000)
+    expect(challengeTotalVnd(2026, 10, 1000)).toBe(496_000)
+    expect(challengeTotalVnd(2027, 2, 1000)).toBe(406_000)
 
-    for (const tier of CHALLENGE_TIERS) {
-      const schedule = challengeSchedule(2026, 10, tier)
+    for (const unitVnd of CHALLENGE_UNITS_VND) {
+      const schedule = challengeSchedule(2026, 10, unitVnd)
       const summed = schedule.reduce((acc, row) => acc + row.amountVnd, 0)
-      expect(challengeTotalVnd(2026, 10, tier)).toBe(summed)
+      expect(challengeTotalVnd(2026, 10, unitVnd)).toBe(summed)
     }
   })
 })
 
 describe('where a month stands', () => {
   const state = (over: Partial<Parameters<typeof challengeMonthState>[0]> = {}) =>
-    challengeMonthState({ year: 2026, month: 9, tier: 1, checkedDays: [], now: NOW, ...over })
+    challengeMonthState({ year: 2026, month: 9, unitVnd: 1000, checkedDays: [], now: NOW, ...over })
 
   it('counts what has been set aside against the whole month', () => {
     const s = state({ checkedDays: [1, 2, 30] })
@@ -124,7 +133,7 @@ describe('where a month stands', () => {
   it('reports progress as a bounded percentage', () => {
     expect(state().pct).toBe(0)
     expect(state({ checkedDays: [1] }).pct).toBeCloseTo(6.45, 2)
-    expect(state({ checkedDays: challengeSchedule(2026, 9, 1).map(r => r.day) }).pct).toBe(100)
+    expect(state({ checkedDays: challengeSchedule(2026, 9, 1000).map(r => r.day) }).pct).toBe(100)
   })
 
   it('ignores a day that is not in the month, and counts a repeat once', () => {
@@ -173,7 +182,7 @@ describe('where a month stands', () => {
     expect(past.canTick(1)).toBe(false)
     expect(past.canTick(31)).toBe(false)
     // Its whole month is what was due, so the shortfall is the honest total.
-    expect(past.dueVnd).toBe(challengeTotalVnd(2026, 8, 1))
+    expect(past.dueVnd).toBe(challengeTotalVnd(2026, 8, 1000))
 
     const lastYear = state({ year: 2025, month: 9 })
     expect(lastYear.isCurrentMonth).toBe(false)
@@ -199,7 +208,7 @@ describe('where a month stands', () => {
   })
 
   it('answers for a month with no challenge at all', () => {
-    const none = challengeMonthState({ year: 2026, month: 9, tier: null, checkedDays: [], now: NOW })
+    const none = challengeMonthState({ year: 2026, month: 9, unitVnd: null, checkedDays: [], now: NOW })
     expect(none.targetVnd).toBe(0)
     expect(none.savedVnd).toBe(0)
     expect(none.dueVnd).toBe(0)
@@ -215,12 +224,14 @@ describe('where a month stands', () => {
 })
 
 describe('the lock', () => {
-  it('holds a tier as soon as one day is ticked, and lets go when none is', () => {
+  it('holds a step as soon as one day is ticked, and lets go when none is', () => {
     // The mirror of the database trigger, so the UI can grey the control out
     // instead of letting the user press it and read a refusal.
-    expect(challengeMonthState({ year: 2026, month: 9, tier: 1, checkedDays: [], now: NOW }).locked).toBe(false)
-    expect(challengeMonthState({ year: 2026, month: 9, tier: 1, checkedDays: [4], now: NOW }).locked).toBe(true)
+    const at = (checkedDays: number[]) =>
+      challengeMonthState({ year: 2026, month: 9, unitVnd: 1000, checkedDays, now: NOW }).locked
+    expect(at([])).toBe(false)
+    expect(at([4])).toBe(true)
     // A day the month does not have is not a tick, here as everywhere else.
-    expect(challengeMonthState({ year: 2026, month: 9, tier: 1, checkedDays: [31], now: NOW }).locked).toBe(false)
+    expect(at([31])).toBe(false)
   })
 })
