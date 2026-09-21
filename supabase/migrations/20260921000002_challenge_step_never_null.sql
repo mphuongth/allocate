@@ -20,7 +20,74 @@
 -- and it is what lets the app keep `tier` out of its code entirely, rather than
 -- carrying a mapping for a column it is trying to retire.
 
--- ── any row already stuck in that window ─────────────────────────────────────
+-- ── first: the lock has to tell a repair from a re-price ─────────────────────
+--
+-- The worst case of the stuck row is a tier-only challenge with a day ALREADY
+-- ticked, and that is precisely the row the sweep below has to write to. Since
+-- 20260921000001 the lock watches unit_vnd, so it reads that write as a
+-- repricing and raises — one such row in production would abort this migration
+-- before its trigger was installed and take `db push` down mid-deploy.
+--
+-- It is not a repricing. Those days were priced from the tier all along, through
+-- the coalesce in the day trigger, so writing the tier's OWN unit into unit_vnd
+-- leaves every amount in the month byte-identical. That, and only that, is what
+-- the lock now admits: a NULL step filled with the number the month was already
+-- priced at. Pinning it to the derived value rather than to "any non-null" is
+-- what keeps this from becoming a hole — otherwise a client could reach a ticked
+-- month's price once, through the one column that happened to be empty.
+--
+-- This runs before the sweep, in the same migration, because the sweep is its
+-- first caller.
+
+create or replace function public.assert_challenge_unlocked()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- An UPDATE that leaves the month's step alone is always fine — that is what
+  -- lets updated_at be touched, and what keeps a future column from inheriting a
+  -- lock that was only ever about what a day costs.
+  if tg_op = 'UPDATE'
+     and new.tier is not distinct from old.tier
+     and new.unit_vnd is not distinct from old.unit_vnd then
+    return new;
+  end if;
+
+  -- Filling a missing step in with the one its tier already meant. Every day of
+  -- the month keeps the amount it was ticked at, so nothing the lock protects
+  -- has moved (#734).
+  if tg_op = 'UPDATE'
+     and old.unit_vnd is null
+     and new.tier is not distinct from old.tier
+     and new.unit_vnd is not distinct from
+         (case old.tier when 1 then 1000 when 2 then 5000 when 3 then 10000 end) then
+    return new;
+  end if;
+
+  -- The account is being deleted and this row is coming with it (the cascade
+  -- from auth.users). The guard exists to protect the user from re-picking a
+  -- month mid-flight, not to make their account undeletable — and by the time
+  -- the cascade reaches here the parent is already gone, which is exactly the
+  -- signal. Reachable only as the owner (20260916000002).
+  if tg_op = 'DELETE' and not exists (select 1 from auth.users where id = old.user_id) then
+    return old;
+  end if;
+
+  -- Locking on what is ticked NOW: un-ticking the last day hands the choice
+  -- back. A user who does that has surrendered the month's whole progress to get
+  -- there, so there is nothing left for the re-pick to protect.
+  if exists (select 1 from public.savings_challenge_days where challenge_id = old.challenge_id) then
+    raise exception 'savings challenge: the amount is locked once a day has been set aside'
+      using errcode = 'check_violation';
+  end if;
+
+  return case tg_op when 'DELETE' then old else new end;
+end;
+$$;
+
+-- ── then: any row already stuck in that window ───────────────────────────────
 --
 -- Idempotent and cheap: after this migration the trigger below makes it
 -- impossible to create another, so this is a one-time sweep rather than

@@ -567,3 +567,95 @@ begin
 end $$;
 
 rollback;
+
+-- ── Filling a missing step in is a repair, not a re-price ───────────────────
+--
+-- The row this shape exists to fix is the worst case of it: a tier-only
+-- challenge with a day ALREADY ticked. 20260921000002 has to write unit_vnd onto
+-- exactly that row — and the lock, which since 20260921000001 watches unit_vnd,
+-- reads the write as a repricing and raises. One such row in production would
+-- abort the migration before its trigger was installed and take `db push` down
+-- mid-deploy.
+--
+-- It is not a repricing. The day amounts were computed from the tier all along
+-- (the coalesce in the day trigger), so writing the tier's OWN unit into
+-- unit_vnd leaves every amount in the month byte-identical. That, and only that,
+-- is what the lock now lets through: a null step filled with the number the
+-- month was already priced at. Any other value on a ticked month is still the
+-- move the lock exists to refuse.
+--
+-- The step-from-tier trigger is switched off here so the pre-migration row shape
+-- can be built at all — after 20260921000002 there is no other way to reach it,
+-- which is the point of that trigger.
+begin;
+alter table public.savings_challenges disable trigger savings_challenge_step_from_tier;
+
+do $$
+declare
+  v_owner  uuid := gen_random_uuid();
+  v_c      uuid;
+  v_unit   bigint;
+  v_failed boolean;
+begin
+  insert into auth.users (id, email) values (v_owner, 'challenge-repair@test.invalid');
+
+  insert into public.savings_challenges (user_id, year, month, tier)
+  values (v_owner, 2026, 9, 2) returning challenge_id into v_c;
+  insert into public.savings_challenge_days (challenge_id, day, amount_vnd)
+  values (v_c, 1, 150000);  -- September has 30 days, at the tier-2 unit: 30 x 5,000
+
+  -- The migration's own backfill, on a locked row.
+  update public.savings_challenges
+  set unit_vnd = case tier when 1 then 1000 when 2 then 5000 when 3 then 10000 end
+  where challenge_id = v_c;
+
+  select unit_vnd into v_unit from public.savings_challenges where challenge_id = v_c;
+  if v_unit <> 5000 then
+    raise exception 'the backfill must reach a locked tier-only row, got %',
+      coalesce(v_unit::text, 'NULL');
+  end if;
+
+  -- ...and the month is unchanged by it: day 1 is still what it was ticked at.
+  if not exists (
+    select 1 from public.savings_challenge_days
+    where challenge_id = v_c and day = 1 and amount_vnd = 150000
+  ) then
+    raise exception 'the backfill must not move an amount that was already ticked';
+  end if;
+
+  -- ── Any OTHER value is still the repricing the lock refuses ──────────────
+  insert into public.savings_challenges (user_id, year, month, tier)
+  values (v_owner, 2026, 10, 1) returning challenge_id into v_c;
+  insert into public.savings_challenge_days (challenge_id, day, amount_vnd)
+  values (v_c, 1, 31000);  -- October has 31 days, at the tier-1 unit
+
+  v_failed := false;
+  begin
+    -- Not the tier's own unit: this would re-price a month that is already part
+    -- ticked, which is the whole thing the lock is for.
+    update public.savings_challenges set unit_vnd = 10000 where challenge_id = v_c;
+  exception when check_violation then
+    v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'filling a step must not be a way to re-price a ticked month';
+  end if;
+
+  -- And once a step is there, moving it is refused as it always was.
+  update public.savings_challenges set unit_vnd = 1000 where challenge_id = v_c;
+  v_failed := false;
+  begin
+    update public.savings_challenges set unit_vnd = 2000 where challenge_id = v_c;
+  exception when check_violation then
+    v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'a step that is already set must stay locked';
+  end if;
+
+  delete from auth.users where id = v_owner;
+
+  raise notice 'savings challenge repair: pass';
+end $$;
+
+rollback;
