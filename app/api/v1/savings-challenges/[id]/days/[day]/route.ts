@@ -7,8 +7,8 @@ import { challengeRefusal, isBusinessMonth, loadOwnedChallenge, notCurrentMonth 
 //
 // No "has this day arrived" check, unlike the tick: undoing a mistake does not
 // require the day to be re-doable, and the whole month stays undoable until it
-// ends. That symmetry is what keeps the tier lock honest — the last day a user
-// un-ticks hands the tier choice back, which the database allows precisely
+// ends. That symmetry is what keeps the step lock honest — the last day a user
+// un-ticks hands the choice back, which the database allows precisely
 // because getting there costs the month's entire progress.
 
 export async function DELETE(

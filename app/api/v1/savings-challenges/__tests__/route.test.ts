@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server'
 //
 // Two things are worth pinning here rather than trusting to the client. A read
 // that FAILS must not degrade into "no challenge yet" — that is the shape the
-// UI uses to offer the tier picker, so a transient error would invite the user
+// UI uses to offer the step picker, so a transient error would invite the user
 // to start a month they already started, and the 409 they'd get back would be
 // the first they heard of it. And the month a challenge can be started for is
 // the current one: a past month is history, a future one hasn't begun, and
@@ -93,7 +93,7 @@ describe('GET /api/v1/savings-challenges', () => {
 
   it('returns the month with its ticked days as bare numbers', async () => {
     h.results.savings_challenges = {
-      data: { challenge_id: 'c-1', year: 2026, month: 9, tier: 2 },
+      data: { challenge_id: 'c-1', year: 2026, month: 9, unit_vnd: 5000 },
       error: null,
     }
     h.results.savings_challenge_days = { data: [{ day: 3 }, { day: 1 }], error: null }
@@ -101,7 +101,7 @@ describe('GET /api/v1/savings-challenges', () => {
     const res = await GET(get('?year=2026&month=9'))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({
-      challenge: { challenge_id: 'c-1', year: 2026, month: 9, tier: 2 },
+      challenge: { challenge_id: 'c-1', year: 2026, month: 9, unit_vnd: 5000 },
       days: [3, 1],
     })
   })
@@ -112,10 +112,10 @@ describe('GET /api/v1/savings-challenges', () => {
   })
 
   it('reports a failed day read as an error, not as an untouched month', async () => {
-    // The dangerous direction: an empty day list unlocks the tier picker and
+    // The dangerous direction: an empty day list unlocks the step picker and
     // tells the user they have saved nothing this month.
     h.results.savings_challenges = {
-      data: { challenge_id: 'c-1', year: 2026, month: 9, tier: 1 },
+      data: { challenge_id: 'c-1', year: 2026, month: 9, unit_vnd: 1000 },
       error: null,
     }
     h.results.savings_challenge_days = { data: null, error: { message: 'boom' } }
@@ -126,41 +126,45 @@ describe('GET /api/v1/savings-challenges', () => {
 describe('POST /api/v1/savings-challenges', () => {
   it('refuses an unauthenticated write', async () => {
     h.user = null
-    expect((await POST(post({ year: 2026, month: 9, tier: 1 }))).status).toBe(401)
+    expect((await POST(post({ year: 2026, month: 9, unit_vnd: 1000 }))).status).toBe(401)
   })
 
-  it('takes one of the three tiers and nothing else', async () => {
-    for (const tier of [0, 4, 2.5, '2', null, undefined]) {
-      const res = await POST(post({ year: 2026, month: 9, tier }))
+  it('takes a step on the thousand grid and nothing else', async () => {
+    // Off the ends, off the grid, and not a number at all. Each of these would
+    // otherwise reach the table's own CHECK and come back as a 500 naming a
+    // constraint rather than a 400 naming the rule.
+    for (const unit_vnd of [0, 500, 2500, 11000, -1000, '2000', null, undefined]) {
+      const res = await POST(post({ year: 2026, month: 9, unit_vnd }))
       expect(res.status).toBe(400)
     }
+    expect(h.inserted).toEqual([])
   })
 
   it('starts the current month, stamping the row with the caller', async () => {
     h.results.savings_challenges = {
-      data: { challenge_id: 'c-1', year: 2026, month: 9, tier: 3 },
+      data: { challenge_id: 'c-1', year: 2026, month: 9, unit_vnd: 3000 },
       error: null,
     }
-    const res = await POST(post({ year: 2026, month: 9, tier: 3 }))
+    const res = await POST(post({ year: 2026, month: 9, unit_vnd: 3000 }))
     expect(res.status).toBe(201)
-    expect(h.inserted).toEqual([{ user_id: 'user-1', year: 2026, month: 9, tier: 3 }])
+    expect(h.inserted).toEqual([{ user_id: 'user-1', year: 2026, month: 9, unit_vnd: 3000 }])
   })
 
   it('will not start a month that has already been and gone', async () => {
-    const res = await POST(post({ year: 2026, month: 8, tier: 1 }))
+    const res = await POST(post({ year: 2026, month: 8, unit_vnd: 1000 }))
     expect(res.status).toBe(409)
     expect(h.inserted).toEqual([])
   })
 
   it('will not start a month that has not begun', async () => {
-    const res = await POST(post({ year: 2026, month: 10, tier: 1 }))
+    const res = await POST(post({ year: 2026, month: 10, unit_vnd: 1000 }))
     expect(res.status).toBe(409)
     expect(h.inserted).toEqual([])
   })
 
   it('answers a month that is already under way with a conflict', async () => {
     h.results.savings_challenges = { data: null, error: { code: '23505', message: 'duplicate key' } }
-    const res = await POST(post({ year: 2026, month: 9, tier: 1 }))
+    const res = await POST(post({ year: 2026, month: 9, unit_vnd: 1000 }))
     expect(res.status).toBe(409)
   })
 })

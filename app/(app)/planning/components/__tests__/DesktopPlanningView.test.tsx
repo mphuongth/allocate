@@ -45,13 +45,13 @@ const recurringSavings: RecurringSaving[] = [
 const challengeStub = {
   challenge: null,
   days: [] as number[],
-  view: challengeMonthState({ year: 2026, month: 5, tier: null, checkedDays: [] }),
+  view: challengeMonthState({ year: 2026, month: 5, unitVnd: null, checkedDays: [] }),
   loading: false,
   error: false,
   busy: false,
   reload: vi.fn(),
   start: vi.fn(async () => true),
-  retier: vi.fn(async () => true),
+  restep: vi.fn(async () => true),
   abandon: vi.fn(async () => true),
   toggleDay: vi.fn(async () => true),
 }

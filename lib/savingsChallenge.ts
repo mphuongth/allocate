@@ -1,15 +1,21 @@
 // The monthly savings challenge — the schedule, and where a month stands.
 //
-// The familiar 30-day challenge, run backwards: pick a tier for the month and
-// set aside the most on the 1st, the least on the last day. The total is the
-// same in either direction (reversing a sum cannot change it), so front-loading
-// costs the user nothing and puts the hard days where the enthusiasm is.
+// The familiar 30-day challenge, run backwards: pick what a step is worth for
+// the month and set aside the most on the 1st, the least on the last day. The
+// total is the same in either direction (reversing a sum cannot change it), so
+// front-loading costs the user nothing and puts the hard days where the
+// enthusiasm is.
 //
-//   amount(day) = (days in the month + 1 - day) x the tier's unit
+//   amount(day) = (days in the month + 1 - day) x the month's step
 //
-// The month's REAL length feeds that, so a 31-day month opens at 31 units and
-// February at 28. A fixed 30-row schedule would either invent a 31st day nobody
-// can save on or cap a long month a day short.
+// The step is a number the user picks — 1,000 through 10,000, in thousands —
+// rather than one of three named tiers. "mức 2" said nothing about what a day
+// would cost, and three fixed units skipped the whole middle of the range the
+// table this came from actually lays out.
+//
+// The month's REAL length feeds the schedule, so a 31-day month opens at 31
+// steps and February at 28. A fixed 30-row schedule would either invent a 31st
+// day nobody can save on or cap a long month a day short.
 //
 // This mirrors public.savings_challenge_day_amount exactly, on purpose. The
 // database is the authority — it recomputes every amount a client sends and
@@ -23,16 +29,35 @@
 
 import { businessYearMonth, todayIso } from '@/lib/dates'
 
-export const CHALLENGE_TIERS = [1, 2, 3] as const
-export type ChallengeTier = (typeof CHALLENGE_TIERS)[number]
+const CHALLENGE_UNIT_MIN_VND = 1000
+const CHALLENGE_UNIT_MAX_VND = 10000
+const CHALLENGE_UNIT_STEP_VND = 1000
 
-// mức 1 / mức 2 / mức 3 from the picture this came from. Stored as the tier
-// rather than the unit (see the migration), so re-scaling these later leaves
-// past months readable as the choice the user actually made.
-export const TIER_UNIT_VND: Record<ChallengeTier, number> = { 1: 1000, 2: 5000, 3: 10000 }
+// The ten choices, generated rather than listed so the three constants above
+// stay the single statement of the range. This is the same rule the database's
+// CHECK spells as arithmetic (20260921000001) — widening the range is one edit
+// on each side, and the two cannot drift into disagreeing about 11,000.
+export const CHALLENGE_UNITS_VND: number[] = Array.from(
+  { length: (CHALLENGE_UNIT_MAX_VND - CHALLENGE_UNIT_MIN_VND) / CHALLENGE_UNIT_STEP_VND + 1 },
+  (_, i) => CHALLENGE_UNIT_MIN_VND + i * CHALLENGE_UNIT_STEP_VND,
+)
 
-export function isChallengeTier(value: unknown): value is ChallengeTier {
-  return CHALLENGE_TIERS.includes(value as ChallengeTier)
+/**
+ * Is this one of the steps a month can be run at?
+ *
+ * Checked as arithmetic, not as membership of the array: the array is for the
+ * picker to render, and a guard that walked it would quietly start admitting
+ * whatever a future edit put in it. The route calls this so an off-grid value
+ * comes back as a 400 rather than reaching the database's CHECK as a 500.
+ */
+export function isChallengeUnitVnd(value: unknown): value is number {
+  return (
+    typeof value === 'number'
+    && Number.isInteger(value)
+    && value >= CHALLENGE_UNIT_MIN_VND
+    && value <= CHALLENGE_UNIT_MAX_VND
+    && value % CHALLENGE_UNIT_STEP_VND === 0
+  )
 }
 
 // How many days the given business month has.
@@ -52,41 +77,41 @@ export function daysInBusinessMonth(year: number, month: number): number {
 // on the 31st of September" is "nothing", and the DB trigger reads the same 0 as
 // its own out-of-month refusal.
 export function challengeDayAmount(
-  year: number, month: number, tier: ChallengeTier, day: number,
+  year: number, month: number, unitVnd: number, day: number,
 ): number {
   if (!Number.isInteger(day)) return 0
   const days = daysInBusinessMonth(year, month)
   if (day < 1 || day > days) return 0
-  return (days + 1 - day) * TIER_UNIT_VND[tier]
+  return (days + 1 - day) * unitVnd
 }
 
 export type ChallengeDay = { day: number; amountVnd: number }
 
 // The whole month, one row per real day, heaviest first.
 export function challengeSchedule(
-  year: number, month: number, tier: ChallengeTier,
+  year: number, month: number, unitVnd: number,
 ): ChallengeDay[] {
   const days = daysInBusinessMonth(year, month)
   return Array.from({ length: days }, (_, i) => ({
     day: i + 1,
-    amountVnd: (days - i) * TIER_UNIT_VND[tier],
+    amountVnd: (days - i) * unitVnd,
   }))
 }
 
-export function challengeTotalVnd(year: number, month: number, tier: ChallengeTier): number {
+export function challengeTotalVnd(year: number, month: number, unitVnd: number): number {
   const days = daysInBusinessMonth(year, month)
   // 1 + 2 + ... + days, scaled. Summing the schedule would give the same number;
-  // the closed form is here so a card can show the target for a tier the user is
-  // only hovering over, without building 31 rows to do it.
-  return ((days * (days + 1)) / 2) * TIER_UNIT_VND[tier]
+  // the closed form is here so the picker can show the month's target beneath
+  // all ten steps at once, without building ten schedules of 31 rows to do it.
+  return ((days * (days + 1)) / 2) * unitVnd
 }
 
 export type ChallengeMonthState = {
-  /** The schedule for the chosen tier, or empty when no tier has been picked. */
+  /** The schedule for the chosen step, or empty when none has been picked. */
   schedule: ChallengeDay[]
-  /** Days in the month — the denominator, whether or not a tier is chosen. */
+  /** Days in the month — the denominator, whether or not a step is chosen. */
   totalDays: number
-  /** What the whole month asks for. 0 with no tier. */
+  /** What the whole month asks for. 0 with no step. */
   targetVnd: number
   /** What has actually been ticked. */
   savedVnd: number
@@ -103,7 +128,7 @@ export type ChallengeMonthState = {
   today: number | null
   todayAmountVnd: number
   todayChecked: boolean
-  /** Mirrors the DB trigger: the tier freezes at the first tick. */
+  /** Mirrors the DB trigger: the step freezes at the first tick. */
   locked: boolean
   canTick: (day: number) => boolean
 }
@@ -119,12 +144,12 @@ export type ChallengeMonthState = {
  * actually misleads.
  */
 export function challengeMonthState({
-  year, month, tier, checkedDays, now = new Date(),
+  year, month, unitVnd, checkedDays, now = new Date(),
 }: {
   year: number
   month: number
-  /** null when the user hasn't picked a tier for this month. */
-  tier: ChallengeTier | null
+  /** null when the user hasn't picked a step for this month. */
+  unitVnd: number | null
   checkedDays: number[]
   now?: Date
 }): ChallengeMonthState {
@@ -139,11 +164,11 @@ export function challengeMonthState({
   )
   const locked = inMonth.size > 0
 
-  const schedule = tier === null ? [] : challengeSchedule(year, month, tier)
-  const targetVnd = tier === null ? 0 : challengeTotalVnd(year, month, tier)
-  const savedVnd = tier === null
+  const schedule = unitVnd === null ? [] : challengeSchedule(year, month, unitVnd)
+  const targetVnd = unitVnd === null ? 0 : challengeTotalVnd(year, month, unitVnd)
+  const savedVnd = unitVnd === null
     ? 0
-    : [...inMonth].reduce((acc, d) => acc + challengeDayAmount(year, month, tier, d), 0)
+    : [...inMonth].reduce((acc, d) => acc + challengeDayAmount(year, month, unitVnd, d), 0)
 
   // What "should" have been set aside by now. A past month is wholly due; a
   // future month asks for nothing yet; the current month is due through today.
@@ -151,7 +176,7 @@ export function challengeMonthState({
   // that they are hopelessly behind, which is both untrue and the fastest way to
   // make them stop.
   const dueThroughDay = isPast ? totalDays : isCurrentMonth ? (today ?? 0) : 0
-  const dueVnd = tier === null
+  const dueVnd = unitVnd === null
     ? 0
     : schedule.filter(r => r.day <= dueThroughDay).reduce((acc, r) => acc + r.amountVnd, 0)
 
@@ -166,14 +191,14 @@ export function challengeMonthState({
     behindVnd: Math.max(0, dueVnd - savedVnd),
     isCurrentMonth,
     today,
-    todayAmountVnd: tier === null || today === null ? 0 : challengeDayAmount(year, month, tier, today),
+    todayAmountVnd: unitVnd === null || today === null ? 0 : challengeDayAmount(year, month, unitVnd, today),
     todayChecked: today !== null && inMonth.has(today),
     locked,
     // Ticking is the current month's business only. A past month is history —
     // reopening it would mean a "saved" figure that can still change after the
     // month it describes has ended — and a future day has not happened yet.
     canTick: (day: number) =>
-      tier !== null
+      unitVnd !== null
       && isCurrentMonth
       && today !== null
       && Number.isInteger(day)

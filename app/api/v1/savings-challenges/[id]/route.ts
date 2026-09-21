@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { ValidationError, validateUUID } from '@/lib/validation'
 import { readJsonBody } from '@/lib/apiBody'
-import { isChallengeTier } from '@/lib/savingsChallenge'
+import { isChallengeUnitVnd } from '@/lib/savingsChallenge'
 import {
   CHALLENGE_COLUMNS, challengeRefusal, isBusinessMonth, loadOwnedChallenge, notCurrentMonth,
 } from '../challengeAccess'
 
-// Change a month's tier, or abandon the month.
+// Change a month's step, or abandon the month.
 //
 // Both are only possible before the first day is ticked; the database holds that
 // line (20260916000001) and these handlers relay its refusal. The check is NOT
@@ -22,12 +22,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
-  const { tier } = parsed.body
+  const { unit_vnd: unitVnd } = parsed.body
 
   let challengeId: string
   try {
     challengeId = validateUUID(id, 'challenge_id')
-    if (!isChallengeTier(tier)) throw new ValidationError('tier must be 1, 2 or 3')
+    if (!isChallengeUnitVnd(unitVnd)) {
+      throw new ValidationError('unit_vnd must be a multiple of 1,000 between 1,000 and 10,000')
+    }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -39,7 +41,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { data, error } = await supabase
     .from('savings_challenges')
-    .update({ tier, updated_at: new Date().toISOString() })
+    .update({ unit_vnd: unitVnd, updated_at: new Date().toISOString() })
     .eq('challenge_id', challengeId)
     .eq('user_id', user.id)
     .select(CHALLENGE_COLUMNS)
@@ -48,8 +50,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (error) {
     const refusal = challengeRefusal(error)
     if (refusal) return refusal
-    console.error('savings challenge re-tier failed', error.message)
-    return NextResponse.json({ error: 'Failed to change the tier' }, { status: 500 })
+    console.error('savings challenge re-step failed', error.message)
+    return NextResponse.json({ error: 'Failed to change the amount' }, { status: 500 })
   }
 
   return NextResponse.json(data)

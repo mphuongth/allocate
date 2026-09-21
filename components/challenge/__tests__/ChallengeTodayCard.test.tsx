@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { NextIntlClientProvider } from 'next-intl'
 import messages from '@/messages/vi.json'
 import ChallengeTodayCard from '../ChallengeTodayCard'
-import { challengeMonthState, type ChallengeTier } from '@/lib/savingsChallenge'
+import { challengeMonthState } from '@/lib/savingsChallenge'
 import type { SavingsChallengeState } from '@/features/challenge/useSavingsChallenge'
 
 // The dashboard's one daily action.
@@ -18,7 +18,7 @@ import type { SavingsChallengeState } from '@/features/challenge/useSavingsChall
 const NOW = new Date('2026-09-16T00:30:00Z')  // the 16th, 07:30 in Vietnam
 
 function stateFor({
-  tier = 1 as ChallengeTier | null,
+  unitVnd = 1000 as number | null,
   days = [] as number[],
   month = 9,
   loading = false,
@@ -26,15 +26,15 @@ function stateFor({
   busy = false,
 } = {}): SavingsChallengeState {
   return {
-    challenge: tier === null ? null : { challenge_id: 'c-1', year: 2026, month, tier },
+    challenge: unitVnd === null ? null : { challenge_id: 'c-1', year: 2026, month, unit_vnd: unitVnd },
     days,
-    view: challengeMonthState({ year: 2026, month, tier, checkedDays: days, now: NOW }),
+    view: challengeMonthState({ year: 2026, month, unitVnd, checkedDays: days, now: NOW }),
     loading,
     error,
     busy,
     reload: vi.fn(),
     start: vi.fn(async () => true),
-    retier: vi.fn(async () => true),
+    restep: vi.fn(async () => true),
     abandon: vi.fn(async () => true),
     toggleDay: vi.fn(async () => true),
   }
@@ -58,26 +58,26 @@ afterEach(() => {
 
 describe('what today asks for', () => {
   it('names the day and its amount', () => {
-    show(stateFor({ tier: 1 }))
+    show(stateFor({ unitVnd: 1000 }))
     expect(screen.getByText('Hôm nay, ngày 16')).toBeInTheDocument()
     // (30 + 1 - 16) x 1,000
     expect(screen.getByText('₫ 15.000')).toBeInTheDocument()
   })
 
-  it('scales with the tier', () => {
-    show(stateFor({ tier: 3 }))
+  it('scales with the month’s step', () => {
+    show(stateFor({ unitVnd: 10000 }))
     expect(screen.getByText('₫ 150.000')).toBeInTheDocument()
   })
 
   it('sets today aside, without the user naming the day', async () => {
-    const state = stateFor({ tier: 1 })
+    const state = stateFor({ unitVnd: 1000 })
     show(state)
     await userEvent.click(screen.getByRole('button', { name: 'Để dành' }))
     expect(state.toggleDay).toHaveBeenCalledWith(16)
   })
 
   it('shows today as done, and lets it be taken back', async () => {
-    const state = stateFor({ tier: 1, days: [16] })
+    const state = stateFor({ unitVnd: 1000, days: [16] })
     show(state)
     const button = screen.getByRole('button', { name: /Đã để dành/ })
     expect(button).toHaveAttribute('aria-pressed', 'true')
@@ -86,13 +86,13 @@ describe('what today asks for', () => {
   })
 
   it('carries the month’s running count and a way into the month view', () => {
-    show(stateFor({ tier: 1, days: [1, 16] }))
+    show(stateFor({ unitVnd: 1000, days: [1, 16] }))
     expect(screen.getByText(/2\/30 ngày/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Xem cả tháng' })).toHaveAttribute('href', '/planning')
   })
 
   it('does not act twice while a write is in flight', () => {
-    show(stateFor({ tier: 1, busy: true }))
+    show(stateFor({ unitVnd: 1000, busy: true }))
     expect(screen.getByRole('button', { name: 'Để dành' })).toBeDisabled()
   })
 })
@@ -106,16 +106,16 @@ describe('when it has nothing to say', () => {
   it('says nothing when no challenge is running', () => {
     // The invitation to start one belongs on Planning, next to the other
     // monthly decisions — not as a nag on a dashboard of real balances.
-    silent(stateFor({ tier: null }))
+    silent(stateFor({ unitVnd: null }))
   })
 
   it('says nothing while the month is still loading', () => {
-    silent(stateFor({ tier: null, loading: true }))
+    silent(stateFor({ unitVnd: null, loading: true }))
   })
 
   it('says nothing when the month could not be read', () => {
     // The month view owns the retry. A second error surface here would report
     // the same failure twice and offer no way to fix it.
-    silent(stateFor({ tier: null, error: true }))
+    silent(stateFor({ unitVnd: null, error: true }))
   })
 })

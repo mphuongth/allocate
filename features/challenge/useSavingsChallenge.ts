@@ -6,7 +6,7 @@
 // on the dashboard — and they must not disagree about how much has been set
 // aside. Everything they display is derived from `challengeMonthState`, so the
 // disagreement has nowhere to come from: this hook holds only the raw month
-// (tier + which days are ticked) and hands the derivation the same inputs.
+// (the step + which days are ticked) and hands the derivation the same inputs.
 //
 // Ticking is optimistic. A checkbox that waits for a round trip before it fills
 // in feels broken on a phone, and the cost of being wrong is small and visible:
@@ -19,9 +19,7 @@
 // the second tick, silently un-ticking a day the server accepted.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  challengeMonthState, type ChallengeMonthState, type ChallengeTier,
-} from '@/lib/savingsChallenge'
+import { challengeMonthState, type ChallengeMonthState } from '@/lib/savingsChallenge'
 
 // Not exported: consumers read it through SavingsChallengeState['challenge'],
 // and a second exported name for the same shape as the server's ChallengeRow
@@ -30,7 +28,7 @@ type ChallengeRow = {
   challenge_id: string
   year: number
   month: number
-  tier: ChallengeTier
+  unit_vnd: number
 }
 
 export type SavingsChallengeState = {
@@ -40,11 +38,11 @@ export type SavingsChallengeState = {
   loading: boolean
   /** The month could not be read at all — distinct from "no challenge yet". */
   error: boolean
-  /** A write is in flight; the tier controls disable rather than queue. */
+  /** A write is in flight; the step controls disable rather than queue. */
   busy: boolean
   reload: () => void
-  start: (tier: ChallengeTier) => Promise<boolean>
-  retier: (tier: ChallengeTier) => Promise<boolean>
+  start: (unitVnd: number) => Promise<boolean>
+  restep: (unitVnd: number) => Promise<boolean>
   abandon: () => Promise<boolean>
   toggleDay: (day: number) => Promise<boolean>
 }
@@ -99,7 +97,7 @@ export function useSavingsChallenge(
       })
       .catch(() => {
         if (cancelled || wantedRef.current !== wanted) return
-        // NOT "no challenge yet": that shape offers the tier picker, and
+        // NOT "no challenge yet": that shape offers the step picker, and
         // offering it over a failed read invites the user to start a month they
         // may already have started.
         setChallenge(null)
@@ -118,13 +116,13 @@ export function useSavingsChallenge(
     return false
   }, [])
 
-  const start = useCallback(async (tier: ChallengeTier) => {
+  const start = useCallback(async (unitVnd: number) => {
     setBusy(true)
     try {
       const res = await fetch(BASE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, month, tier }),
+        body: JSON.stringify({ year, month, unit_vnd: unitVnd }),
       })
       if (!res.ok) return fail(await refusalMessage(res, 'Could not start the challenge.'))
       setChallenge(await res.json())
@@ -137,20 +135,20 @@ export function useSavingsChallenge(
     }
   }, [year, month, fail])
 
-  const retier = useCallback(async (tier: ChallengeTier) => {
+  const restep = useCallback(async (unitVnd: number) => {
     if (!challenge) return false
     setBusy(true)
     try {
       const res = await fetch(`${BASE}/${challenge.challenge_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier }),
+        body: JSON.stringify({ unit_vnd: unitVnd }),
       })
-      if (!res.ok) return fail(await refusalMessage(res, 'Could not change the tier.'))
+      if (!res.ok) return fail(await refusalMessage(res, 'Could not change the amount.'))
       setChallenge(await res.json())
       return true
     } catch {
-      return fail('Could not change the tier.')
+      return fail('Could not change the amount.')
     } finally {
       setBusy(false)
     }
@@ -203,13 +201,13 @@ export function useSavingsChallenge(
   return {
     challenge,
     days,
-    view: challengeMonthState({ year, month, tier: challenge?.tier ?? null, checkedDays: days }),
+    view: challengeMonthState({ year, month, unitVnd: challenge?.unit_vnd ?? null, checkedDays: days }),
     loading,
     error,
     busy,
     reload,
     start,
-    retier,
+    restep,
     abandon,
     toggleDay,
   }

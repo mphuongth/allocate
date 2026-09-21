@@ -8,7 +8,7 @@ import { challengeRefusal, isBusinessMonth, loadOwnedChallenge, notCurrentMonth 
 
 // Tick a day off — "I set this much aside today".
 //
-// The amount is DERIVED here, from the challenge's own year/month/tier. The
+// The amount is DERIVED here, from the challenge's own year/month/step. The
 // client never sends one: a route that accepted `amount_vnd` would be leaning on
 // the trigger to catch a lie, and a trigger is a last line rather than the
 // contract. Both sides compute it from lib/savingsChallenge, which mirrors
@@ -37,10 +37,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const owned = await loadOwnedChallenge(supabase, challengeId, user.id)
   if (!owned.ok) return owned.response
-  const { year, month, tier } = owned.challenge
+  const { year, month, unit_vnd: unitVnd } = owned.challenge
   if (!isBusinessMonth(year, month)) return notCurrentMonth()
 
-  const amountVnd = challengeDayAmount(year, month, tier, day)
+  const amountVnd = challengeDayAmount(year, month, unitVnd, day)
   // 0 means the month has no such day — the same answer the database's trigger
   // arrives at, reached here so the caller reads the calendar rather than a
   // constraint violation.

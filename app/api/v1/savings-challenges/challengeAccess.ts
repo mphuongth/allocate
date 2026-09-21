@@ -1,9 +1,9 @@
 // Shared front-half guards for the savings-challenge routes.
 //
-// The database owns the real rules (20260916000001): the tier freezes at the
-// first tick, an amount has to match the schedule, a day has to exist in its
-// month. Those are statements about rows that already exist, so they cannot be
-// settled correctly anywhere else. But a trigger fires mid-write, and on its own
+// The database owns the real rules (20260916000001, 20260921000001): the
+// month's step freezes at the first tick, an amount has to match the schedule,
+// a day has to exist in its month. Those are statements about rows that already
+// exist, so they cannot be settled correctly anywhere else. But a trigger fires mid-write, and on its own
 // the caller reads a 500 for what is really a refusal it could act on — so each
 // helper here turns one of those refusals into an answer, the way
 // completedGoalError does for a finished goal (#650).
@@ -11,16 +11,19 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { businessYearMonth } from '@/lib/dates'
-import type { ChallengeTier } from '@/lib/savingsChallenge'
 
 export type ChallengeRow = {
   challenge_id: string
   year: number
   month: number
-  tier: ChallengeTier
+  unit_vnd: number
 }
 
-export const CHALLENGE_COLUMNS = 'challenge_id, year, month, tier'
+// `tier` is deliberately not read. It still exists on the table for the window
+// in which an older client might write one (20260921000001), but this app prices
+// a month from unit_vnd alone — and selecting a column nobody uses is how the
+// dead one stays alive past the migration that was meant to drop it.
+export const CHALLENGE_COLUMNS = 'challenge_id, year, month, unit_vnd'
 
 /**
  * The database's own refusal, turned into an answer.
@@ -28,7 +31,8 @@ export const CHALLENGE_COLUMNS = 'challenge_id, year, month, tier'
  * Every guard in the migration raises with this prefix, and the message is
  * already written for a person — the route should pass it along rather than
  * replace it with "Failed to update challenge", which would hide the one thing
- * the user needs to know (the tier is locked because they have started ticking).
+ * the user needs to know (the step is locked because they have started
+ * ticking).
  *
  * 409, not 400: the request is well-formed, and it is the state of the month
  * that refuses it. Returns null for anything else, so it chains ahead of a

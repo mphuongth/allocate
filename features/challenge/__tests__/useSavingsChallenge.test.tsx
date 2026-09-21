@@ -6,7 +6,7 @@ import { useSavingsChallenge } from '../useSavingsChallenge'
 // would reach:
 //
 //   1. A failed read is not an empty month. `challenge: null` is what makes the
-//      card offer the tier picker, so degrading into it would invite the user to
+//      card offer the step picker, so degrading into it would invite the user to
 //      start a month that may already be running.
 //   2. A tick is optimistic, and a refusal puts back exactly the list that was
 //      there — not a re-derived one, which would lose a second tick that landed
@@ -34,10 +34,10 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const SEPTEMBER = { challenge_id: 'c-1', year: 2026, month: 9, tier: 1 }
+const SEPTEMBER = { challenge_id: 'c-1', year: 2026, month: 9, unit_vnd: 1000 }
 
 describe('reading a month', () => {
-  it('loads the tier and its ticked days', async () => {
+  it('loads the month’s step and its ticked days', async () => {
     fetchMock.mockReturnValue(json({ challenge: SEPTEMBER, days: [1, 2] }))
     const { result } = renderHook(() => useSavingsChallenge(2026, 9))
 
@@ -71,7 +71,7 @@ describe('reading a month', () => {
     fetchMock.mockImplementation((url: string) =>
       url.includes('month=9')
         ? new Promise(resolve => { settleSeptember = resolve })
-        : json({ challenge: { ...SEPTEMBER, month: 10, tier: 3 }, days: [4] }),
+        : json({ challenge: { ...SEPTEMBER, month: 10, unit_vnd: 10000 }, days: [4] }),
     )
 
     const { result, rerender } = renderHook(
@@ -173,10 +173,10 @@ describe('choosing and abandoning', () => {
     const { result } = renderHook(() => useSavingsChallenge(2026, 9))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    fetchMock.mockReturnValue(json({ ...SEPTEMBER, tier: 2 }, 201))
+    fetchMock.mockReturnValue(json({ ...SEPTEMBER, unit_vnd: 5000 }, 201))
     await act(async () => { expect(await result.current.start(2)).toBe(true) })
 
-    expect(result.current.challenge?.tier).toBe(2)
+    expect(result.current.challenge?.unit_vnd).toBe(5000)
     expect(result.current.days).toEqual([])
     expect(result.current.view.targetVnd).toBe(2_325_000)
   })
@@ -188,14 +188,14 @@ describe('choosing and abandoning', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     fetchMock.mockReturnValue(json(
-      { error: 'the tier is locked once a day has been set aside', code: 'challenge_locked' },
+      { error: 'the amount is locked once a day has been set aside', code: 'challenge_locked' },
       409,
     ))
-    await act(async () => { expect(await result.current.retier(3)).toBe(false) })
+    await act(async () => { expect(await result.current.restep(10000)).toBe(false) })
 
-    expect(onError).toHaveBeenCalledWith('the tier is locked once a day has been set aside')
-    // The tier on screen is still the real one.
-    expect(result.current.challenge?.tier).toBe(1)
+    expect(onError).toHaveBeenCalledWith('the amount is locked once a day has been set aside')
+    // The step on screen is still the real one.
+    expect(result.current.challenge?.unit_vnd).toBe(1000)
   })
 
   it('empties the month when it is abandoned', async () => {
