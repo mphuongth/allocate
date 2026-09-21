@@ -27,6 +27,7 @@ function stateFor({
 } = {}): SavingsChallengeState {
   return {
     challenge: unitVnd === null ? null : { challenge_id: 'c-1', year: 2026, month, unit_vnd: unitVnd },
+    unitVnd,
     days,
     view: challengeMonthState({ year: 2026, month, unitVnd, checkedDays: days, now: NOW }),
     loading,

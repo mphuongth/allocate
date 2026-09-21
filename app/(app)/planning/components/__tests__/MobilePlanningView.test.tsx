@@ -85,6 +85,7 @@ const baseSavings: DirectSaving[] = [
 // not the challenge — components/challenge has its own.
 const challengeStub = {
   challenge: null,
+  unitVnd: null,
   days: [] as number[],
   view: challengeMonthState({ year: 2026, month: 5, unitVnd: null, checkedDays: [] }),
   loading: false,

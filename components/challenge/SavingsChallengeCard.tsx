@@ -3,6 +3,14 @@
 // The month's savings challenge, in full — the step picker before one is
 // chosen, and the day grid afterwards.
 //
+// Which of the two is showing follows `state.unitVnd`, NOT `state.challenge`.
+// The step is known the instant it is pressed and the schedule is a pure
+// function of it and the calendar, so the month is drawn before the POST
+// answers. Keying off the server row instead is what made pressing a step feel
+// like a dead button. The row still gates everything that needs its id: until it
+// arrives, no day is tickable and neither the re-price nor the cancel is
+// offered.
+//
 // The grid is the feature: thirty-odd cells, heaviest first, each one a button
 // that says what that day asks for and whether it has been set aside. Showing
 // the amount ON the cell rather than only the day number is what makes the
@@ -36,7 +44,7 @@ export default function SavingsChallengeCard({
   state: SavingsChallengeState
 }) {
   const t = useTranslations('challenge')
-  const { challenge, view, loading, error, busy } = state
+  const { challenge, unitVnd, view, loading, error, busy } = state
   const [picking, setPicking] = useState(false)
   const [confirmingCancel, setConfirmingCancel] = useState(false)
 
@@ -67,19 +75,22 @@ export default function SavingsChallengeCard({
   // A month that has already ended never gets the picker: starting a challenge
   // for a month you cannot tick a single day of would only create history that
   // did not happen.
-  if (!challenge) {
+  if (unitVnd === null) {
     return (
       <section style={cardStyle}>
         <Header title={t('title')} subtitle={view.isCurrentMonth ? t('pickPrompt') : t('monthClosedEmpty')} />
         {view.isCurrentMonth && (
-          <StepChoices busy={busy} onPick={unitVnd => state.start(unitVnd)} year={year} month={month} t={t} />
+          <StepChoices busy={busy} onPick={next => state.start(next)} year={year} month={month} t={t} />
         )}
       </section>
     )
   }
 
-  const unitVnd = challenge.unit_vnd
-  const canEditStep = view.isCurrentMonth && !view.locked
+  // Everything that needs the row's id waits for the row. The gap is one round
+  // trip on a month with nothing ticked in it yet, so the only controls it
+  // withholds are ones that would have nothing to act on.
+  const confirmed = challenge !== null
+  const canEditStep = confirmed && view.isCurrentMonth && !view.locked
 
   return (
     <section style={cardStyle}>
@@ -100,7 +111,7 @@ export default function SavingsChallengeCard({
               {t('cancelChallenge')}
             </button>
           </div>
-        ) : view.isCurrentMonth ? (
+        ) : confirmed && view.isCurrentMonth ? (
           // The lock is the feature, so it is stated rather than implied by two
           // missing buttons.
           <span
@@ -124,7 +135,10 @@ export default function SavingsChallengeCard({
           year={year}
           month={month}
           t={t}
-          onPick={async next => { if (await state.restep(next)) setPicking(false) }}
+          // Closed on the press, not on the answer: the new step is already on
+          // screen by then, and holding the picker open over a round trip is
+          // the same stall the start path had.
+          onPick={next => { setPicking(false); void state.restep(next) }}
         />
       )}
 
@@ -162,7 +176,7 @@ export default function SavingsChallengeCard({
           const ticked = state.days.includes(day)
           // A ticked day stays pressable all month so a mistake can be undone;
           // an unticked one waits for its turn.
-          const enabled = view.isCurrentMonth && (ticked || view.canTick(day))
+          const enabled = confirmed && view.isCurrentMonth && (ticked || view.canTick(day))
           return (
             <button
               key={day}

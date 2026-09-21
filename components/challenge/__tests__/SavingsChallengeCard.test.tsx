@@ -24,6 +24,9 @@ const NOW = new Date('2026-09-16T00:30:00Z')  // the 16th, 07:30 in Vietnam
 
 function stateFor({
   unitVnd = 1000 as number | null,
+  // The row the server confirmed. Defaults to "the chosen step is confirmed";
+  // pass false for the moment between pressing a step and the POST answering.
+  confirmed = true,
   days = [] as number[],
   year = 2026,
   month = 9,
@@ -32,7 +35,10 @@ function stateFor({
   actions = {} as Partial<SavingsChallengeState>,
 } = {}): SavingsChallengeState {
   return {
-    challenge: unitVnd === null ? null : { challenge_id: 'c-1', year, month, unit_vnd: unitVnd },
+    challenge: unitVnd === null || !confirmed
+      ? null
+      : { challenge_id: 'c-1', year, month, unit_vnd: unitVnd },
+    unitVnd,
     days,
     view: challengeMonthState({ year, month, unitVnd, checkedDays: days, now: NOW }),
     loading,
@@ -260,5 +266,34 @@ describe('when the month cannot be read', () => {
     show(stateFor({ unitVnd: null, loading: true }))
     expect(screen.getByTestId('challenge-skeleton')).toBeInTheDocument()
     noStepButtons()
+  })
+})
+
+describe('pressing a step answers immediately', () => {
+  // The stall this replaced: the card sat on the picker until the POST came
+  // back, which on a slow connection reads as a dead button. The schedule is a
+  // pure function of the step and the calendar, so it can be drawn at once —
+  // only the row's id has to come from the server.
+  it('draws the month from a step the server has not confirmed yet', () => {
+    show(stateFor({ unitVnd: 5000, confirmed: false }))
+    noStepButtons()
+    expect(screen.getByText('Mức ₫ 5.000 · ₫ 2.325.000/tháng')).toBeInTheDocument()
+    expect(dayCell(1)).toHaveAccessibleName('Ngày 1 — ₫ 150.000')
+  })
+
+  it('will not let a day be ticked before the month has an id', async () => {
+    // There is nothing to tick against yet, and a tick that raced the start
+    // would have no challenge to name.
+    const state = stateFor({ unitVnd: 5000, confirmed: false })
+    show(state)
+    expect(dayCell(5)).toBeDisabled()
+    await userEvent.click(dayCell(5))
+    expect(state.toggleDay).not.toHaveBeenCalled()
+  })
+
+  it('offers no re-price or cancel until the month is real', () => {
+    show(stateFor({ unitVnd: 5000, confirmed: false }))
+    expect(screen.queryByRole('button', { name: 'Đổi mức' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Huỷ thử thách' })).not.toBeInTheDocument()
   })
 })
