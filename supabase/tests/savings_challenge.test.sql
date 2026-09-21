@@ -325,4 +325,135 @@ begin
   raise notice 'savings challenge: pass';
 end $$;
 
+-- ── The month's step is a chosen amount, not a tier (20260921000001) ─────────
+--
+-- The picker stopped being `mức 1 / 2 / 3` and became the number itself, 1,000
+-- through 10,000 in thousands. `tier` is still on the table while the deployed
+-- client writes it, so what this proves is the pair of them living together: a
+-- row written the new way schedules from unit_vnd, a row written the old way
+-- still schedules from tier, and a row that names neither cannot exist.
+do $$
+declare
+  v_owner  uuid := gen_random_uuid();
+  v_sep    uuid;
+  v_old    uuid;
+  v_amount bigint;
+  v_unit   bigint;
+  v_failed boolean;
+begin
+  insert into auth.users (id, email) values (v_owner, 'challenge-unit@test.invalid');
+
+  -- ── A challenge can name its step and nothing else ────────────────────────
+  insert into public.savings_challenges (user_id, year, month, unit_vnd)
+  values (v_owner, 2026, 9, 3000) returning challenge_id into v_sep;
+
+  -- September has 30 days, so at 3,000 a step day 1 is 90,000 and day 30 is
+  -- 3,000 — the same heaviest-first shape, generated from the chosen number.
+  insert into public.savings_challenge_days (challenge_id, day, amount_vnd)
+  values (v_sep, 1, 90000);
+  select amount_vnd into v_amount
+    from public.savings_challenge_days where challenge_id = v_sep and day = 1;
+  if v_amount <> 90000 then
+    raise exception 'day 1 of a 30-day 3,000 month must be 90,000, got %', v_amount;
+  end if;
+
+  insert into public.savings_challenge_days (challenge_id, day, amount_vnd)
+  values (v_sep, 30, 3000);
+
+  v_failed := false;
+  begin
+    insert into public.savings_challenge_days (challenge_id, day, amount_vnd)
+    values (v_sep, 2, 3000);
+  exception when check_violation then
+    v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'an amount that disagrees with the chosen step must be refused';
+  end if;
+
+  -- ── The step locks with the first tick, exactly as the tier did ───────────
+  --
+  -- The lock used to watch `tier` alone. Re-pricing a ticked month through the
+  -- new column is the same move under a different name, and has to meet the
+  -- same refusal.
+  v_failed := false;
+  begin
+    update public.savings_challenges set unit_vnd = 10000 where challenge_id = v_sep;
+  exception when check_violation then
+    v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'the step must lock once a day has been ticked';
+  end if;
+
+  -- ── The ten steps, and only those ─────────────────────────────────────────
+  v_failed := false;
+  begin
+    insert into public.savings_challenges (user_id, year, month, unit_vnd)
+    values (v_owner, 2026, 11, 11000);
+  exception when check_violation then
+    v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'a step above 10,000 must be refused';
+  end if;
+
+  v_failed := false;
+  begin
+    insert into public.savings_challenges (user_id, year, month, unit_vnd)
+    values (v_owner, 2026, 11, 2500);
+  exception when check_violation then
+    v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'a step off the 1,000 grid must be refused';
+  end if;
+
+  -- ── A challenge has to price its days somehow ─────────────────────────────
+  v_failed := false;
+  begin
+    insert into public.savings_challenges (user_id, year, month)
+    values (v_owner, 2026, 11);
+  exception when check_violation then
+    v_failed := true;
+  end;
+  if not v_failed then
+    raise exception 'a challenge naming neither a step nor a tier must be refused';
+  end if;
+
+  -- ── A row the deployed client wrote still schedules from its tier ─────────
+  --
+  -- This is the whole reason the column arrived nullable: for the window between
+  -- `db push` and the deploy, both shapes have to tick without either one
+  -- meeting a refusal.
+  insert into public.savings_challenges (user_id, year, month, tier)
+  values (v_owner, 2026, 10, 2) returning challenge_id into v_old;
+  update public.savings_challenges set unit_vnd = null where challenge_id = v_old;
+
+  insert into public.savings_challenge_days (challenge_id, day, amount_vnd)
+  values (v_old, 1, 155000);  -- October has 31 days, at the tier-2 unit: 31 x 5,000
+  select amount_vnd into v_amount
+    from public.savings_challenge_days where challenge_id = v_old and day = 1;
+  if v_amount <> 155000 then
+    raise exception 'a tier-only month must still schedule from its tier, got %', v_amount;
+  end if;
+
+  -- ── The backfill left every existing month priced as it already was ───────
+  insert into public.savings_challenges (user_id, year, month, tier)
+  values (v_owner, 2026, 12, 3) returning challenge_id into v_old;
+  select unit_vnd into v_unit from public.savings_challenges where challenge_id = v_old;
+  if v_unit is not null then
+    raise exception 'a tier-only insert must not invent a step, got %', v_unit;
+  end if;
+  update public.savings_challenges
+  set unit_vnd = case tier when 1 then 1000 when 2 then 5000 when 3 then 10000 end
+  where challenge_id = v_old;
+  insert into public.savings_challenge_days (challenge_id, day, amount_vnd)
+  values (v_old, 1, 310000);  -- unchanged by the backfill: 31 x 10,000
+
+  delete from auth.users where id = v_owner;
+
+  raise notice 'savings challenge step: pass';
+end $$;
+
 rollback;
