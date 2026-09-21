@@ -87,16 +87,7 @@ begin
 end;
 $$;
 
--- ── then: any row already stuck in that window ───────────────────────────────
---
--- Idempotent and cheap: after this migration the trigger below makes it
--- impossible to create another, so this is a one-time sweep rather than
--- something a later migration has to repeat.
-update public.savings_challenges
-set unit_vnd = case tier when 1 then 1000 when 2 then 5000 when 3 then 10000 end
-where unit_vnd is null and tier is not null;
-
--- ── and none created from here on ────────────────────────────────────────────
+-- ── then: none created from here on ─────────────────────────────────────────
 
 create or replace function public.challenge_step_from_tier()
 returns trigger
@@ -151,3 +142,27 @@ drop trigger if exists savings_challenge_step_from_tier on public.savings_challe
 create trigger savings_challenge_step_from_tier
   before insert or update on public.savings_challenges
   for each row execute function public.challenge_step_from_tier();
+
+-- ── last: any row already stuck in that window ───────────────────────────────
+--
+-- After the trigger, not before, and that ordering is the whole synchronisation
+-- this needs. Sweeping first would leave a gap: the still-deployed tier-only
+-- client can insert between the sweep and the CREATE TRIGGER, and that row is in
+-- neither — too late for the sweep, too early for the trigger — so it commits
+-- with unit_vnd NULL and keeps exactly the unusable month this migration exists
+-- to eliminate.
+--
+-- Reversed, there is no gap to fall into. An insert after the trigger is filled
+-- in by it. An insert before is committed, so the sweep sees it. And an insert
+-- already in flight when CREATE TRIGGER asks for its ACCESS EXCLUSIVE lock is
+-- the only interesting case: the trigger waits for that transaction, so the row
+-- lands WITHOUT the trigger — and then the sweep, which runs after, picks it up.
+-- No explicit LOCK TABLE, which would only be legal if the runner wrapped this
+-- file in a transaction; the ordering holds either way.
+--
+-- Idempotent and cheap: with the trigger in place no further row can be created
+-- that needs this, so it is a one-time sweep rather than something a later
+-- migration has to repeat.
+update public.savings_challenges
+set unit_vnd = case tier when 1 then 1000 when 2 then 5000 when 3 then 10000 end
+where unit_vnd is null and tier is not null;
