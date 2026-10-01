@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     const [invRes, savRes, overridesRes, expRes, insRes, exclRes, insOverridesRes, goalsRes, fundsRes, otherExpRes, recSavRes, recSavOverridesRes, dcaSkipsRes, recFulfillmentsRes] = await Promise.all([
       supabase
         .from('investment_transactions')
-        .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, is_dca_seeded, funds(name, nav), savings_goals(goal_name)')
+        .select('transaction_id, plan_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, is_dca_seeded, funds!fund_id(name, nav), savings_goals(goal_name)')
         .eq('plan_id', plan.id).eq('asset_type', 'fund'),
       supabase
         .from('investment_transactions')
