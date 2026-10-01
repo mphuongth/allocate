@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investment_transactions')
-    .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, is_dca_seeded, funds(id, name, nav), savings_goals(goal_name)')
+    .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, is_dca_seeded, funds!fund_id(id, name, nav), savings_goals(goal_name)')
     .eq('user_id', user.id)
     .eq('asset_type', 'fund')
     .or('is_dca_seeded.eq.false,units.not.is.null')
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       unit_price: cleanNav,
       investment_date: cleanInvestmentDate,
     })
-    .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, funds(id, name, nav), savings_goals(goal_name)')
+    .select('transaction_id, fund_id, goal_id, amount_vnd, units, unit_price, investment_date, created_at, funds!fund_id(id, name, nav), savings_goals(goal_name)')
     .single()
 
   // A finished goal takes no new money (#650). The database refuses it; say so

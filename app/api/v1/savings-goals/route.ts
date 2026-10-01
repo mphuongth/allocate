@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   const { data: transactions, error: txError } = await supabase
     // Snapshot-free view so renewal history rows can't reach per-goal stats.
     .from('active_investment_transactions')
-    .select('transaction_id, goal_id, asset_type, transaction_type, amount_vnd, units, unit_price, interest_rate, investment_date, expiry_date, funds(id, name, nav)')
+    .select('transaction_id, goal_id, asset_type, transaction_type, amount_vnd, units, unit_price, interest_rate, investment_date, expiry_date, funds!fund_id(id, name, nav)')
     .eq('user_id', user.id)
     .not('goal_id', 'is', null)
     .is('renewed_from_transaction_id', null) // defence; the active_* view already excludes snapshots
