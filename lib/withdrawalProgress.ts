@@ -145,3 +145,14 @@ export function buildWithdrawalMaps(withdrawals: WithdrawalRow[], parents: Paren
 
   return { parentWdMap, fundWdMap, parentWdMapAll, fundWdMapAll }
 }
+
+// Net worth (currentValue) and the goal bar (progressValue) decoupled once
+// affects_progress=false withdrawals were introduced: such a withdrawal lowers
+// net worth but is added back to progress, so the bar holds steady while the
+// value held drops. This is the credited-but-withdrawn amount — what was spent
+// for the goal — that reconciles the two (progressValue − currentValue). The goal
+// cards caption it and the PDF report prints it, so both read it from here.
+export function progressCredit(currentValue: number, progressValue: number | undefined): number {
+  if (progressValue == null) return 0
+  return Math.max(0, Math.round(progressValue) - Math.round(currentValue))
+}

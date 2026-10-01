@@ -52,7 +52,11 @@ describe('DownloadReportSheet — structure', () => {
     expect(screen.getByText(/net worth overview/i)).toBeInTheDocument()
     expect(screen.getByText(/per-goal breakdown/i)).toBeInTheDocument()
     expect(screen.getByText(/unallocated holdings/i)).toBeInTheDocument()
-    expect(screen.getByText(/transaction history/i)).toBeInTheDocument()
+  })
+
+  it('does not promise a transaction history the PDF does not contain', () => {
+    render(<DownloadReportSheet open data={null} onClose={noop} onExport={noop} />)
+    expect(screen.queryByText(/transaction history/i)).not.toBeInTheDocument()
   })
 })
 

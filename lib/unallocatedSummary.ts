@@ -1,7 +1,7 @@
 import type { DashboardData, FundBreakdownItem, NonFundUnallocatedItem } from '@/features/dashboard/contracts'
 
 /** One unallocated holding, already valued — a fund position or a non-fund tranche. */
-interface UnallocatedHolding {
+export interface UnallocatedHolding {
   id: string
   name: string
   totalInvested: number
@@ -20,11 +20,11 @@ export interface UnallocatedSummary {
   profitLossPercentage: number
 }
 
-function pct(profitLoss: number, invested: number) {
+export function pct(profitLoss: number, invested: number) {
   return invested > 0 ? (profitLoss / invested) * 100 : 0
 }
 
-function fundHolding(f: FundBreakdownItem): UnallocatedHolding {
+export function fundHolding(f: FundBreakdownItem): UnallocatedHolding {
   const profitLoss = f.currentValue - f.costBasis
   return {
     id: f.fundId,
@@ -46,7 +46,7 @@ function nonFundName(it: NonFundUnallocatedItem, isVi: boolean): string {
   return it.type
 }
 
-function nonFundHolding(it: NonFundUnallocatedItem, isVi: boolean): UnallocatedHolding {
+export function nonFundHolding(it: NonFundUnallocatedItem, isVi: boolean): UnallocatedHolding {
   const profitLoss = it.currentValue - it.amount
   return {
     id: it.transactionId,
