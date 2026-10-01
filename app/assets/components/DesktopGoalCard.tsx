@@ -1,7 +1,8 @@
 'use client'
 
 import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
-import { ProgressCreditNote, progressCredit } from './goalDetailShared'
+import { ProgressCreditNote } from './goalDetailShared'
+import { progressCredit } from '@/lib/withdrawalProgress'
 import { goalCompletion } from '@/lib/finishGoal'
 import type { GoalData } from '@/features/dashboard/contracts'
 

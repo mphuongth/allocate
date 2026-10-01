@@ -181,3 +181,93 @@ describe('PortfolioReport — unallocated holdings', () => {
     expect(screen.getByText('Total')).toBeInTheDocument()
   })
 })
+
+describe('PortfolioReport — what each goal holds', () => {
+  afterEach(cleanup)
+
+  const goalFund = {
+    fundId: 'f9',
+    fundName: 'E1VFVN30',
+    fundType: 'etf',
+    quantity: 1_000,
+    currentNAV: 30_000,
+    currentValue: 30_000_000,
+    purchasePrice: 25_000,
+    costBasis: 25_000_000,
+    profitLoss: 5_000_000,
+    profitLossPercentage: 20,
+    goalId: 'g1',
+  }
+
+  const goalDeposit = {
+    transactionId: 'd1',
+    type: 'bank',
+    amount: 50_000_000,
+    currentValue: 51_000_000,
+    interestRate: 6,
+    expiryDate: '2027-04-01',
+    investmentDate: '2026-10-01',
+    notes: 'Sổ VCB 6 th.',
+    units: null,
+  }
+
+  it('prints every holding of a goal under it, with its value and P/L', () => {
+    const goal: GoalData = { ...mockGoal, currentValue: 81_000_000, funds: [goalFund], nonFunds: [goalDeposit] }
+    render(React.createElement(PortfolioReport, { data: { ...mockData, goals: [goal] }, locale: 'vi' }))
+
+    expect(screen.getByText('E1VFVN30')).toBeInTheDocument()
+    // Once in the asset-allocation total (the only fund), once on its own line.
+    expect(screen.getAllByText('₫ 30.000.000')).toHaveLength(2)
+    expect(screen.getByText('+₫ 5.000.000 (+20.00%)')).toBeInTheDocument()
+
+    expect(screen.getByText('Sổ VCB 6 th.')).toBeInTheDocument()
+    expect(screen.getByText('₫ 51.000.000')).toBeInTheDocument()
+    expect(screen.getByText('+₫ 1.000.000 (+2.00%)')).toBeInTheDocument()
+  })
+
+  it('names the recurring savings the plan credited, so the lines add up to the goal value', () => {
+    // 30M fund + 51M deposit + 9M of recurring months with no holding row = 90M.
+    const goal: GoalData = { ...mockGoal, currentValue: 90_000_000, funds: [goalFund], nonFunds: [goalDeposit] }
+    render(React.createElement(PortfolioReport, { data: { ...mockData, goals: [goal] }, locale: 'vi' }))
+
+    expect(screen.getByText('Tiết kiệm định kỳ')).toBeInTheDocument()
+    expect(screen.getByText('₫ 9.000.000')).toBeInTheDocument()
+  })
+
+  it('prints what was spent for the goal, and a value that reconciles with the % complete', () => {
+    // The "Thuế và Thầu" case: 31.2M paid out with "count toward goal progress"
+    // off. The card says "includes 31.2M withdrawn"; the PDF printed only the
+    // 90.9M left, beside a percentage computed from 122.1M.
+    const goal: GoalData = {
+      ...mockGoal,
+      goalName: 'Thuế và Thầu',
+      targetAmount: 200_000_000,
+      currentValue: 90_900_000,
+      progressValue: 122_100_000,
+      progressPercentage: 61.05,
+    }
+    render(React.createElement(PortfolioReport, { data: { ...mockData, goals: [goal] }, locale: 'vi' }))
+
+    expect(screen.getByText('Đã chi cho mục tiêu')).toBeInTheDocument()
+    expect(screen.getByText('₫ 31.200.000')).toBeInTheDocument()
+    expect(screen.getByText('Giá trị tính tiến độ')).toBeInTheDocument()
+    expect(screen.getByText('₫ 122.100.000')).toBeInTheDocument()
+    expect(screen.getByText('₫ 200.000.000 — 61.0% hoàn thành')).toBeInTheDocument()
+  })
+
+  it('prints no spent line when nothing was spent for the goal', () => {
+    render(React.createElement(PortfolioReport, { data: mockData, locale: 'vi' }))
+
+    expect(screen.queryByText('Đã chi cho mục tiêu')).not.toBeInTheDocument()
+    expect(screen.queryByText('Giá trị tính tiến độ')).not.toBeInTheDocument()
+  })
+
+  it('labels the goal lines in English', () => {
+    const goal: GoalData = { ...mockGoal, currentValue: 90_900_000, progressValue: 122_100_000, funds: [goalFund] }
+    render(React.createElement(PortfolioReport, { data: { ...mockData, goals: [goal] }, locale: 'en' }))
+
+    expect(screen.getByText('Spent for this goal')).toBeInTheDocument()
+    expect(screen.getByText('Value counted toward progress')).toBeInTheDocument()
+    expect(screen.getByText('Recurring savings')).toBeInTheDocument()
+  })
+})
