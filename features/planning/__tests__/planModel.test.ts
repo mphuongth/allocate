@@ -52,6 +52,14 @@ describe('monthLabel', () => {
 })
 
 describe('goalItemSublabel', () => {
+  it('says where a DCA parked in a deposit went', () => {
+    const parked = item({ type: 'fund', isFundDca: true, parkedIn: { transactionId: 'dep-1', name: 'Sổ VCB', amount: 5_000_000 } })
+    expect(goalItemSublabel(parked, true)).toBe('Gửi tiết kiệm thay · Sổ VCB')
+    expect(goalItemSublabel(parked, false)).toBe('Parked in a deposit · Sổ VCB')
+    const unnamed = item({ type: 'fund', isFundDca: true, parkedIn: { transactionId: 'dep-1', name: null, amount: 5_000_000 } })
+    expect(goalItemSublabel(unnamed, true)).toBe('Gửi tiết kiệm thay')
+  })
+
   it('reports a skipped item before anything else', () => {
     const skipped = item({ skipped: true, overridden: true, recorded: true })
     expect(goalItemSublabel(skipped, false)).toBe('Skipped this month')

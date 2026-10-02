@@ -5,7 +5,7 @@
 // by the fixed/insurance sections, plus the shared kebab MenuBtn. Prop-driven and
 // layout-only — DesktopPlanningView owns the data + action handlers.
 import { useState, useRef } from 'react'
-import { Check, Plus, RefreshCw, TrendingUp, MoreHorizontal, X } from 'lucide-react'
+import { Check, Plus, RefreshCw, TrendingUp, MoreHorizontal, X, PiggyBank } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
 import { type GoalItem } from '@/lib/planning'
 import { useCloseOnScroll } from '@/components/ui/useDialogA11y'
@@ -89,10 +89,12 @@ export function DPlanRow({ primary, secondary, amount, relationship, defaultAmou
 // Recurring savings get a kebab (save more / edit / skip). Fund DCA lines get a
 // "Buy" pill to record the actual purchase, plus skip / restore for the month.
 
-export function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRecordBuy, onRecordDeposit, onDcaSkip, onDcaRestore }: {
+export function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRecordBuy, onRecordDeposit, onDcaSkip, onDcaRestore, onDcaPark, onDcaUnpark }: {
   item: GoalItem; isVI: boolean
   onSkip: () => void; onRestore: () => void; onOverride: () => void; onEdit: () => void
   onRecordBuy: () => void; onRecordDeposit: () => void; onDcaSkip: () => void; onDcaRestore: () => void
+  // Park this month's DCA in a term deposit / undo that (delete the deposit).
+  onDcaPark: () => void; onDcaUnpark: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
@@ -163,6 +165,23 @@ export function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit
               </>
             )}
           </div>
+        ) : item.isFundDca && item.parkedIn ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-navy)', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+              <PiggyBank size={13} />{isVI ? 'Đã gửi TK' : 'Parked'}
+            </span>
+            <button ref={btnRef} onClick={() => open ? setOpen(false) : openMenu()} aria-label="Parked DCA actions" aria-haspopup="menu" aria-expanded={open} style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>
+              <MoreHorizontal size={14} />
+            </button>
+            {open && (
+              <>
+                <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+                <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+                  <MenuBtn icon={<X size={13} />} label={isVI ? 'Huỷ gửi tiết kiệm (xoá sổ)' : 'Undo — delete the deposit'} onClick={() => { onDcaUnpark(); setOpen(false) }} danger noBorder />
+                </div>
+              </>
+            )}
+          </div>
         ) : item.isFundDca && skipped ? (
           <button onClick={onDcaRestore} aria-label="Restore DCA" style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <Check size={12} />{isVI ? 'Khôi phục' : 'Restore'}
@@ -185,6 +204,7 @@ export function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit
                 <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
                 <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
                   <MenuBtn icon={<Plus size={13} />} label={isVI ? 'Ghi nhận mua tháng này' : 'Record buy this month'} onClick={() => { onRecordBuy(); setOpen(false) }} />
+                  <MenuBtn icon={<PiggyBank size={13} />} label={isVI ? 'Gửi tiết kiệm thay' : 'Park in a deposit instead'} onClick={() => { onDcaPark(); setOpen(false) }} />
                   <MenuBtn icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onDcaSkip(); setOpen(false) }} danger noBorder />
                 </div>
               </>

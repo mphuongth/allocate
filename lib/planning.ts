@@ -124,21 +124,69 @@ export function recurringSavingsTotal(resolved: ResolvedSaving[]): number {
 
 // ─── By-goal grouping ───────────────────────────────────────────────────────────
 
+/** A plan's DCA skip, with the deposit it was parked in when it was. */
+export interface PlanDcaSkip {
+  fund_id: string
+  parked_in_tx_id?: string | null
+  // PostgREST returns a to-one embed as an object, older clients as an array.
+  parked?: ParkedDeposit | ParkedDeposit[] | null
+}
+interface ParkedDeposit { transaction_id: string; notes: string | null; amount_vnd: number }
+
+/**
+ * The lines of a month's skipped DCA funds. They are not seeded as rows, so
+ * they are built from the fund config and the plan's skips — and a skip that
+ * parked the DCA in a term deposit carries that deposit, so buildByGoal keeps
+ * the line planned and says where the money went.
+ */
+export function skippedDcaLines(
+  funds: { id: string; name: string; is_dca?: boolean | null; dca_monthly_amount_vnd?: number | null; dca_goal_id?: string | null }[],
+  skips: PlanDcaSkip[],
+): GoalInvestment[] {
+  const byFund = new Map(skips.map((s) => [s.fund_id, s]))
+  return funds
+    .filter((f) => f.is_dca && f.dca_monthly_amount_vnd && byFund.has(f.id))
+    .map((f) => {
+      const skip = byFund.get(f.id)!
+      const dep = Array.isArray(skip.parked) ? skip.parked[0] : skip.parked
+      return {
+        goal_id: f.dca_goal_id ?? null,
+        amount_vnd: f.dca_monthly_amount_vnd as number,
+        is_dca_seeded: true,
+        skipped: true,
+        fund_id: f.id,
+        funds: { name: f.name },
+        ...(skip.parked_in_tx_id && dep
+          ? { parked: { transactionId: dep.transaction_id, name: dep.notes ?? null, amount: dep.amount_vnd } }
+          : {}),
+      }
+    })
+}
+
 export interface GoalInvestment {
   goal_id: string | null
   amount_vnd: number
   units?: number | null // a recorded buy when non-null; pending DCA row when null
   is_dca_seeded?: boolean
   skipped?: boolean // synthesized: a DCA fund skipped this month
+  // …into this term deposit instead (park_dca_in_deposit): the line stays
+  // planned and the deposit is what went in.
+  parked?: ParkedIn
   fund_id?: string | null
   transaction_id?: string
   funds?: { name: string } | null
   savings_goals?: { goal_name: string } | null
 }
 
+/** The term deposit a month's DCA was parked in. */
+interface ParkedIn { transactionId: string; name: string | null; amount: number }
+
 export interface GoalDirectSaving {
   goal_id: string | null
   amount_vnd: number
+  transaction_id?: string
+  // Set on a renewal snapshot: the live deposit it was the first cycle of.
+  renewed_from_transaction_id?: string | null
   savings_goals?: { goal_name: string } | null
 }
 
@@ -155,6 +203,8 @@ export interface GoalItem {
   isRecurring?: boolean
   recurringId?: string
   skipped?: boolean
+  // A DCA line whose money was parked in a term deposit this month.
+  parkedIn?: ParkedIn
   overridden?: boolean
   // An accumulating book this recurring is linked to (its anchor id), if any —
   // the "Saved" pill tops up that book instead of logging a standalone deposit.
@@ -219,6 +269,19 @@ export function buildByGoal(
     const row = ensure(inv.goal_id, inv.savings_goals?.goal_name)
     const recorded = inv.units != null
 
+    if (inv.skipped && inv.parked) {
+      // Parked in a deposit: still this month's plan for the goal. The deposit
+      // itself counts toward contributed with the other bank deposits below.
+      row.totalAllocated += inv.amount_vnd
+      row.items.push({
+        name: inv.funds?.name ?? 'Unknown fund',
+        type: 'fund', amount: inv.amount_vnd, baseAmount: inv.amount_vnd,
+        isDCA: true, isFundDca: true, fundId: inv.fund_id, skipped: false,
+        parkedIn: inv.parked,
+      })
+      continue
+    }
+
     if (inv.skipped) {
       // A DCA fund skipped this month — show it struck through, 0 planned.
       row.items.push({
@@ -248,9 +311,15 @@ export function buildByGoal(
   // month (the deposit isn't linked to a specific saving, so we match greedily
   // on goal + amount — one deposit completes one planned line).
   const depositPool = new Map<string, number[]>()
+  // A deposit a DCA was parked in belongs to that DCA line, never to a
+  // recurring saving that happens to share its amount — matched by the live
+  // id, or, after a renewal, by the first cycle that now carries the month.
+  const parkedIds = new Set(investments.flatMap((inv) => (inv.parked ? [inv.parked.transactionId] : [])))
   for (const sav of directSavings) {
     const row = ensure(sav.goal_id, sav.savings_goals?.goal_name)
     row.contributed += sav.amount_vnd
+    if ((sav.transaction_id && parkedIds.has(sav.transaction_id))
+      || (sav.renewed_from_transaction_id && parkedIds.has(sav.renewed_from_transaction_id))) continue
     const key = sav.goal_id ?? UNALLOCATED
     const pool = depositPool.get(key)
     if (pool) pool.push(sav.amount_vnd)

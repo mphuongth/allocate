@@ -118,6 +118,32 @@ describe('usePlanningActions (#467 shared planning actions)', () => {
     expect(onToast).not.toHaveBeenCalled()
   })
 
+  describe('unparkDca', () => {
+    // Undoing "Gửi tiết kiệm thay" is deleting the deposit: the skip goes with
+    // it (FK cascade) and the next load asks for the DCA again.
+    const parked = {
+      name: 'VFMVN30 ETF', type: 'fund', amount: 5_000_000, isFundDca: true, fundId: 'f-e1',
+      parkedIn: { transactionId: 'dep-1', name: 'Sổ VCB', amount: 5_000_000 },
+    } as GoalItem
+
+    it('deletes the deposit the DCA was parked in and reports it', async () => {
+      const { actions, onRefresh, onToast } = setup()
+      const calls = mockFetch(() => ({ ok: true }))
+      await actions.unparkDca(parked)
+      expect(calls).toEqual([{ url: '/api/v1/investment-transactions/dep-1', init: { method: 'DELETE' } }])
+      expect(onRefresh).toHaveBeenCalled()
+      expect(onToast).toHaveBeenCalledWith('Restored VFMVN30 ETF')
+    })
+
+    it("says why when the deposit can't be deleted (e.g. already renewed)", async () => {
+      const { actions, onToast } = setup()
+      mockFetch(() => ({ ok: false, body: { error: 'This deposit has been renewed and cannot be deleted.' } }))
+      await actions.unparkDca(parked)
+      expect(toastErrorMock).toHaveBeenCalledWith('This deposit has been renewed and cannot be deleted.')
+      expect(onToast).not.toHaveBeenCalled()
+    })
+  })
+
   describe('probeRecurringRecord', () => {
     const item = { recurringId: 'r1', linkedDepositTxId: 'tx1', name: 'Save', amount: 1_000_000 } as GoalItem
 

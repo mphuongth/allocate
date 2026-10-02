@@ -101,5 +101,10 @@ export interface Fund {
   dca_goal_id?: string | null
 }
 
-export interface DcaSkip { fund_id: string }
+export interface DcaSkip {
+  fund_id: string
+  // The term deposit this month's DCA was parked in instead (20261002000002).
+  parked_in_tx_id?: string | null
+  parked?: { transaction_id: string; notes: string | null; amount_vnd: number } | { transaction_id: string; notes: string | null; amount_vnd: number }[] | null
+}
 export interface Goal { goal_id: string; goal_name: string }
