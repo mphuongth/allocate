@@ -209,7 +209,9 @@ describe('fetchEtfMarketPrice', () => {
 
 describe('isEtfSymbolPriceable', () => {
   it('is true for a listed ticker and false for an invented one', async () => {
-    h.bodies.FUEVFVND = bars([34.38])
+    // Dated today, not NOW: this check prices against the real clock, and a
+    // bar from the fixed NOW turned too old to count 14 days after it.
+    h.bodies.FUEVFVND = bars([34.38], Date.now())
     h.bodies.NOTATICKER = JSON.stringify({ s: 'no_data' })
     expect(await isEtfSymbolPriceable('FUEVFVND')).toBe(true)
     expect(await isEtfSymbolPriceable('NOTATICKER')).toBe(false)
