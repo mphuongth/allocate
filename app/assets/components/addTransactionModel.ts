@@ -185,10 +185,21 @@ export interface TxForm {
   rate: string
   maturity: string
   topUpLockDays?: string
+  /** Term deposit only: the fund its money moves to when it is not renewed. */
+  targetFundId?: string
   goldProvider: string
   goldUnit: 'chi' | 'luong'
   goldQty: string
   goldPrice: string
+}
+
+// Only a single term deposit has a target fund (20261001000001): a book's
+// tranches are settled by the book flows, a flex deposit never matures. A
+// "term" deposit still missing its rate or maturity is not one yet — the server
+// would refuse the target, and with it a save that is otherwise fine.
+function targetFund(form: TxForm): string | null {
+  const isTerm = form.depositType === 'term' && Boolean(form.rate) && Boolean(form.maturity)
+  return isTerm ? form.targetFundId || null : null
 }
 
 // Fund units: an explicit entry wins; otherwise derive amount ÷ NAV when NAV known.
@@ -231,6 +242,9 @@ export function buildEditPayload(form: TxForm): BuildResult {
       interest_rate: form.rate ? Number(form.rate) : null, expiry_date: form.maturity || null,
       goal_id: goalId || null, notes: form.selectedBankName || note || null,
       bank_code: form.bankCode || null,
+      // A book is edited through update_deposit_book, which has no target fund,
+      // so the field is left out rather than sent as a no-op.
+      ...(form.depositType === 'accumulating' ? {} : { target_fund_id: targetFund(form) }),
     } }
   }
   const gold = normalizeGold(form.goldQty, form.goldPrice, form.goldUnit)
@@ -267,6 +281,7 @@ export function buildBuyPayload(form: TxForm, planId: string | null): BuildResul
       ...base, amount_vnd: amt, notes: form.selectedBankName || note || null,
       bank_code: form.bankCode || null, interest_rate: form.rate ? Number(form.rate) : null,
       expiry_date: form.maturity || null,
+      ...(form.depositType === 'term' ? { target_fund_id: targetFund(form) } : {}),
       // An accumulating book: the route self-groups this anchor row for later top-ups.
       ...(form.depositType === 'accumulating' ? { accumulating: true } : {}),
       ...(form.depositType === 'accumulating' && form.topUpLockDays != null && form.topUpLockDays !== '' ? { top_up_lock_days: Number(form.topUpLockDays) } : {}),

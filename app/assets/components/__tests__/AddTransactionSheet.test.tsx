@@ -752,3 +752,90 @@ describe('AddTransactionSheet — the row is gone', () => {
     expect(onSaved).not.toHaveBeenCalled()
   })
 })
+
+describe('AddTransactionSheet — a term deposit\'s target fund', () => {
+  // Where a term deposit's money goes at maturity when it is not renewed
+  // (20261001000001). Offered only for a term deposit, and defaulted to the
+  // fund whose DCA feeds the deposit's goal — the money was parked from that
+  // DCA in the first place.
+  const funds = [
+    { id: 'f-e1', name: 'VFMVN30 ETF', code: 'E1VFVN30', nav: 25_000, is_dca: true, dca_goal_id: 'g1' },
+    { id: 'f-other', name: 'DCDS', code: 'DCDS', nav: 90_000, is_dca: false, dca_goal_id: null },
+  ]
+  const fetchWith = () => vi.fn((url: string, _init?: RequestInit) => {
+    if (String(url).includes('/api/funds')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ funds }) })
+    if (String(url).includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [{ goal_id: 'g1', goal_name: 'Wealth Max' }] }) })
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+  })
+  const sent = (fetchMock: ReturnType<typeof fetchWith>, method: string) => {
+    const call = fetchMock.mock.calls.find((c) => String(c[0]).includes('/investment-transactions') && (c[1] as RequestInit)?.method === method)
+    return call ? JSON.parse(String((call[1] as RequestInit).body)) : undefined
+  }
+
+  it('offers the target fund for a term deposit only', async () => {
+    vi.stubGlobal('fetch', fetchWith())
+    render(<AddTransactionSheet open onClose={vi.fn()} />)
+    fireEvent.click(screen.getByText('Bank'))
+
+    expect(await screen.findByTestId('target-fund-select')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'E1VFVN30 — VFMVN30 ETF' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('deposit-type-accumulating'))
+    expect(screen.queryByTestId('target-fund-select')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('deposit-type-flex'))
+    expect(screen.queryByTestId('target-fund-select')).not.toBeInTheDocument()
+  })
+
+  it("defaults to the fund whose DCA feeds the deposit's goal, and posts it", async () => {
+    const fetchMock = fetchWith()
+    vi.stubGlobal('fetch', fetchMock)
+    render(
+      <AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()}
+        prefill={{ asset_type: 'bank', goal_id: 'g1', amount_vnd: 10_000_000, investment_date: '2026-06-01' }} />,
+    )
+
+    const sel = await screen.findByTestId('target-fund-select') as HTMLSelectElement
+    await waitFor(() => expect(sel.value).toBe('f-e1'))
+    // A term deposit: a rate and a maturity, without which there is no "at maturity".
+    fireEvent.change(screen.getByPlaceholderText('5,5'), { target: { value: '6' } })
+    fireEvent.change(screen.getByText('maturity').parentElement!.querySelector('input')!, { target: { value: '2027-04-01' } })
+    fireEvent.click(screen.getByText('save'))
+    await waitFor(() => expect(sent(fetchMock, 'POST')?.target_fund_id).toBe('f-e1'))
+  })
+
+  it('keeps the user\'s own choice, including "none"', async () => {
+    const fetchMock = fetchWith()
+    vi.stubGlobal('fetch', fetchMock)
+    render(
+      <AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()}
+        prefill={{ asset_type: 'bank', goal_id: 'g1', amount_vnd: 10_000_000, investment_date: '2026-06-01' }} />,
+    )
+
+    const sel = await screen.findByTestId('target-fund-select') as HTMLSelectElement
+    await waitFor(() => expect(sel.value).toBe('f-e1'))
+    fireEvent.change(sel, { target: { value: '' } })
+    fireEvent.click(screen.getByText('save'))
+    await waitFor(() => expect(sent(fetchMock, 'POST')).toBeTruthy())
+    expect(sent(fetchMock, 'POST').target_fund_id).toBeNull()
+  })
+
+  it('prefills the stored target fund in edit mode and sends it on PUT', async () => {
+    const fetchMock = fetchWith()
+    vi.stubGlobal('fetch', fetchMock)
+    render(
+      <AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()}
+        existing={{
+          transaction_id: 'tx1', asset_type: 'bank', investment_date: '2026-06-01',
+          amount_vnd: 10_000_000, unit_price: null, units: null, interest_rate: 6,
+          expiry_date: '2026-12-01', notes: null, fund_id: null, goal_id: 'g1', bank_code: null,
+          target_fund_id: 'f-other',
+        }} />,
+    )
+
+    const sel = await screen.findByTestId('target-fund-select') as HTMLSelectElement
+    // The stored choice wins over the goal's DCA default.
+    await waitFor(() => expect(sel.value).toBe('f-other'))
+    fireEvent.click(screen.getByText('saveChanges'))
+    await waitFor(() => expect(sent(fetchMock, 'PUT')?.target_fund_id).toBe('f-other'))
+  })
+})

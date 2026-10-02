@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('investment_transactions')
-    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, currency, is_pledged, top_up_lock_days, successor_deposit_tx_id, merged_from_book_id, principal_withdrawn, units_withdrawn, affects_progress, held_for_merge, consumed_by_inv_id, merge_anchor_inv_id, savings_goals(goal_name), funds!fund_id(id, name, nav)', { count: 'exact' })
+    .select('transaction_id, goal_id, asset_type, transaction_type, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, interest_earned_vnd, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, currency, is_pledged, top_up_lock_days, successor_deposit_tx_id, merged_from_book_id, principal_withdrawn, units_withdrawn, affects_progress, held_for_merge, consumed_by_inv_id, merge_anchor_inv_id, target_fund_id, savings_goals(goal_name), funds!fund_id(id, name, nav)', { count: 'exact' })
     .eq('user_id', user.id)
     .order('investment_date', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
   const body = parsed.body
-  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id, bank_code, top_up_lock_days, held_for_merge, merge_target_goal_id, merge_anchor_inv_id } = body
+  const { goal_id, asset_type, transaction_type = 'investment', investment_date, amount_vnd, unit_price, units, interest_rate, notes, fund_id, plan_id, expiry_date, parent_transaction_id, principal_withdrawn, units_withdrawn, affects_progress, accumulating, tops_up_deposit_id, bank_code, top_up_lock_days, held_for_merge, merge_target_goal_id, merge_anchor_inv_id, target_fund_id } = body
 
   const isWithdrawal = transaction_type === 'withdrawal'
 
@@ -145,6 +145,7 @@ export async function POST(request: NextRequest) {
   let cleanTopsUpId: string | null = null
   let cleanBankCode: string | null = null
   let cleanTopUpLockDays: number | null = null
+  let cleanTargetFundId: string | null = null
   // "Ví chờ gộp": a settle-with-hold parks the closed deposit's cash for a future
   // merge. Only meaningful on a withdrawal; the target goal/anchor say where the
   // pool synthesizes the cash back to and which deposit it's waiting on.
@@ -180,6 +181,16 @@ export async function POST(request: NextRequest) {
     if (principal_withdrawn != null && principal_withdrawn !== '') cleanPrincipalWithdrawn = validateAmount(principal_withdrawn, 'principal_withdrawn')
     if (units_withdrawn != null && units_withdrawn !== '') cleanUnitsWithdrawn = validateAmount(units_withdrawn, 'units_withdrawn')
     if (tops_up_deposit_id) cleanTopsUpId = validateUUID(tops_up_deposit_id, 'tops_up_deposit_id')
+    if (target_fund_id) {
+      cleanTargetFundId = validateUUID(target_fund_id, 'target_fund_id')
+      // Only a single term deposit has somewhere to go at maturity
+      // (20261001000001): a book's tranches are settled by the book flows, a
+      // flex deposit never matures, and nothing else is a deposit at all.
+      const isTermDeposit = !isWithdrawal && cleanAssetType === 'bank'
+        && !accumulating && !tops_up_deposit_id
+        && interest_rate != null && interest_rate !== '' && Boolean(expiry_date)
+      if (!isTermDeposit) throw new ValidationError('target_fund_id applies only to a term bank deposit')
+    }
     if (bank_code != null && bank_code !== '') cleanBankCode = validateBankCode(bank_code, 'bank_code')
     if (top_up_lock_days != null && top_up_lock_days !== '') {
       const lockDays = Number(top_up_lock_days)
@@ -223,6 +234,17 @@ export async function POST(request: NextRequest) {
       .from('funds')
       .select('id')
       .eq('id', cleanFundId)
+      .eq('user_id', user.id)
+      .single()
+    if (!fund) return NextResponse.json({ error: "You don't have permission to access this fund." }, { status: 403 })
+  }
+
+  // The target fund is a fund reference like fund_id, and is owned the same way.
+  if (cleanTargetFundId) {
+    const { data: fund } = await supabase
+      .from('funds')
+      .select('id')
+      .eq('id', cleanTargetFundId)
       .eq('user_id', user.id)
       .single()
     if (!fund) return NextResponse.json({ error: "You don't have permission to access this fund." }, { status: 403 })
@@ -467,6 +489,7 @@ export async function POST(request: NextRequest) {
       // A top-up tranche inherits the book's bank (effectiveBankCode).
       bank_code: effectiveAssetType === 'bank' ? effectiveBankCode : null,
       top_up_lock_days: depositGroupId ? cleanTopUpLockDays : null,
+      target_fund_id: cleanTargetFundId,
       // The held-for-merge pool is created by create_held_settlement, never here
       // (#588). Written out rather than left to the column defaults so a body
       // carrying these fields cannot ride in on a row this path builds.

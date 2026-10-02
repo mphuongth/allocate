@@ -15,6 +15,8 @@ export interface LedgerTransaction {
   expiry_date: string | null
   fund_id: string | null
   bank_code?: string | null
+  // A term deposit's fund for when it is not renewed at maturity (20261001000001).
+  target_fund_id?: string | null
   // An accumulating book: every tranche (and its anchor) carries the group id.
   deposit_group_id?: string | null
   top_up_lock_days?: number | null
