@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SNAPSHOT_WRITE_TIMEOUT_MS } from '@/lib/snapshots'
+import { todayIso, addDaysIso } from '@/lib/dates'
 
 // A partial dashboard read must never (a) return an understated 200 nor
 // (b) overwrite today's net-worth snapshot with the incomplete value (#513).
@@ -269,6 +270,40 @@ describe('GET /api/v1/dashboard/overview — moving a deposit to its fund keeps 
     expect(Math.abs(after.goals[0].currentValue - before.goals[0].currentValue)).toBeLessThanOrEqual(drift)
     expect(Math.abs(after.goals[0].progressValue - before.goals[0].progressValue)).toBeLessThanOrEqual(drift)
     expect(Math.abs(after.netWorth.netWorth - before.netWorth.netWorth)).toBeLessThanOrEqual(drift)
+  })
+})
+
+// A purchase made by moving a deposit is priced at the NAV the app knew, flagged
+// units_estimated until the user corrects it. For the week the order takes to
+// fill, the dashboard's "needs attention" card asks for that correction — so
+// the overview lists those purchases, with what the edit form needs.
+describe('GET /api/v1/dashboard/overview — purchases whose units are an estimate', () => {
+  const FUND = { id: 'f-e1', name: 'VFMVN30 ETF', code: 'E1VFVN30', nav: 25_000, updated_at: new Date().toISOString(), fund_type: 'etf' }
+  const buy = (id: string, investment_date: string, units_estimated: boolean) => ({
+    transaction_id: id, goal_id: 'g1', asset_type: 'fund', transaction_type: 'investment',
+    fund_id: 'f-e1', funds: FUND, amount_vnd: 102_991_781, units: 4119.67, unit_price: 25_000,
+    investment_date, units_estimated, affects_progress: true,
+  })
+
+  it('lists estimated purchases made in the last week, and nothing else', async () => {
+    h.tables.savings_goals = { data: [{ goal_id: 'g1', goal_name: 'Wealth Max', target_amount: 500_000_000, target_date: null }], error: null }
+    h.tables.active_investment_transactions = {
+      data: [
+        buy('recent', addDaysIso(todayIso(), -3), true),
+        buy('stale', addDaysIso(todayIso(), -9), true),
+        buy('corrected', addDaysIso(todayIso(), -1), false),
+      ],
+      error: null,
+    }
+    const res = await GET()
+    expect(res.status).toBe(200)
+    expect(h.selects.active_investment_transactions).toContain('units_estimated')
+    expect(h.selects.active_investment_transactions).toMatch(/funds!fund_id\([^)]*code/)
+    const d = await res.json() as { estimatedPurchases?: unknown[] }
+    expect(d.estimatedPurchases).toEqual([{
+      transactionId: 'recent', fundId: 'f-e1', fundName: 'VFMVN30 ETF', fundCode: 'E1VFVN30', goalId: 'g1',
+      amount: 102_991_781, units: 4119.67, unitPrice: 25_000, investmentDate: addDaysIso(todayIso(), -3),
+    }])
   })
 })
 

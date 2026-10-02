@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { addDaysIso, todayIso } from '@/lib/dates'
 import type { DashboardData, GoalData, NonFundUnallocatedItem, FundBreakdownItem } from '../contracts'
 import {
+  estimateToEditable,
   isDashboardEmpty,
   sortGoals,
   tagNonFunds,
@@ -338,6 +339,22 @@ describe('reportPreviewStats', () => {
     const stats = reportPreviewStats(net, [goal(), goal({ goalId: 'g2' })])
     expect(stats).toEqual({
       netWorth: 50_000_000, currentValue: 40_000_000, totalPL: 2_000_000, goalCount: 2,
+    })
+  })
+})
+
+describe('estimateToEditable', () => {
+  // The "needs attention" card's "Update" opens the purchase in the edit form,
+  // prefilled with what it holds, so correcting the units is one save — and
+  // that save is what clears the estimate (PUT sets units_estimated = false).
+  it('opens the purchase as a fund edit, prefilled', () => {
+    expect(estimateToEditable({
+      transactionId: 'buy-1', fundId: 'f-e1', fundName: 'VFMVN30 ETF', fundCode: 'E1VFVN30', goalId: 'g1',
+      amount: 102_991_781, units: 4119.67, unitPrice: 25_000, investmentDate: '2026-10-01',
+    })).toEqual({
+      transaction_id: 'buy-1', asset_type: 'fund', fund_id: 'f-e1', goal_id: 'g1',
+      investment_date: '2026-10-01', amount_vnd: 102_991_781, units: 4119.67, unit_price: 25_000,
+      interest_rate: null, expiry_date: null, notes: null,
     })
   })
 })

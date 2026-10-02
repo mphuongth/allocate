@@ -2,14 +2,19 @@
 
 // Dashboard "Needs attention" card: lists bank term deposits that are matured
 // or maturing within the reminder window, each with a one-tap "Handle" action
-// that opens the renew/withdraw flow. Renders nothing when there's nothing to
-// act on. Purely presentational — the parent supplies the already-filtered rows
+// that opens the renew/withdraw flow — a single term deposit also reminds the
+// user to look up today's 12-month rate, which decides renew vs move to fund.
+// It also lists fund purchases whose units are still an estimate (a deposit
+// moved to its fund), for the week the order takes to fill, each opening the
+// purchase to correct. Renders nothing when there's nothing to act on. Purely presentational — the parent supplies the already-filtered rows
 // (see isActionableTermDeposit) and handles the resolve flow.
 
-import { AlertTriangle, Building2, RefreshCw, GitMerge } from 'lucide-react'
-import { fmtCompact } from '@/lib/formatters'
+import { AlertTriangle, Building2, RefreshCw, GitMerge, TrendingUp, Pencil } from 'lucide-react'
+import { fmtCompact, fmtUnits } from '@/lib/formatters'
 import { daysUntil } from '@/lib/maturity'
 import { GD_COLORS, type InvRow } from './goalDetailShared'
+import { fmtTxDate } from './transactionUtils'
+import type { EstimatedPurchase } from '@/features/dashboard/contracts'
 
 function pillFor(inv: InvRow, isVi: boolean): { text: string; color: string; bg: string } | null {
   const diff = daysUntil(inv.expiryDate ?? '')
@@ -35,9 +40,12 @@ function pillFor(inv: InvRow, isVi: boolean): { text: string; color: string; bg:
 export interface MaturityCluster { anchorId: string; size: number }
 
 export default function MaturityActionCard({
-  items, isVi, onResolve, clusters, onMergeCluster, style,
+  items, estimates = [], isVi, onResolve, onFixEstimate, clusters, onMergeCluster, style,
 }: {
   items: InvRow[]
+  // Purchases priced at an estimated NAV, still within their reminder week.
+  estimates?: EstimatedPurchase[]
+  onFixEstimate?: (p: EstimatedPurchase) => void
   isVi: boolean
   onResolve: (inv: InvRow) => void
   // Merge clusters among `items`. Each banner opens the sheet on its anchor.
@@ -45,7 +53,7 @@ export default function MaturityActionCard({
   onMergeCluster?: (anchorId: string) => void
   style?: React.CSSProperties
 }) {
-  if (!items.length) return null
+  if (!items.length && !estimates.length) return null
 
   return (
     <div data-testid="maturity-action-card" className="cn-card" style={{ overflow: 'hidden', ...style }}>
@@ -55,7 +63,7 @@ export default function MaturityActionCard({
           {isVi ? 'Cần xử lý' : 'Needs attention'}
         </span>
         <span data-testid="maturity-action-count" style={{ fontSize: 11, fontWeight: 700, padding: '2px 9px', borderRadius: 999, background: 'rgba(180,83,9,0.14)', color: 'var(--c-warn)' }}>
-          {items.length}
+          {items.length + estimates.length}
         </span>
       </div>
       {(clusters ?? []).map((c) => (
@@ -94,6 +102,13 @@ export default function MaturityActionCard({
                   <span>{fmtCompact(inv.principal ?? inv.value)}</span>
                   {pill && <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 999, background: pill.bg, color: pill.color }}>{pill.text}</span>}
                 </div>
+                {/* Renew or move is decided on today's 12-month rate (Settings
+                    threshold) — a book has no such choice. */}
+                {!inv.depositGroupId && (
+                  <div data-testid={`maturity-rate-reminder-${inv.id}`} style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 3, lineHeight: 1.35 }}>
+                    {isVi ? 'Xem lãi suất 12 tháng hiện hành để chọn gửi lại hay chuyển quỹ' : "Check today's 12-month rate to choose renew or move to fund"}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => onResolve(inv)}
@@ -106,6 +121,29 @@ export default function MaturityActionCard({
             </div>
           )
         })}
+        {estimates.map((p, i) => (
+          <div key={p.transactionId} data-testid={`unit-estimate-${p.transactionId}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderTop: items.length || i > 0 ? '1px solid var(--c-line)' : 'none' }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--c-card-2)', color: GD_COLORS.fund, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <TrendingUp size={16} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.fundCode || p.fundName}</div>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 1, lineHeight: 1.35 }}>
+                {isVi
+                  ? `Cập nhật số CCQ khớp lệnh · ${fmtUnits(p.units)} CCQ ước tính · mua ${fmtTxDate(p.investmentDate, 'vi')}`
+                  : `Update the filled units · ${fmtUnits(p.units)} estimated · bought ${fmtTxDate(p.investmentDate, 'en')}`}
+              </div>
+            </div>
+            <button
+              onClick={() => onFixEstimate?.(p)}
+              className="cn-btn"
+              style={{ padding: '7px 13px', minHeight: 44, fontSize: 12.5, gap: 5, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Pencil size={13} strokeWidth={2.2} />
+              {isVi ? 'Cập nhật' : 'Update'}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   )
