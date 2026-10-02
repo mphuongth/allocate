@@ -188,6 +188,37 @@ describe('buildBuyPayload', () => {
     expect(term).not.toHaveProperty('accumulating')
   })
 
+  it('bank: a term deposit carries the fund it moves to at maturity', () => {
+    const p = ok(buildBuyPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'term', rate: '6', maturity: '2027-04-01', targetFundId: 'fund-e1' }), null))
+    expect(p).toMatchObject({ target_fund_id: 'fund-e1' })
+    const none = ok(buildBuyPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'term', targetFundId: '' }), null))
+    expect(none).toMatchObject({ target_fund_id: null })
+  })
+
+  it('bank: a "term" deposit still missing its rate or maturity sends no target fund', () => {
+    // The server only takes a target on a deposit that will actually mature, so
+    // sending one here would refuse the whole save over an optional field. The
+    // deposit saves as it always did; the target is chosen once it has a term.
+    const noMaturity = ok(buildBuyPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'term', rate: '6', maturity: '', targetFundId: 'fund-e1' }), null))
+    expect(noMaturity).toMatchObject({ target_fund_id: null })
+    const noRate = ok(buildBuyPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'term', rate: '', maturity: '2027-04-01', targetFundId: 'fund-e1' }), null))
+    expect(noRate).toMatchObject({ target_fund_id: null })
+  })
+
+  it('bank: only a term deposit has a target fund — a book or a flex deposit never sends one', () => {
+    // A book's tranches mature together and are settled by their own flow; a
+    // flex deposit has no maturity. The column refuses both (20261001000001).
+    for (const depositType of ['accumulating', 'flex'] as const) {
+      const p = ok(buildBuyPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType, targetFundId: 'fund-e1' }), null))
+      expect(p).not.toHaveProperty('target_fund_id')
+    }
+  })
+
+  it('fund and gold never send a target fund', () => {
+    expect(ok(buildBuyPayload(form({ assetType: 'fund', fundId: 'f1', amount: '1000000', nav: '20000', targetFundId: 'fund-e1' }), null))).not.toHaveProperty('target_fund_id')
+    expect(ok(buildBuyPayload(form({ assetType: 'gold', goldQty: '1', goldPrice: '9000000', targetFundId: 'fund-e1' }), null))).not.toHaveProperty('target_fund_id')
+  })
+
   it('gold: luông normalizes to chỉ (×10 units, ÷10 price)', () => {
     const p = ok(buildBuyPayload(form({ assetType: 'gold', goldUnit: 'luong', goldQty: '1', goldPrice: '92.000.000', goldProvider: 'PNJ' }), null))
     expect(p).toMatchObject({ asset_type: 'gold', amount_vnd: 92_000_000, units: 10, unit_price: 9_200_000, notes: 'PNJ' })
@@ -202,6 +233,17 @@ describe('buildEditPayload', () => {
       amount_vnd: 1_000_000, units: 40, unit_price: 25_000, goal_id: null, notes: null,
     })
     expect(p).not.toHaveProperty('transaction_type')
+  })
+
+  it('bank: editing a term deposit sets or clears its target fund', () => {
+    expect(ok(buildEditPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'term', rate: '6', maturity: '2027-04-01', targetFundId: 'fund-e1' })))).toMatchObject({ target_fund_id: 'fund-e1' })
+    expect(ok(buildEditPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'term', targetFundId: '' })))).toMatchObject({ target_fund_id: null })
+  })
+
+  it('bank: editing a flex deposit clears any target fund; editing a book leaves the field alone', () => {
+    expect(ok(buildEditPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'flex', targetFundId: 'fund-e1' })))).toMatchObject({ target_fund_id: null })
+    // A book goes through update_deposit_book, which has no target fund at all.
+    expect(ok(buildEditPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'accumulating', targetFundId: 'fund-e1' })))).not.toHaveProperty('target_fund_id')
   })
 
   it('bank/gold carry explicit fund_id: null', () => {

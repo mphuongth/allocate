@@ -27,13 +27,14 @@ export type SubtypeAssetType = 'fund' | 'bank' | 'gold' | 'stock'
  * - bank  — the deposit terms; a deposit has no units, no NAV and no fund.
  *   `deposit_group_id` ties an accumulating book's tranches together,
  *   `interest_earned_vnd` is what a renewal booked, and `top_up_lock_days` is
- *   how long before maturity the bank stops accepting top-ups.
+ *   how long before maturity the bank stops accepting top-ups;
+ *   `target_fund_id` is where a term deposit's money goes when not renewed.
  */
 export const ASSET_SUBTYPE_FIELDS: Record<SubtypeAssetType, readonly string[]> = {
   fund: ['fund_id', 'units', 'unit_price'],
   gold: ['units', 'unit_price'],
   stock: ['units', 'unit_price'],
-  bank: ['interest_rate', 'expiry_date', 'bank_code', 'interest_earned_vnd', 'deposit_group_id', 'top_up_lock_days'],
+  bank: ['interest_rate', 'expiry_date', 'bank_code', 'interest_earned_vnd', 'deposit_group_id', 'top_up_lock_days', 'target_fund_id'],
 }
 
 /** Every column that belongs to at least one asset type but not to all of them. */

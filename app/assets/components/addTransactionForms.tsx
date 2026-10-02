@@ -102,6 +102,7 @@ export function BuyFundFields({
 export function BuyBankFields({
   banks, bankCode, setBankCode, depositType, setDepositType,
   bankAmount, setBankAmount, rate, setRate, maturity, setMaturity, topUpLockDays, setTopUpLockDays, date,
+  funds = [], targetFundId = '', setTargetFundId,
   lockType = false, inputStyle, labelStyle,
 }: {
   banks: Bank[]
@@ -118,6 +119,10 @@ export function BuyBankFields({
   topUpLockDays: string
   setTopUpLockDays: (v: string) => void
   date: string
+  /** Term deposit only: the fund its money moves to when it is not renewed. */
+  funds?: Fund[]
+  targetFundId?: string
+  setTargetFundId?: (v: string) => void
   /** Editing a book: the savings type and its lock window are fixed — the PUT
    *  has no way to group or ungroup a deposit, so offering the switch would
    *  promise a change that silently never happens. */
@@ -209,6 +214,24 @@ export function BuyBankFields({
             onChange={(e) => setMaturity(e.target.value)}
             style={inputStyle}
           />
+        </div>
+      )}
+      {depositType === 'term' && setTargetFundId && (
+        <div>
+          <label htmlFor="target-fund" style={labelStyle}>{t('targetFund')}</label>
+          <select
+            id="target-fund"
+            data-testid="target-fund-select"
+            value={targetFundId}
+            onChange={(e) => setTargetFundId(e.target.value)}
+            style={inputStyle}
+          >
+            <option value="">{t('targetFundNone')}</option>
+            {funds.map((f) => (
+              <option key={f.id} value={f.id}>{f.code ? `${f.code} — ${f.name}` : f.name}</option>
+            ))}
+          </select>
+          <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('targetFundHint')}</div>
         </div>
       )}
       {depositType === 'accumulating' && (

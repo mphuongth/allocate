@@ -44,7 +44,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
   const body = parsed.body
-  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code } = body
+  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, target_fund_id } = body
 
   let txId: string
   let cleanAssetType: typeof ASSET_TYPES[number] | undefined
@@ -58,6 +58,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   let cleanGoalId: string | null | undefined
   let cleanFundId: string | null | undefined
   let cleanBankCode: string | null | undefined
+  let cleanTargetFundId: string | null | undefined
 
   try {
     txId = validateUUID(id, 'transaction_id')
@@ -100,6 +101,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (bank_code !== undefined) {
       cleanBankCode = bank_code === null || bank_code === '' ? null : validateBankCode(bank_code, 'bank_code')
     }
+    if (target_fund_id !== undefined) {
+      cleanTargetFundId = target_fund_id === null || target_fund_id === '' ? null : validateUUID(target_fund_id, 'target_fund_id')
+    }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -134,6 +138,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!fund) return NextResponse.json({ error: "You don't have permission to access this fund." }, { status: 403 })
   }
 
+  // The target fund is a fund reference like fund_id, and is owned the same way.
+  if (cleanTargetFundId) {
+    const { data: fund } = await supabase
+      .from('funds')
+      .select('id')
+      .eq('id', cleanTargetFundId)
+      .eq('user_id', user.id)
+      .single()
+    if (!fund) return NextResponse.json({ error: "You don't have permission to access this fund." }, { status: 403 })
+  }
+
   // An accumulating book shares goal + maturity across all tranches. Editing it
   // must update the whole group atomically — doing the row update and the cascade
   // as two separate statements risks a partial failure that splits the book across
@@ -159,6 +174,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       { error: 'An accumulating deposit book cannot be changed to another asset type.', code: 'book_type_change' },
       { status: 400 },
     )
+  }
+
+  // Only a single bank deposit has a target fund (20261001000001). A book's
+  // tranches are settled by the book flows — and update_deposit_book has no
+  // such field, so accepting one here would promise a change that never lands.
+  if (cleanTargetFundId && (existing.deposit_group_id || (cleanAssetType ?? existing.asset_type) !== 'bank')) {
+    return NextResponse.json({ error: 'Only a single bank deposit can have a target fund.' }, { status: 400 })
   }
 
   if (existing.deposit_group_id) {
@@ -244,6 +266,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const effType = cleanAssetType ?? existing.asset_type
     updates.bank_code = effType === 'bank' ? cleanBankCode : null
   }
+  if (target_fund_id !== undefined) updates.target_fund_id = cleanTargetFundId
 
   const { data: transaction, error } = await supabase
     .from('investment_transactions')

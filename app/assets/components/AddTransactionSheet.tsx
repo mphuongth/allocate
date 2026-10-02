@@ -11,7 +11,7 @@ import { todayIso } from '@/lib/dates'
 import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload, type TxForm } from './addTransactionModel'
 import { BuyFundFields, BuyBankFields, BuyGoldFields, SellForm } from './addTransactionForms'
 
-export interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string }
+export interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string; is_dca?: boolean; dca_goal_id?: string | null }
 interface Goal { goal_id: string; goal_name: string; completed_at?: string | null }
 export interface Bank { code: string; name: string; logo_url?: string | null }
 
@@ -98,6 +98,8 @@ export interface EditableTransaction {
   goal_id: string | null
   // Structured bank reference (FK to banks.code). Null on legacy deposits.
   bank_code?: string | null
+  // A term deposit's fund for when it is not renewed at maturity (20261001000001).
+  target_fund_id?: string | null
   // Set on every row of an accumulating book (anchor and tranches alike). It is
   // what makes the deposit a book — there is no separate "type" column — so the
   // edit form reads the savings type from it.
@@ -198,6 +200,12 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
   const [rate, setRate] = useState('')
   const [maturity, setMaturity] = useState('')
   const [topUpLockDays, setTopUpLockDays] = useState('')
+  // Where a term deposit's money goes at maturity when not renewed. Defaults to
+  // the fund whose DCA feeds the deposit's goal — the money was parked from
+  // that DCA — until the user picks for themselves (or an edit loads a stored
+  // choice), after which the default never overrides them.
+  const [targetFundId, setTargetFundId] = useState('')
+  const [targetTouched, setTargetTouched] = useState(false)
 
   // gold fields
   const [goldProvider, setGoldProvider] = useState('PNJ')
@@ -284,6 +292,8 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
       setDepositType(existing.deposit_group_id != null ? 'accumulating' : existing.interest_rate != null ? 'term' : 'flex')
       setTopUpLockDays(existing.top_up_lock_days != null ? String(existing.top_up_lock_days) : '')
       setBankCode(existing.bank_code || '')
+      setTargetFundId(existing.target_fund_id || '')
+      setTargetTouched(true)
       // Legacy deposits stored their name only as free text (no bank_code). Keep
       // that text alive in the general note so editing doesn't silently drop it;
       // structured deposits derive their name from the bank, so leave note blank.
@@ -311,6 +321,12 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
       else if (at === 'fund') setAmount(amt)
     }
   }, [open, existing, prefill])
+
+  useEffect(() => {
+    if (!open || existing || targetTouched || assetType !== 'bank' || depositType !== 'term') return
+    const dca = goalId ? funds.find((f) => f.is_dca && f.dca_goal_id === goalId) : undefined
+    setTargetFundId(dca?.id ?? '')
+  }, [open, existing, targetTouched, assetType, depositType, goalId, funds])
 
   // Lazily load sellable holdings from the overview the first time the user
   // switches to "Sell" — most opens are buys, so we don't pay for it up front.
@@ -348,6 +364,8 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     setRate('')
     setMaturity('')
     setTopUpLockDays('')
+    setTargetFundId('')
+    setTargetTouched(false)
     setGoldProvider('PNJ')
     setGoldUnit('chi')
     setGoldQty('')
@@ -438,7 +456,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     const form: TxForm = {
       assetType, date, goalId, note,
       fundId, amount, units, nav, selectedFundNav: selectedFund?.nav,
-      bankCode, selectedBankName, depositType, bankAmount, rate, maturity, topUpLockDays,
+      bankCode, selectedBankName, depositType, bankAmount, rate, maturity, topUpLockDays, targetFundId,
       goldProvider, goldUnit, goldQty, goldPrice,
     }
 
@@ -587,6 +605,8 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
               rate={rate} setRate={setRate}
               maturity={maturity} setMaturity={setMaturity} date={date}
               topUpLockDays={topUpLockDays} setTopUpLockDays={setTopUpLockDays}
+              funds={funds} targetFundId={targetFundId}
+              setTargetFundId={(v) => { setTargetFundId(v); setTargetTouched(true) }}
               lockType={Boolean(existing?.deposit_group_id)}
               inputStyle={inputStyle} labelStyle={labelStyle}
             />
