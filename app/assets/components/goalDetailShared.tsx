@@ -230,6 +230,7 @@ export interface GoalDetailTx {
   top_up_lock_days?: number | null
   // The book this one is planned to be folded into at maturity (#638).
   successor_deposit_tx_id?: string | null
+  target_fund_id?: string | null
   // ...and, on the tranche a completed merge credited, the book its cash came
   // from. Historical fact: the source is dissolved by then.
   merged_from_book_id?: string | null

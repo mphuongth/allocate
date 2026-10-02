@@ -77,7 +77,7 @@ export default defineConfig({
         // bugs, and they are fully covered today — hold them there. The two
         // price sources belong here for the same reason: a wrong price is a
         // wrong portfolio, and nothing downstream re-checks the number.
-        'lib/{accumulating,bankWithdrawal,dates,depositValuation,effectiveRange,finance,fundPricing,fundWithdrawal,goldWithdrawal,heldForMerge,hose-price,inflation,maturity,mergeCluster,mergeEligibility,planning,recurringLink,savingsChallenge,snapshots,validation,withdrawalProgress}.ts':
+        'lib/{accumulating,bankWithdrawal,dates,depositMove,depositValuation,effectiveRange,finance,fundPricing,fundWithdrawal,goldWithdrawal,heldForMerge,hose-price,inflation,maturity,mergeCluster,mergeEligibility,planning,recurringLink,renewThreshold,savingsChallenge,snapshots,validation,withdrawalProgress}.ts':
           { lines: 100, functions: 100, branches: 80 },
 
         // The server routes the audit flagged as thin. Floors sit just under

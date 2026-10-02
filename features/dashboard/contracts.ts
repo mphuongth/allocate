@@ -95,6 +95,9 @@ export interface NonFundUnallocatedItem {
   // opened from the dashboard's needs-attention card makes the same decision as
   // the one opened from goal detail (#659). Set on a book anchor only.
   successorDepositTxId?: string | null
+  // A single term deposit's fund for when it is not renewed at maturity
+  // (20261001000001). Optional for cached payloads predating the field.
+  targetFundId?: string | null
 }
 
 export interface DashboardData {
@@ -156,6 +159,8 @@ export interface InvRow {
   // ...and what that book is called, so the promise can be stated in the user's
   // own words rather than as an anonymous "a successor book".
   successorName?: string | null
+  // A single term deposit's fund for when it is not renewed at maturity.
+  targetFundId?: string | null
   // The book's tranches (top-ups), newest first, for the detail view. Each is one
   // underlying row; present only on an accumulating book row.
   tranches?: InvTranche[] | null

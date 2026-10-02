@@ -267,6 +267,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     updates.bank_code = effType === 'bank' ? cleanBankCode : null
   }
   if (target_fund_id !== undefined) updates.target_fund_id = cleanTargetFundId
+  // A purchase made by moving a deposit is priced at the NAV the app knew and
+  // flagged as estimated (20261001000001). Saving it here is the user's
+  // correction, so the flag goes; and a row that stops being a fund cannot
+  // carry an estimate of fund units at all.
+  updates.units_estimated = false
 
   const { data: transaction, error } = await supabase
     .from('investment_transactions')

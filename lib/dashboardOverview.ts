@@ -57,10 +57,13 @@ type NonFundEntry = {
   // dashboard's needs-attention card without it is offered a renewal fork the
   // database refuses every option of (#659).
   successorDepositTxId: string | null
+  // A single term deposit's fund for when it is not renewed at maturity
+  // (20261001000001). The maturity sheet offers the move to it.
+  targetFundId: string | null
 }
 
 function buildNonFund(
-  tx: { transaction_id: string; asset_type: string; interest_rate: number | null; expiry_date: string | null; investment_date: string; notes: string | null; deposit_group_id?: string | null; bank_code?: string | null; currency?: string | null; is_pledged?: boolean | null; successor_deposit_tx_id?: string | null },
+  tx: { transaction_id: string; asset_type: string; interest_rate: number | null; expiry_date: string | null; investment_date: string; notes: string | null; deposit_group_id?: string | null; bank_code?: string | null; currency?: string | null; is_pledged?: boolean | null; successor_deposit_tx_id?: string | null; target_fund_id?: string | null },
   amount: number,
   currentValue: number,
   units: number | null,
@@ -80,6 +83,7 @@ function buildNonFund(
     currency: tx.currency ?? null,
     isPledged: tx.is_pledged ?? false,
     successorDepositTxId: tx.successor_deposit_tx_id ?? null,
+    targetFundId: tx.target_fund_id ?? null,
   }
 }
 
@@ -118,7 +122,7 @@ export async function buildDashboardOverview(
       // Snapshot-free view — renewal history rows can't reach the net-worth /
       // goal / allocation totals (defence on top of the app-side filter below).
       .from('active_investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, expiry_date, notes, affects_progress, bank_code, currency, is_pledged, held_for_merge, merge_target_goal_id, consumed_by_inv_id, successor_deposit_tx_id, funds!fund_id(id, name, nav, updated_at, fund_type)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, expiry_date, notes, affects_progress, bank_code, currency, is_pledged, held_for_merge, merge_target_goal_id, consumed_by_inv_id, successor_deposit_tx_id, target_fund_id, funds!fund_id(id, name, nav, updated_at, fund_type)')
       .eq('user_id', userId),
     supabase
       .from('insurance_members')

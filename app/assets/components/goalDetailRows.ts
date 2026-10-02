@@ -148,7 +148,7 @@ export function buildInvRows(
       }
     }
 
-    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, investmentDate: fund ? null : (tx.investment_date ?? null), fund: fund ?? null, depositGroupId: null, bankCode: tx.asset_type === 'bank' ? (tx.bank_code ?? null) : null, currency: tx.currency ?? null, isPledged: tx.is_pledged ?? false, topUpLockDays: tx.top_up_lock_days ?? null }
+    return { id: tx.transaction_id, name, type: tx.asset_type, value, gainPct, units, principal, interestRate: tx.interest_rate ?? null, expiryDate: tx.expiry_date ?? null, investmentDate: fund ? null : (tx.investment_date ?? null), fund: fund ?? null, depositGroupId: null, bankCode: tx.asset_type === 'bank' ? (tx.bank_code ?? null) : null, currency: tx.currency ?? null, isPledged: tx.is_pledged ?? false, topUpLockDays: tx.top_up_lock_days ?? null, targetFundId: tx.asset_type === 'bank' ? (tx.target_fund_id ?? null) : null }
   }).filter((row): row is InvRow => row !== null)
 
   // One InvRow per accumulating book: value each tranche on its own locked rate
