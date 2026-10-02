@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { interestAtMaturity, fundUnitsFor } from '@/lib/depositMove'
+import { interestAtMaturity, fundUnitsFor, isUnitEstimateDue } from '@/lib/depositMove'
 import { suggestMaturityAction, resolveRenewThreshold, DEFAULT_RENEW_MIN_RATE_PCT } from '@/lib/renewThreshold'
 
 // What a matured term deposit pays and where it goes. Interest is simple, on
@@ -82,5 +82,23 @@ describe('renew-or-move suggestion', () => {
     expect(resolveRenewThreshold(undefined)).toBe(8)
     expect(resolveRenewThreshold(7.5)).toBe(7.5)
     expect(resolveRenewThreshold(0)).toBe(0)
+  })
+})
+
+describe('isUnitEstimateDue', () => {
+  // A purchase priced at an estimated NAV asks to be corrected for the week the
+  // order takes to fill, counted from the day it was made.
+  const today = '2026-10-10'
+  it('is due from the purchase day through the seventh day after it', () => {
+    expect(isUnitEstimateDue('2026-10-10', today)).toBe(true)
+    expect(isUnitEstimateDue('2026-10-03', today)).toBe(true)
+  })
+
+  it('stops asking after a week', () => {
+    expect(isUnitEstimateDue('2026-10-02', today)).toBe(false)
+  })
+
+  it('does not ask about a date it cannot read', () => {
+    expect(isUnitEstimateDue('', today)).toBe(false)
   })
 })

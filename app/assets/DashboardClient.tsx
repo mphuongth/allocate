@@ -16,7 +16,7 @@ import { SellWithdrawSheet, type SellItem } from './components/SellWithdrawSheet
 import GoalDetailSheet from './components/GoalDetailSheet'
 import AssignGoalSheet from './components/AssignGoalSheet'
 import DownloadReportSheet from './components/DownloadReportSheet'
-import AddTransactionSheet, { type PrefillTransaction } from './components/AddTransactionSheet'
+import AddTransactionSheet, { type PrefillTransaction, type EditableTransaction } from './components/AddTransactionSheet'
 import RecentActivityCard from './components/RecentActivityCard'
 import MaturityActionCard from './components/MaturityActionCard'
 import ChallengeTodayCard from '@/components/challenge/ChallengeTodayCard'
@@ -44,6 +44,7 @@ import {
   sellItemForMaturingDeposit,
   type SortValue,
   type MaturingDep,
+  estimateToEditable,
 } from '@/features/dashboard/dashboardModel'
 import { fetchNetWorthHistory, type TimeRange, type ChartPoint } from './components/netWorthHistory'
 import { fmtTimeAgo } from '@/lib/formatters'
@@ -117,6 +118,9 @@ export default function DashboardClient({ userId }: { userId: string }) {
   // When set, the add-transaction sheet opens prefilled (e.g. "Add to this goal"
   // from a goal detail). Cleared on close so the plain FAB/button path stays blank.
   const [addTxPrefill, setAddTxPrefill] = useState<PrefillTransaction | null>(null)
+  // A purchase whose units are still an estimate, opened from the "needs
+  // attention" card to be corrected (saving it clears the estimate).
+  const [estimateEdit, setEstimateEdit] = useState<EditableTransaction | null>(null)
   const [showAddInsurance, setShowAddInsurance] = useState(false)
   // Data loading — cache-first paint, silent refresh, the error banner and the
   // three PWA-only staleness rules — all belongs to useOverviewData now (#602).
@@ -376,6 +380,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
                 {/* Term deposits needing a maturity decision */}
                 <MaturityActionCard
                   items={maturingDeposits.map((d) => d.inv)}
+                  estimates={data?.estimatedPurchases ?? []}
+                  onFixEstimate={(p) => setEstimateEdit(estimateToEditable(p))}
                   isVi={isVi}
                   onResolve={(inv) => resolveById(inv.id)}
                   clusters={mergeClusters}
@@ -561,6 +567,8 @@ export default function DashboardClient({ userId }: { userId: string }) {
               {/* Term deposits needing a maturity decision */}
               <MaturityActionCard
                 items={maturingDeposits.map((d) => d.inv)}
+                estimates={data?.estimatedPurchases ?? []}
+                onFixEstimate={(p) => setEstimateEdit(estimateToEditable(p))}
                 isVi={isVi}
                 onResolve={(inv) => resolveById(inv.id)}
                 clusters={mergeClusters}
@@ -843,6 +851,16 @@ export default function DashboardClient({ userId }: { userId: string }) {
         onSaved={() => { fetchData({ force: true }); bumpHistoryKey() }}
         desktop={isDesktop}
         prefill={addTxPrefill}
+      />
+
+      {/* Correcting the units of a purchase priced at an estimated NAV. */}
+      <AddTransactionSheet
+        open={!!estimateEdit}
+        existing={estimateEdit}
+        onClose={() => setEstimateEdit(null)}
+        onSaved={() => { setEstimateEdit(null); fetchData({ force: true }); bumpHistoryKey() }}
+        onStale={() => { setEstimateEdit(null); fetchData({ force: true }) }}
+        desktop={isDesktop}
       />
 
       {/* Download Report Sheet */}

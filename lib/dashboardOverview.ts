@@ -16,6 +16,7 @@ import { heldForMergeContributions } from '@/lib/heldForMerge'
 import { valueNonFundHolding } from '@/lib/depositValuation'
 import { persistSnapshot, shouldWriteSnapshot } from '@/lib/snapshots'
 import { todayIso } from '@/lib/dates'
+import { isUnitEstimateDue } from '@/lib/depositMove'
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>
 
@@ -122,7 +123,7 @@ export async function buildDashboardOverview(
       // Snapshot-free view — renewal history rows can't reach the net-worth /
       // goal / allocation totals (defence on top of the app-side filter below).
       .from('active_investment_transactions')
-      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, expiry_date, notes, affects_progress, bank_code, currency, is_pledged, held_for_merge, merge_target_goal_id, consumed_by_inv_id, successor_deposit_tx_id, target_fund_id, funds!fund_id(id, name, nav, updated_at, fund_type)')
+      .select('transaction_id, goal_id, amount_vnd, interest_rate, investment_date, asset_type, transaction_type, units, unit_price, units_withdrawn, principal_withdrawn, fund_id, parent_transaction_id, renewed_from_transaction_id, deposit_group_id, expiry_date, notes, affects_progress, bank_code, currency, is_pledged, held_for_merge, merge_target_goal_id, consumed_by_inv_id, successor_deposit_tx_id, target_fund_id, units_estimated, funds!fund_id(id, name, code, nav, updated_at, fund_type)')
       .eq('user_id', userId),
     supabase
       .from('insurance_members')
@@ -333,13 +334,25 @@ export async function buildDashboardOverview(
   let goldUnits = 0  // total gold holdings in chỉ (after withdrawals)
 
   const unallocatedNonFunds: NonFundEntry[] = []
+  // Purchases priced at an estimated NAV (a deposit moved to its fund) that the
+  // "needs attention" card asks the user to correct, for the week the order
+  // takes to fill.
+  const estimatedPurchases: NonNullable<DashboardData['estimatedPurchases']> = []
 
   for (const tx of investments) {
     if (tx.asset_type === 'fund' && tx.units) {
       const fund = Array.isArray(tx.funds)
-        ? tx.funds[0] as { id: string; name: string; nav: number; updated_at: string; fund_type: string } | undefined
-        : tx.funds as { id: string; name: string; nav: number; updated_at: string; fund_type: string } | null
+        ? tx.funds[0] as { id: string; name: string; code?: string | null; nav: number; updated_at: string; fund_type: string } | undefined
+        : tx.funds as { id: string; name: string; code?: string | null; nav: number; updated_at: string; fund_type: string } | null
       if (!fund) continue
+
+      if (tx.units_estimated && isUnitEstimateDue(tx.investment_date)) {
+        estimatedPurchases.push({
+          transactionId: tx.transaction_id, fundId: fund.id, fundName: fund.name, fundCode: fund.code ?? null,
+          goalId: tx.goal_id ?? null, amount: tx.amount_vnd, units: tx.units, unitPrice: tx.unit_price ?? null,
+          investmentDate: tx.investment_date,
+        })
+      }
 
       if (isNavStale(fund.updated_at)) navStale = true
       if (!latestNavUpdatedAt || fund.updated_at > latestNavUpdatedAt) latestNavUpdatedAt = fund.updated_at
@@ -672,5 +685,6 @@ export async function buildDashboardOverview(
     byType: { bank: nonFundByType.bank, gold: nonFundByType.gold, stock: nonFundByType.stock },
     goldUnits,
     insurance: insuranceOutput,
+    estimatedPurchases,
   } }
 }

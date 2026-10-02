@@ -96,3 +96,40 @@ describe('MaturityActionCard', () => {
     expect(onMergeCluster).toHaveBeenCalledWith('b')
   })
 })
+
+describe('MaturityActionCard — renew-or-move and estimated-units reminders', () => {
+  const estimate = {
+    transactionId: 'buy-1', fundId: 'f-e1', fundName: 'VFMVN30 ETF', fundCode: 'E1VFVN30', goalId: 'g1',
+    amount: 102_991_781, units: 4119.67, unitPrice: 25_000, investmentDate: daysFromNow(-2),
+  }
+
+  it("reminds the user to check today's 12-month rate before deciding a term deposit", () => {
+    render(<MaturityActionCard items={[mk({ id: 'a', name: 'VCB 6 th.', expiryDate: daysFromNow(3) })]} isVi={false} onResolve={() => {}} />)
+    expect(screen.getByTestId('maturity-rate-reminder-a')).toHaveTextContent(/today's 12-month rate/i)
+  })
+
+  it('does not ask about the rate for an accumulating book, which has no renew-or-move choice', () => {
+    render(<MaturityActionCard items={[mk({ id: 'b', depositGroupId: 'b' })]} isVi={false} onResolve={() => {}} />)
+    expect(screen.queryByTestId('maturity-rate-reminder-b')).not.toBeInTheDocument()
+  })
+
+  it('asks for the filled units of a purchase priced at an estimated NAV, and opens it to correct', async () => {
+    const user = userEvent.setup()
+    const onFixEstimate = vi.fn()
+    render(<MaturityActionCard items={[]} estimates={[estimate]} isVi onResolve={() => {}} onFixEstimate={onFixEstimate} />)
+
+    // The card shows even with no deposit to decide, and counts the purchase.
+    expect(screen.getByTestId('maturity-action-count').textContent).toBe('1')
+    const row = screen.getByTestId('unit-estimate-buy-1')
+    expect(row).toHaveTextContent('E1VFVN30')
+    expect(row).toHaveTextContent(/Cập nhật số CCQ khớp lệnh/)
+
+    await user.click(within(row).getByRole('button', { name: /Cập nhật/ }))
+    expect(onFixEstimate).toHaveBeenCalledWith(estimate)
+  })
+
+  it('counts deposits and purchases together', () => {
+    render(<MaturityActionCard items={[mk({ id: 'a' })]} estimates={[estimate]} isVi={false} onResolve={() => {}} onFixEstimate={() => {}} />)
+    expect(screen.getByTestId('maturity-action-count').textContent).toBe('2')
+  })
+})

@@ -16,6 +16,7 @@ import { detectMergeClusters } from '@/lib/mergeCluster'
 import { actionableBooks, type TaggedTranche } from './maturityCardItems'
 import type {
   DashboardData,
+  EstimatedPurchase,
   FundBreakdownItem,
   GoalData,
   InvRow,
@@ -270,5 +271,18 @@ export function sellItemForMaturingDeposit(dep: MaturingDep, isVi: boolean): Sel
     purchasePrice: dep.inv.principal ?? dep.inv.value,
     depositGroupId: dep.inv.depositGroupId,
     interestRate: dep.inv.interestRate ?? undefined,
+  }
+}
+
+/**
+ * A purchase whose units are still an estimate, as the add-transaction sheet's
+ * edit form takes it — so the card's "Update" opens it prefilled, and saving
+ * it (PUT, which clears units_estimated) is the whole correction.
+ */
+export function estimateToEditable(p: EstimatedPurchase) {
+  return {
+    transaction_id: p.transactionId, asset_type: 'fund', fund_id: p.fundId, goal_id: p.goalId,
+    investment_date: p.investmentDate, amount_vnd: p.amount, units: p.units, unit_price: p.unitPrice,
+    interest_rate: null, expiry_date: null, notes: null,
   }
 }

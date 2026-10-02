@@ -118,6 +118,23 @@ export interface DashboardData {
   byType: { bank: number; gold: number; stock: number }
   goldUnits?: number
   insurance: InsuranceData[]
+  // Fund purchases whose units are still an estimate (a deposit moved to its
+  // fund at the NAV the app knew), within the week the order takes to fill.
+  // The "needs attention" card asks the user to correct them. Optional for
+  // cached payloads predating the field.
+  estimatedPurchases?: EstimatedPurchase[]
+}
+
+export interface EstimatedPurchase {
+  transactionId: string
+  fundId: string
+  fundName: string
+  fundCode: string | null
+  goalId: string | null
+  amount: number
+  units: number
+  unitPrice: number | null
+  investmentDate: string
 }
 
 // A holding as the goal-detail views and the maturity flows render it: one row
