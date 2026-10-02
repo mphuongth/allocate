@@ -184,7 +184,13 @@
     "inflationDefaultNote": "Để trống để dùng mặc định của ứng dụng.",
     "inflationRangeError": "Nhập tỉ lệ từ 0 đến 100.",
     "inflationSaveFailed": "Không lưu được tỉ lệ lạm phát",
-    "inflationSave": "Lưu tỉ lệ giả định"
+    "inflationSave": "Lưu tỉ lệ giả định",
+    "savingsDeposits": "Sổ tiết kiệm",
+    "renewThresholdRate": "Gửi lại khi lãi từ",
+    "renewThresholdHint": "Khi sổ đáo hạn, bạn nhập lãi suất 12 tháng hiện hành. Từ ngưỡng này trở lên, app gợi ý gửi lại cả gốc lẫn lãi; thấp hơn thì gợi ý chuyển gốc + lãi sang quỹ đích của sổ. App chỉ gợi ý — bạn là người xác nhận.",
+    "renewThresholdDefaultNote": "Để trống để dùng mặc định {pct}%.",
+    "renewThresholdSaveFailed": "Không lưu được ngưỡng gửi lại",
+    "renewThresholdSave": "Lưu ngưỡng gửi lại"
   },
   "goals": {
     "title": "Mục tiêu Tiết kiệm",

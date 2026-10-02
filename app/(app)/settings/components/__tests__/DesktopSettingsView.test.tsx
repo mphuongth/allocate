@@ -347,3 +347,13 @@ describe('DesktopSettingsView — profile email hint', () => {
     expect(screen.getByText(/email can't be changed/i)).toBeInTheDocument()
   })
 })
+
+// ─── Savings deposits — the renew-or-move threshold ─────────────────────────────
+
+describe('DesktopSettingsView — savings deposits', () => {
+  it('renders the renewal threshold under its own heading', () => {
+    render(<DesktopSettingsView {...defaultProps} />)
+    expect(screen.getByText('Savings deposits')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /renew at or above/i })).toBeInTheDocument()
+  })
+})
