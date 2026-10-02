@@ -198,6 +198,80 @@ describe('GET /api/v1/dashboard/overview — a book carries its successor promis
   })
 })
 
+// A matured term deposit moves into its target fund (move_deposit_to_fund,
+// 20261001000001): a withdrawal closes the deposit and a purchase of the fund
+// is made with the same money, in the same goal. The goal's value must not
+// jump — the deposit was already counted at principal + interest, and the fund
+// is worth what the bank paid out. Asserted through the real overview handler,
+// on both the value (net worth) and the bar (progress).
+describe('GET /api/v1/dashboard/overview — moving a deposit to its fund keeps the goal whole', () => {
+  const NAV = 25_000
+  const FUND = { id: 'f-e1', name: 'VFMVN30 ETF', nav: NAV, updated_at: new Date().toISOString(), fund_type: 'etf' }
+  // 100M at 6%, 1 Oct 2025 → 1 Apr 2026 (182 days, matured): the bank pays
+  // 100M × 6% × 182/365 = 2,991,781 of interest.
+  const DEPOSIT = {
+    transaction_id: 'dep-1', goal_id: 'g1', asset_type: 'bank', transaction_type: 'investment',
+    amount_vnd: 100_000_000, interest_rate: 6, investment_date: '2025-10-01', expiry_date: '2026-04-01',
+    target_fund_id: 'f-e1', affects_progress: true,
+  }
+  const RECEIVED = 102_991_781
+  const UNITS = 4119.67 // lib/depositMove fundUnitsFor(RECEIVED, NAV)
+
+  function goal() {
+    h.tables.savings_goals = { data: [{ goal_id: 'g1', goal_name: 'Wealth Max', target_amount: 500_000_000, target_date: null }], error: null }
+  }
+  async function overview() {
+    const res = await GET()
+    expect(res.status).toBe(200)
+    return await res.json() as {
+      netWorth: { netWorth: number }
+      goals: { currentValue: number; progressValue: number; nonFunds: { transactionId: string; targetFundId?: string | null }[]; funds: unknown[] }[]
+    }
+  }
+
+  it('asks for the target fund, and carries it on the deposit', async () => {
+    goal()
+    h.tables.active_investment_transactions = { data: [DEPOSIT], error: null }
+    const d = await overview()
+    expect(h.selects.active_investment_transactions).toContain('target_fund_id')
+    expect(d.goals[0].nonFunds[0].targetFundId).toBe('f-e1')
+  })
+
+  it('values the goal the same before and after the move', async () => {
+    goal()
+    h.tables.active_investment_transactions = { data: [DEPOSIT], error: null }
+    const before = await overview()
+    expect(Math.round(before.goals[0].currentValue)).toBe(RECEIVED)
+
+    h.tables.active_investment_transactions = {
+      data: [
+        DEPOSIT,
+        {
+          transaction_id: 'wd-1', goal_id: 'g1', asset_type: 'bank', transaction_type: 'withdrawal',
+          parent_transaction_id: 'dep-1', amount_vnd: RECEIVED, principal_withdrawn: 100_000_000,
+          investment_date: '2026-04-01', affects_progress: true, moved_to_fund_tx_id: 'buy-1',
+        },
+        {
+          transaction_id: 'buy-1', goal_id: 'g1', asset_type: 'fund', transaction_type: 'investment',
+          fund_id: 'f-e1', funds: FUND, amount_vnd: RECEIVED, units: UNITS, unit_price: NAV,
+          investment_date: '2026-04-01', units_estimated: true, affects_progress: true,
+        },
+      ],
+      error: null,
+    }
+    const after = await overview()
+
+    // The deposit is gone from the goal; the fund holds the money.
+    expect(after.goals[0].nonFunds).toHaveLength(0)
+    expect(after.goals[0].funds).toHaveLength(1)
+    // Same value, to within the rounding of units to a hundredth (≤ NAV/200).
+    const drift = NAV * 0.005
+    expect(Math.abs(after.goals[0].currentValue - before.goals[0].currentValue)).toBeLessThanOrEqual(drift)
+    expect(Math.abs(after.goals[0].progressValue - before.goals[0].progressValue)).toBeLessThanOrEqual(drift)
+    expect(Math.abs(after.netWorth.netWorth - before.netWorth.netWorth)).toBeLessThanOrEqual(drift)
+  })
+})
+
 // #606 — a withdrawal parented to a FUND PURCHASE (not itself fund-keyed: no
 // fund_id, asset_type omitted). It used to be filed under a key the dashboard
 // never reads, so the cash left while the fund kept every unit: net worth

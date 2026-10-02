@@ -19,13 +19,16 @@
 // (the parent wires `onWithdraw`).
 
 import { useState, useEffect } from 'react'
-import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, PiggyBank } from 'lucide-react'
+import { RefreshCw, Pencil, ArrowDownToLine, AlertTriangle, Check, Building2, X, Plus, PiggyBank, TrendingUp } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import PendingButton from '@/components/ui/PendingButton'
 import { fieldLabel, moneyInput, dateInput, MoneyField, WithdrawSection, HeldPoolSection, DestinationBankField } from './maturityResolveFields'
 import { MergeSourcesSection } from './maturityResolveMergeSources'
 import { RecurringRedepositSection } from './maturityResolveRecurring'
 import { CombineNewCycleSection } from './maturityResolveNewCycle'
+import { RenewOrMoveAdvisor, MoveToFundSection, fundLabel, type MoveFund } from './maturityResolveMoveToFund'
+import { interestAtMaturity, fundUnitsFor } from '@/lib/depositMove'
+import { resolveRenewThreshold, suggestMaturityAction } from '@/lib/renewThreshold'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { iconHit } from './iconHit'
 import { SUCCESS_FLASH_MS } from '../successFlash'
@@ -46,7 +49,7 @@ import { classifyMergeSources, type MergeBlockReason } from '@/lib/mergeEligibil
 import { todayIso } from '@/lib/dates'
 import { clickAway } from '@/components/ui/clickAway'
 
-type Mode = RenewMode | 'withdraw' | 'combine'
+type Mode = RenewMode | 'withdraw' | 'combine' | 'move'
 
 // A native <input type=date> on iOS Safari sizes to its intrinsic content width
 // and ignores width:100%, so an un-clamped date field pushes the whole sheet
@@ -153,6 +156,25 @@ export function MaturityResolveBody({
   // Settle-with-hold success: the deposit was parked in the pool (no re-deposit).
   const [heldDone, setHeldDone] = useState<null | { anchorName: string }>(null)
 
+  // ── Renew or move to the target fund (20261001000001) ───────────────────────
+  // A single term deposit only: a book renews by collapsing, through its own
+  // flows. The user enters today's 12-month rate; their threshold decides the
+  // suggestion, which preselects an option — the user still confirms.
+  const canMoveToFund = !isBook
+  const [currentRate, setCurrentRate] = useState('')
+  const [storedThreshold, setStoredThreshold] = useState<number | null>(null)
+  const [funds, setFunds] = useState<MoveFund[]>([])
+  const [moveFundId, setMoveFundId] = useState(inv.targetFundId ?? '')
+  const maturityInterest = interestAtMaturity({
+    principal, rate: inv.interestRate, investmentDate: inv.investmentDate ?? inv.expiryDate ?? todayIso(), expiryDate: inv.expiryDate,
+  })
+  // What the bank pays out: principal + the full term's interest, which the
+  // user confirms or corrects against the slip.
+  const [moveReceived, setMoveReceived] = useState(String(principal + maturityInterest))
+  // The NAV follows the chosen fund until the user types their own.
+  const [moveNavOverride, setMoveNavOverride] = useState<string | null>(null)
+  const [movedDone, setMovedDone] = useState<null | { fund: string }>(null)
+
   // ── Combine ("settle & re-deposit", merge recurring) ────────────────────────
   // A recurring bank saving due for this goal this month can be folded into the
   // re-deposit. We fetch the goal's active recurring savings on open and match
@@ -255,6 +277,36 @@ export function MaturityResolveBody({
     // of this effect with it, so the disable it used to need is gone too.
   }, [])
 
+  // The renew-or-move threshold and the funds a move can buy. Both are
+  // optional to the sheet: a failed read leaves the 8% default and no move.
+  useEffect(() => {
+    if (!canMoveToFund) return
+    let cancelled = false
+    fetch('/api/v1/user-settings', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && typeof d?.renew_min_rate_pct === 'number') setStoredThreshold(d.renew_min_rate_pct) })
+      .catch(() => {})
+    fetch('/api/funds')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setFunds(Array.isArray(d?.funds) ? d.funds : []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [canMoveToFund])
+
+  const threshold = resolveRenewThreshold(storedThreshold)
+  const currentRateNum = currentRate.trim() === '' ? NaN : Number(currentRate)
+  const suggestion = canMoveToFund && currentRateNum > 0 ? suggestMaturityAction(currentRateNum, threshold) : null
+  // Preselect what the suggestion says, each time it changes. Choosing another
+  // option afterwards is the user's call and sticks until the rate is retyped.
+  useEffect(() => {
+    if (suggestion) setMode(suggestion === 'renew' ? 'principal_interest' : 'move')
+  }, [suggestion])
+  const moveFund = funds.find((f) => f.id === moveFundId) ?? null
+  const targetFund = funds.find((f) => f.id === inv.targetFundId) ?? null
+  const moveNav = moveNavOverride ?? (moveFund ? String(moveFund.nav) : '')
+  const moveReceivedNum = moveReceived.trim() === '' ? 0 : Number(moveReceived)
+  const moveUnits = fundUnitsFor(moveReceivedNum, Number(moveNav) || null)
+
   useEffect(() => {
     // Combine needs the deposit's goal scope. When the caller doesn't wire it
     // (goalId omitted), stay in plain renew-only mode and skip the lookup.
@@ -307,7 +359,8 @@ export function MaturityResolveBody({
   // recurring); the merged-in sibling cash is added ON TOP for the new principal.
   // Submit sends the BASE and the per-source received list — the RPC re-sums
   // Σ(received) server-side, so the net-worth invariant can't drift.
-  const newPrincipal = computeNewPrincipal(mode, { principal, iNum, newAmountNum, redepositNum, mergeReceivedTotal, heldReceivedTotal })
+  // A move re-deposits nothing: the money buys the fund instead.
+  const newPrincipal = mode === 'move' ? 0 : computeNewPrincipal(mode, { principal, iNum, newAmountNum, redepositNum, mergeReceivedTotal, heldReceivedTotal })
 
   // Suggested re-deposit = principal + interest + this month's recurring, until
   // the user edits it (their bank's actual figure may differ).
@@ -370,6 +423,13 @@ export function MaturityResolveBody({
     { id: 'principal_interest', icon: <RefreshCw size={16} />, label: isVi ? 'Tái tục gốc + lãi' : 'Renew principal + interest', sub: isVi ? 'Cộng lãi vào gốc cho kỳ mới' : 'Roll interest into the new principal' },
     { id: 'principal_only', icon: <RefreshCw size={16} />, label: isVi ? 'Tái tục chỉ gốc' : 'Renew principal only', sub: isVi ? 'Lãi chuyển ra ngoài (về ví)' : 'Interest paid out to your wallet' },
     { id: 'change', icon: <Pencil size={16} />, label: isVi ? 'Đổi số tiền / kỳ hạn' : 'Change amount / term', sub: isVi ? 'Điều chỉnh gốc hoặc kỳ hạn kỳ mới' : 'Adjust principal or term for the new cycle' },
+    ...(canMoveToFund ? [{
+      id: 'move' as Mode, icon: <TrendingUp size={16} />,
+      label: isVi ? 'Chuyển sang quỹ' : 'Move to fund',
+      sub: targetFund
+        ? (isVi ? `Gốc + lãi mua ${fundLabel(targetFund)}, vẫn thuộc mục tiêu này` : `Principal + interest buys ${fundLabel(targetFund)}, staying in this goal`)
+        : (isVi ? 'Gốc + lãi mua quỹ, vẫn thuộc mục tiêu này' : 'Principal + interest buys a fund, staying in this goal'),
+    }] : []),
     // Withdraw = don't renew. For a book this is a FULL close (every tranche),
     // handed off to the sell sheet via onWithdraw — same as a single deposit.
     { id: 'withdraw' as Mode, icon: <ArrowDownToLine size={16} />, label: isVi ? 'Không tái tục — rút' : 'Don’t renew — withdraw', sub: isVi ? 'Rút toàn bộ số dư' : 'Withdraw the full balance', danger: true },
@@ -485,7 +545,39 @@ export function MaturityResolveBody({
     } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
   }
 
+  // Close the deposit and buy the fund with the payout, in one call
+  // (move_deposit_to_fund): the goal keeps the money, now in the fund.
+  async function handleMove() {
+    if (!moveFund || !(moveReceivedNum > 0) || moveUnits == null) return
+    setSaving(true); setError('')
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${inv.id}/move-to-fund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          received_vnd: Math.round(moveReceivedNum),
+          fund_id: moveFund.id,
+          units: moveUnits,
+          unit_price: Number(moveNav),
+          date: todayIso(),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body.error ?? (isVi ? 'Không chuyển được sang quỹ' : 'Could not move to the fund'))
+        setSaving(false)
+        return
+      }
+      setMovedDone({ fund: fundLabel(moveFund) })
+      setTimeout(() => { onRenewed(); onClose() }, SUCCESS_FLASH_MS)
+    } catch {
+      setError(isVi ? 'Lỗi kết nối' : 'Connection error')
+      setSaving(false)
+    }
+  }
+
   async function handleConfirm() {
+    if (mode === 'move') { await handleMove(); return }
     if (mode === 'withdraw') {
       // The hold fork only exists when there's an eligible anchor; default is hold.
       if (canHold && holdChoice === 'hold') { await handleHold(); return }
@@ -549,6 +641,21 @@ export function MaturityResolveBody({
             {t.mergedSourcesLabel}: {done.sources.join(', ')}
           </div>
         )}
+      </div>
+    )
+  }
+
+  // ─── Moved-to-fund success ───
+  if (movedDone) {
+    return (
+      <div data-testid="maturity-moved" style={{ padding: '24px 4px 8px', textAlign: 'center' }}>
+        <div style={{ width: 56, height: 56, borderRadius: 28, background: 'var(--c-pos-tint)', color: 'var(--c-pos)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+          <Check size={26} strokeWidth={2.4} />
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{isVi ? `Đã chuyển sang ${movedDone.fund}` : `Moved to ${movedDone.fund}`}</div>
+        <div style={{ fontSize: 13, color: 'var(--c-muted)', marginTop: 6, lineHeight: 1.5 }}>
+          {isVi ? 'Nhớ sửa số CCQ khi lệnh mua khớp.' : 'Remember to correct the units once the order fills.'}
+        </div>
       </div>
     )
   }
@@ -677,6 +784,15 @@ export function MaturityResolveBody({
         </div>
       )}
 
+      {/* Today's rate → the renew-or-move suggestion (single term deposits). */}
+      {!hasSuccessor && canMoveToFund && (
+        <RenewOrMoveAdvisor
+          isVi={isVi} interestAtMaturity={maturityInterest} threshold={threshold}
+          currentRate={currentRate} setCurrentRate={setCurrentRate}
+          suggestion={suggestion} targetFund={targetFund}
+        />
+      )}
+
       {/* Decision picker. A promised book has exactly one thing it may do at
           maturity — go where it was promised — and renewing, combining or
           settling it are all refused by the database while the promise stands.
@@ -774,7 +890,15 @@ export function MaturityResolveBody({
       )}
 
       {/* Inputs per mode */}
-      {!hasSuccessor && mode !== 'withdraw' && mode !== 'combine' && (
+      {!hasSuccessor && mode === 'move' && (
+        <MoveToFundSection
+          isVi={isVi} funds={funds} fundId={moveFundId} setFundId={(v) => { setMoveFundId(v); setMoveNavOverride(null) }}
+          received={moveReceived} setReceived={setMoveReceived}
+          nav={moveNav} setNav={setMoveNavOverride} units={moveUnits}
+        />
+      )}
+
+      {!hasSuccessor && mode !== 'withdraw' && mode !== 'combine' && mode !== 'move' && (
         <div style={{ display: 'grid', gap: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {mode === 'change'
@@ -895,7 +1019,7 @@ export function MaturityResolveBody({
           reachable only after picking a sibling to merge (#640). A book gets the
           same choice: it was hidden here purely because the collapse RPC took no
           bank, which made a missing argument look like a decision. */}
-      {!hasSuccessor && mode !== 'withdraw' && banks.length > 0 && (
+      {!hasSuccessor && mode !== 'withdraw' && mode !== 'move' && banks.length > 0 && (
         <DestinationBankField
           banks={banks} value={destBank} onChange={setDestBank}
           label={t.destBankLabel} noneLabel={t.destBankNone}
@@ -906,9 +1030,13 @@ export function MaturityResolveBody({
       {/* Actions */}
       {!hasSuccessor && tooEarlyToRenew && mode !== 'withdraw' && (
         <p data-testid="maturity-too-early-hint" style={{ margin: 0, fontSize: 12.5, lineHeight: 1.45, color: 'var(--c-muted)' }}>
-          {isVi
-            ? `Sổ chưa tới hạn (còn ${daysLeft} ngày) — ghi nhận tái tục khi đáo hạn. Bạn vẫn có thể rút trước hạn.`
-            : `Not matured yet (${daysLeft} days left) — record the renewal at maturity. You can still withdraw early.`}
+          {mode === 'move'
+            ? (isVi
+              ? `Sổ chưa tới hạn (còn ${daysLeft} ngày) — chuyển sang quỹ khi đáo hạn, để không mất lãi.`
+              : `Not matured yet (${daysLeft} days left) — move it to the fund at maturity, so the interest is not lost.`)
+            : isVi
+              ? `Sổ chưa tới hạn (còn ${daysLeft} ngày) — ghi nhận tái tục khi đáo hạn. Bạn vẫn có thể rút trước hạn.`
+              : `Not matured yet (${daysLeft} days left) — record the renewal at maturity. You can still withdraw early.`}
         </p>
       )}
       <div style={{ display: 'flex', gap: 8 }}>
@@ -923,7 +1051,12 @@ export function MaturityResolveBody({
           // Saving is deliberately not part of `disabled` here: PendingButton
           // blocks the second click itself, and leaving it out keeps the button
           // at full opacity so the loader stays legible against the fill.
-          const disabled = (mode !== 'withdraw' && !canRenew) || (holding && !(holdReceivedNum > 0)) || (mode === 'withdraw' && !holding && !(payoutNum > 0))
+          // Moving is closing the deposit at maturity, so the same "not before
+          // maturity" rule renewal follows applies (the RPC enforces it too).
+          const canMove = !tooEarlyToRenew && !!moveFund && moveReceivedNum > 0 && moveUnits != null
+          const disabled = mode === 'move'
+            ? !canMove
+            : (mode !== 'withdraw' && !canRenew) || (holding && !(holdReceivedNum > 0)) || (mode === 'withdraw' && !holding && !(payoutNum > 0))
           return (
             <PendingButton
               pending={saving}
@@ -935,7 +1068,7 @@ export function MaturityResolveBody({
               data-testid="maturity-confirm"
               onClick={handleConfirm}
               disabled={disabled}
-              icon={holding ? <PiggyBank size={14} strokeWidth={2.2} /> : mode === 'withdraw' ? <ArrowDownToLine size={14} strokeWidth={2.2} /> : mode === 'combine' ? <Plus size={14} strokeWidth={2.2} /> : <RefreshCw size={14} strokeWidth={2.2} />}
+              icon={mode === 'move' ? <TrendingUp size={14} strokeWidth={2.2} /> : holding ? <PiggyBank size={14} strokeWidth={2.2} /> : mode === 'withdraw' ? <ArrowDownToLine size={14} strokeWidth={2.2} /> : mode === 'combine' ? <Plus size={14} strokeWidth={2.2} /> : <RefreshCw size={14} strokeWidth={2.2} />}
               style={{
                 flex: 2, justifyContent: 'center', gap: 7, padding: '10px 14px', borderRadius: 10, border: 'none',
                 fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
@@ -944,7 +1077,7 @@ export function MaturityResolveBody({
                 display: 'flex', alignItems: 'center',
               }}
             >
-              {holding ? t.holdConfirm : mode === 'withdraw' ? t.confirmWithdraw : mode === 'combine' ? t.confirmCombine : t.confirmRenew}
+              {mode === 'move' ? (isVi ? 'Chuyển sang quỹ' : 'Move to fund') : holding ? t.holdConfirm : mode === 'withdraw' ? t.confirmWithdraw : mode === 'combine' ? t.confirmCombine : t.confirmRenew}
             </PendingButton>
           )
         })()}

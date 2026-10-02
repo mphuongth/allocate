@@ -215,6 +215,7 @@ export function nonFundToInvRow(it: NonFundUnallocatedItem, isVi: boolean): InvR
     currency: it.currency ?? null,
     isPledged: it.isPledged ?? false,
     successorDepositTxId: it.successorDepositTxId ?? null,
+    targetFundId: it.targetFundId ?? null,
   }
 }
 
