@@ -9,6 +9,7 @@ import { RefreshCw, LogOut, Download, X, Check, Edit2 } from 'lucide-react'
 import DownloadReportSheet from '@/app/assets/components/DownloadReportSheet'
 import { useSettingsController } from '../useSettingsController'
 import InflationRateCard from './InflationRateCard'
+import RenewThresholdCard from './RenewThresholdCard'
 import { useProfileEditor } from '@/features/settings/useProfileEditor'
 import {
   themeOptions, localeOptions, priceSources, type SettingsViewProps,
@@ -247,6 +248,12 @@ export default function DesktopSettingsView({ email, initials, displayName }: Se
             <Card>
               <CardLabel>{t('inflation')}</CardLabel>
               <InflationRateCard />
+            </Card>
+
+            {/* Savings deposits — the renew-or-move threshold */}
+            <Card>
+              <CardLabel>{t('savingsDeposits')}</CardLabel>
+              <RenewThresholdCard />
             </Card>
 
             {/* Sign out */}

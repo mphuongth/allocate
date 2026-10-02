@@ -685,3 +685,13 @@ describe('MobileSettingsView — export KPI loading state', () => {
     fetchSpy.mockRestore()
   })
 })
+
+// ─── Savings deposits — the renew-or-move threshold ─────────────────────────────
+
+describe('MobileSettingsView — savings deposits', () => {
+  it('renders the renewal threshold under its own heading', () => {
+    render(<MobileSettingsView {...defaultProps} />)
+    expect(screen.getByText('Savings deposits')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /renew at or above/i })).toBeInTheDocument()
+  })
+})

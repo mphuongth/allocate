@@ -66,17 +66,22 @@ describe('GET /api/v1/user-settings', () => {
   it('answers "nothing chosen" for a user who has never set a rate', async () => {
     const res = await GET()
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ inflation_rate_pct: null })
+    expect(await res.json()).toEqual({ inflation_rate_pct: null, renew_min_rate_pct: null })
   })
 
   it('returns the stored rate', async () => {
-    h.row = { inflation_rate_pct: 4.5 }
-    expect(await (await GET()).json()).toEqual({ inflation_rate_pct: 4.5 })
+    h.row = { inflation_rate_pct: 4.5, renew_min_rate_pct: null }
+    expect(await (await GET()).json()).toEqual({ inflation_rate_pct: 4.5, renew_min_rate_pct: null })
   })
 
   it('keeps an explicit zero distinct from "not chosen"', async () => {
-    h.row = { inflation_rate_pct: 0 }
-    expect(await (await GET()).json()).toEqual({ inflation_rate_pct: 0 })
+    h.row = { inflation_rate_pct: 0, renew_min_rate_pct: 0 }
+    expect(await (await GET()).json()).toEqual({ inflation_rate_pct: 0, renew_min_rate_pct: 0 })
+  })
+
+  it('returns the stored renew-or-move threshold', async () => {
+    h.row = { inflation_rate_pct: null, renew_min_rate_pct: 8.5 }
+    expect(await (await GET()).json()).toEqual({ inflation_rate_pct: null, renew_min_rate_pct: 8.5 })
   })
 
   it('reports a read failure instead of passing it off as "not chosen"', async () => {
@@ -126,6 +131,40 @@ describe('PUT /api/v1/user-settings', () => {
   ])('refuses a rate that is %s', async (_label, value) => {
     const res = await put({ inflation_rate_pct: value })
     expect(res.status).toBe(400)
+    expect(h.upserts).toHaveLength(0)
+  })
+
+  it('saves the renew-or-move threshold without touching the inflation rate', async () => {
+    const res = await put({ renew_min_rate_pct: 8.5 })
+    expect(res.status).toBe(200)
+    expect(h.upserts[0].renew_min_rate_pct).toBe(8.5)
+    // Absent from the upsert, so the row's inflation rate is left as it was —
+    // the two cards save independently.
+    expect('inflation_rate_pct' in h.upserts[0]).toBe(false)
+  })
+
+  it('saves the inflation rate without touching the threshold', async () => {
+    await put({ inflation_rate_pct: 4 })
+    expect('renew_min_rate_pct' in h.upserts[0]).toBe(false)
+  })
+
+  it('clears the threshold back to "not chosen" on null', async () => {
+    await put({ renew_min_rate_pct: null })
+    expect(h.upserts[0].renew_min_rate_pct).toBeNull()
+  })
+
+  it.each([
+    ['above the ceiling', 101],
+    ['negative', -1],
+    ['not a number', 'eight'],
+  ])('refuses a threshold that is %s', async (_label, value) => {
+    const res = await put({ renew_min_rate_pct: value })
+    expect(res.status).toBe(400)
+    expect(h.upserts).toHaveLength(0)
+  })
+
+  it('refuses the whole write when one of two fields is invalid', async () => {
+    expect((await put({ inflation_rate_pct: 4, renew_min_rate_pct: 200 })).status).toBe(400)
     expect(h.upserts).toHaveLength(0)
   })
 

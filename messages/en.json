@@ -184,7 +184,13 @@
     "inflationDefaultNote": "Leave empty to use the app default.",
     "inflationRangeError": "Enter a rate between 0 and 100.",
     "inflationSaveFailed": "Couldn't save the inflation rate",
-    "inflationSave": "Save assumed rate"
+    "inflationSave": "Save assumed rate",
+    "savingsDeposits": "Savings deposits",
+    "renewThresholdRate": "Renew at or above",
+    "renewThresholdHint": "When a deposit matures you enter today's 12-month rate. At or above this threshold the app suggests you renew principal and interest; below it, it suggests moving principal + interest into the deposit's target fund. The app only suggests — you confirm.",
+    "renewThresholdDefaultNote": "Leave empty to use the default of {pct}%.",
+    "renewThresholdSaveFailed": "Couldn't save the renewal threshold",
+    "renewThresholdSave": "Save renewal threshold"
   },
   "goals": {
     "title": "Savings Goals",
