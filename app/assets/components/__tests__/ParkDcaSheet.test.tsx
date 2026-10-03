@@ -52,7 +52,7 @@ describe('ParkDcaSheet', () => {
     expect(parkBody(fetchMock)).toEqual({
       url: '/api/v1/monthly-plans/plan-1/dca-skips/park',
       body: {
-        fund_id: 'f-e1', amount_vnd: 5_000_000, interest_rate: 6.5,
+        fund_ids: ['f-e1'], amount_vnd: 5_000_000, interest_rate: 6.5,
         investment_date: todayIso(), expiry_date: addMonths(todayIso(), 6),
         bank_code: 'VCB', notes: 'Vietcombank',
       },
@@ -75,5 +75,56 @@ describe('ParkDcaSheet', () => {
     await user.click(screen.getByTestId('park-dca-submit'))
     expect(await screen.findByText("this month's DCA for the fund is already bought")).toBeInTheDocument()
     expect(onDone).not.toHaveBeenCalled()
+  })
+
+  // Five small DCAs under one goal, one real deposit at the bank: the sheet
+  // offers the goal's other pending DCA lines, and the amount follows the pick.
+  describe('several DCA lines in one deposit', () => {
+    const multi = {
+      ...target,
+      others: [
+        { fundId: 'f-2', fundName: 'DCDS', amount: 1_500_000 },
+        { fundId: 'f-3', fundName: 'VESAF', amount: 2_000_000 },
+      ],
+    }
+
+    it('starts with only the line it was opened from', () => {
+      api()
+      render(<ParkDcaSheet target={multi} isVi onClose={() => {}} onDone={() => {}} />)
+      expect(screen.getByRole('checkbox', { name: /DCDS/ })).not.toBeChecked()
+      expect(screen.getByRole('checkbox', { name: /VESAF/ })).not.toBeChecked()
+      expect(screen.getByTestId('park-dca-amount')).toHaveValue('5.000.000')
+    })
+
+    it('adds the picked lines to the amount and parks them together', async () => {
+      const user = userEvent.setup()
+      const fetchMock = api()
+      render(<ParkDcaSheet target={multi} isVi onClose={() => {}} onDone={() => {}} />)
+
+      await user.click(screen.getByRole('checkbox', { name: /DCDS/ }))
+      await user.click(screen.getByRole('checkbox', { name: /VESAF/ }))
+      expect(screen.getByTestId('park-dca-amount')).toHaveValue('8.500.000')
+
+      await user.type(screen.getByTestId('park-dca-rate'), '6')
+      await user.click(screen.getByTestId('park-dca-submit'))
+      await waitFor(() => expect(parkBody(fetchMock)).toBeTruthy())
+      expect(parkBody(fetchMock)!.body).toMatchObject({ fund_ids: ['f-e1', 'f-2', 'f-3'], amount_vnd: 8_500_000 })
+    })
+
+    it('keeps an amount the user typed when the pick changes', async () => {
+      const user = userEvent.setup()
+      api()
+      render(<ParkDcaSheet target={multi} isVi onClose={() => {}} onDone={() => {}} />)
+      await user.clear(screen.getByTestId('park-dca-amount'))
+      await user.type(screen.getByTestId('park-dca-amount'), '9000000')
+      await user.click(screen.getByRole('checkbox', { name: /DCDS/ }))
+      expect(screen.getByTestId('park-dca-amount')).toHaveValue('9.000.000')
+    })
+
+    it('shows no list when the goal has no other pending DCA', () => {
+      api()
+      render(<ParkDcaSheet target={target} isVi onClose={() => {}} onDone={() => {}} />)
+      expect(screen.queryByRole('checkbox')).toBeNull()
+    })
   })
 })

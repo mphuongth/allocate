@@ -4,12 +4,17 @@ import { ValidationError, validateAmount, validateBankCode, validateDate, valida
 import { readJsonBody } from '@/lib/apiBody'
 import { completedGoalError } from '@/lib/assertOwned'
 
-// Park this month's DCA for a fund in a term deposit instead of buying it.
+// Park this month's DCA for one or more funds in a term deposit instead of
+// buying them.
 //
-// One call to park_dca_in_deposit (20261002000002): the deposit (this plan's
-// month, the DCA's goal, the DCA fund as its target), the pending seed
-// removed, and a skip naming the deposit — together, or none of them. Undo is
-// deleting the deposit, which takes the skip with it.
+// One call to park_dca_lines_in_deposit (20261003000002): the deposit (this
+// plan's month, the lines' shared goal; its target fund when one line is
+// parked), the pending seeds removed, and a skip per line naming the deposit
+// with its share — together, or none of them. Undo is deleting the deposit,
+// which takes every skip with it.
+//
+// `fund_ids` names the lines; a lone `fund_id`, as clients before it sent, is
+// the one-line list.
 const PREFIX = 'park dca: '
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,7 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
-  const { fund_id, amount_vnd, interest_rate, investment_date, expiry_date, bank_code, notes } = parsed.body
+  const { fund_id, fund_ids, amount_vnd, interest_rate, investment_date, expiry_date, bank_code, notes } = parsed.body
 
   let args: Record<string, unknown>
   try {
@@ -30,9 +35,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const rate = validateRate(interest_rate, 'interest_rate')
     if (rate <= 0) throw new ValidationError('interest_rate must be positive')
     if (!expiry_date) throw new ValidationError('expiry_date is required')
+    let fundIds: string[]
+    if (fund_ids !== undefined) {
+      if (!Array.isArray(fund_ids) || fund_ids.length === 0) throw new ValidationError('fund_ids must be a non-empty list')
+      fundIds = fund_ids.map((f: unknown) => validateUUID(f, 'fund_ids'))
+      if (new Set(fundIds).size !== fundIds.length) throw new ValidationError('fund_ids names a fund more than once')
+    } else {
+      fundIds = [validateUUID(fund_id, 'fund_id')]
+    }
     args = {
       p_plan_id: validateUUID(id, 'plan_id'),
-      p_fund_id: validateUUID(fund_id, 'fund_id'),
+      p_fund_ids: fundIds,
       p_amount_vnd: amount,
       p_interest_rate: rate,
       p_investment_date: validateDate(investment_date, 'investment_date'),
@@ -45,7 +58,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     throw e
   }
 
-  const { data, error } = await supabase.rpc('park_dca_in_deposit', args)
+  const { data, error } = await supabase.rpc('park_dca_lines_in_deposit', args)
   if (error || !data) {
     const done = completedGoalError(error)
     if (done) return done
