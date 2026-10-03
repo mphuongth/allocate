@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import {
+  skippedDcaLines,
   buildByGoal,
   resolveRecurringSavings,
   DEPOSIT_BACKED_FULFILLMENT_SOURCES,
@@ -66,19 +67,8 @@ export function usePlanningDerivations(input: PlanningDerivationsInput) {
 
   // Skipped DCA funds are no longer seeded as rows, so synthesize struck-through
   // lines from the fund config + the plan's skip list.
-  const skippedDcaInvestments = useMemo(() => {
-    const skipped = new Set(dcaSkips.map(s => s.fund_id))
-    return funds
-      .filter(f => f.is_dca && f.dca_monthly_amount_vnd && skipped.has(f.id))
-      .map(f => ({
-        goal_id: f.dca_goal_id ?? null,
-        amount_vnd: f.dca_monthly_amount_vnd as number,
-        is_dca_seeded: true,
-        skipped: true,
-        fund_id: f.id,
-        funds: { name: f.name },
-      }))
-  }, [funds, dcaSkips])
+  // …and a skip that parked the DCA in a deposit carries it (lib/planning).
+  const skippedDcaInvestments = useMemo(() => skippedDcaLines(funds, dcaSkips), [funds, dcaSkips])
 
   const fulfillments = useMemo(
     () => new Map(recurringFulfillments.map(f => [f.recurring_saving_id, {

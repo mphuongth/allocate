@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   planError: null as unknown,
   seedError: null as unknown,
   results: {} as Record<string, { data: unknown; error: unknown }>,
+  selects: [] as string[],
 }))
 
 // table name -> response key (investment_transactions handled separately)
@@ -45,7 +46,7 @@ vi.mock('@/lib/supabase-server', () => {
       return get(TABLE_KEY[name] ?? name)
     }
     const chain: Record<string, unknown> = {
-      select: () => chain,
+      select: (cols?: string) => { if (cols) h.selects.push(`${name}: ${cols}`); return chain },
       eq: (col: string, val: unknown) => { filters[col] = val; return chain },
       or: () => chain,
       // The goals query narrows to the ACTIVE ones (#650) — a finished goal is
@@ -160,5 +161,21 @@ describe('GET /api/v1/monthly-plans?full=true — fail closed on child-query fai
     h.plan = null
     const res = await GET(req())
     expect(res.status).toBe(404)
+  })
+})
+
+// A DCA parked in a term deposit (20261002000002): the skip names the deposit,
+// and the plan page shows it as "parked in Sổ …" rather than a bare skip. After
+// a renewal the month's bank row is the first cycle's snapshot (#742), which
+// the page matches back to the parked deposit by renewed_from_transaction_id.
+describe('GET /api/v1/monthly-plans — parked DCA', () => {
+  it('reads each skip with the deposit it was parked in, and each bank row with its renewal lineage', async () => {
+    h.selects = []
+    await GET(new Request('http://localhost/api/v1/monthly-plans?month=6&year=2026&full=true') as never)
+    const skips = h.selects.find((sel) => sel.startsWith('plan_dca_skips:'))
+    expect(skips).toContain('parked_in_tx_id')
+    expect(skips).toMatch(/investment_transactions!parked_in_tx_id\([^)]*notes[^)]*amount_vnd/)
+    const bank = h.selects.find((sel) => sel.startsWith('investment_transactions:') && sel.includes('interest_rate'))
+    expect(bank).toContain('renewed_from_transaction_id')
   })
 })

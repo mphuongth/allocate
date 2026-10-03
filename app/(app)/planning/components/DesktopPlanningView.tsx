@@ -17,6 +17,7 @@ import SavingsChallengeCard from '@/components/challenge/SavingsChallengeCard'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
+import { useParkDca } from './useParkDca'
 import SuccessorBookSheet, { type SuccessorTarget } from '@/app/assets/components/SuccessorBookSheet'
 import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
 import { EditIcon, TrashIcon } from './planningIcons'
@@ -137,6 +138,7 @@ export default function DesktopPlanningView({
   // Skip/restore/override/record actions are shared with the mobile view via
   // usePlanningActions so a fix lands on both surfaces (#467).
   const actions = usePlanningActions({ plan, month, year, isVI, onRefresh, onToast })
+  const park = useParkDca({ planId: plan?.id, isVI, variant: 'modal', onRefresh, onToast, unparkDca: actions.unparkDca })
 
   async function handleSetIncome() {
     const num = Number(incomeVal)
@@ -467,6 +469,8 @@ export default function DesktopPlanningView({
                           onRecordDeposit={() => recordRecurring(g, inv)}
                           onDcaSkip={() => handleDcaSkip(inv)}
                           onDcaRestore={() => handleDcaRestore(inv)}
+                          onDcaPark={() => park.openPark(inv)}
+                          onDcaUnpark={() => park.askUnpark(inv)}
                         />
                       ))}
                     </React.Fragment>
@@ -772,6 +776,7 @@ export default function DesktopPlanningView({
         onClose={() => setBookTopUp(null)}
         onDone={() => { onRefresh(); onToast(isVI ? 'Đã nạp vào sổ' : 'Topped up book') }}
       />
+      {park.dialogs}
       <SuccessorBookSheet
         target={successor}
         isVi={isVI}

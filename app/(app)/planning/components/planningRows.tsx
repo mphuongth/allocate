@@ -5,7 +5,7 @@
 // plus the generic plan line item used by the fixed/insurance/other sections.
 // Prop-driven and layout-only — the view owns the data + action handlers.
 import { useState, useRef } from 'react'
-import { Check, ChevronDown, ChevronUp, MoreHorizontal, Plus, RefreshCw, Target, TrendingUp, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, MoreHorizontal, Plus, RefreshCw, Target, TrendingUp, X, PiggyBank } from 'lucide-react'
 import { fmt } from '@/lib/formatters'
 import { type GoalRow, type GoalItem } from '@/lib/planning'
 import { useCloseOnScroll } from '@/components/ui/useDialogA11y'
@@ -13,7 +13,7 @@ import { goalItemSublabel, goalProgress } from '@/features/planning/planModel'
 import { EditIcon } from './planningIcons'
 import { LinkLostBadge } from './LinkLostBadge'
 
-export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride, onRecEdit, onRecordBuy, onRecordDeposit, onLogContribution, onDcaSkip, onDcaRestore }: {
+export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecOverride, onRecEdit, onRecordBuy, onRecordDeposit, onLogContribution, onDcaSkip, onDcaRestore, onDcaPark, onDcaUnpark }: {
   entry: GoalRow; isVI: boolean
   onRecSkip: (item: GoalItem) => void
   onRecRestore: (item: GoalItem) => void
@@ -24,6 +24,9 @@ export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecO
   onLogContribution: () => void
   onDcaSkip: (item: GoalItem) => void
   onDcaRestore: (item: GoalItem) => void
+  // Park this month's DCA in a term deposit / undo that (delete the deposit).
+  onDcaPark: (item: GoalItem) => void
+  onDcaUnpark: (item: GoalItem) => void
 }) {
   const [open, setOpen] = useState(false)
   const { pct, met } = goalProgress(entry)
@@ -96,6 +99,8 @@ export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecO
           onRecordDeposit={() => onRecordDeposit(item)}
           onDcaSkip={() => onDcaSkip(item)}
           onDcaRestore={() => onDcaRestore(item)}
+          onDcaPark={() => onDcaPark(item)}
+          onDcaUnpark={() => onDcaUnpark(item)}
         />
       ))}
     </div>
@@ -104,10 +109,11 @@ export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecO
 
 // ─── GoalItemRow — one allocation under a goal (recurring savings get a kebab) ──
 
-function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRecordBuy, onRecordDeposit, onDcaSkip, onDcaRestore }: {
+function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onRecordBuy, onRecordDeposit, onDcaSkip, onDcaRestore, onDcaPark, onDcaUnpark }: {
   item: GoalItem; isVI: boolean
   onSkip: () => void; onRestore: () => void; onOverride: () => void; onEdit: () => void
   onRecordBuy: () => void; onRecordDeposit: () => void; onDcaSkip: () => void; onDcaRestore: () => void
+  onDcaPark: () => void; onDcaUnpark: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
@@ -179,6 +185,23 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
             </>
           )}
         </>
+      ) : item.isFundDca && item.parkedIn ? (
+        <>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-navy)', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <PiggyBank size={13} />{isVI ? 'Đã gửi TK' : 'Parked'}
+          </span>
+          <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Parked DCA actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <MoreHorizontal size={14} />
+          </button>
+          {menuOpen && (
+            <>
+              <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+              <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+                <MenuItem icon={<X size={13} />} label={isVI ? 'Huỷ gửi tiết kiệm (xoá sổ)' : 'Undo — delete the deposit'} onClick={() => { onDcaUnpark(); setMenuOpen(false) }} danger noBorder />
+              </div>
+            </>
+          )}
+        </>
       ) : item.isFundDca && skipped ? (
         <button onClick={onDcaRestore} aria-label="Restore DCA" style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <Check size={12} />{isVI ? 'Khôi phục' : 'Restore'}
@@ -200,6 +223,7 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
               <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
               <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
                 <MenuItem icon={<Plus size={13} />} label={isVI ? 'Ghi nhận mua tháng này' : 'Record buy this month'} onClick={() => { onRecordBuy(); setMenuOpen(false) }} />
+                <MenuItem icon={<PiggyBank size={13} />} label={isVI ? 'Gửi tiết kiệm thay' : 'Park in a deposit instead'} onClick={() => { onDcaPark(); setMenuOpen(false) }} />
                 <MenuItem icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onDcaSkip(); setMenuOpen(false) }} danger noBorder />
               </div>
             </>

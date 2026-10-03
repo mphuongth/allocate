@@ -36,6 +36,10 @@ export function monthLabel(month: number, year: number, isVI: boolean, opts?: { 
 
 /** The line under an allocation: what happened to it this month, or what it is. */
 export function goalItemSublabel(item: GoalItem, isVI: boolean): string {
+  if (item.parkedIn) {
+    const label = isVI ? 'Gửi tiết kiệm thay' : 'Parked in a deposit'
+    return item.parkedIn.name ? `${label} · ${item.parkedIn.name}` : label
+  }
   if (item.skipped) return isVI ? 'Bỏ qua tháng này' : 'Skipped this month'
   if (item.overridden) return isVI ? 'Đã ghi đè tháng này' : 'Overridden this month'
   if (item.recorded) {

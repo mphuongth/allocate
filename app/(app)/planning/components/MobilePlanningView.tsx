@@ -9,6 +9,7 @@ import SavingsChallengeCard from '@/components/challenge/SavingsChallengeCard'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
+import { useParkDca } from './useParkDca'
 import SuccessorBookSheet, { type SuccessorTarget } from '@/app/assets/components/SuccessorBookSheet'
 import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
 import { EditIcon } from './planningIcons'
@@ -105,6 +106,7 @@ export default function MobilePlanningView({
   // Shared with the desktop view via usePlanningActions so both surfaces stay
   // in lock-step (#467).
   const actions = usePlanningActions({ plan, month, year, isVI, onRefresh, onToast })
+  const park = useParkDca({ planId: plan?.id, isVI, variant: 'sheet', onRefresh, onToast, unparkDca: actions.unparkDca })
   const handleSkipFE = actions.skipFixedExpense
   const handleRestoreFE = actions.restoreFixedExpense
   const handleSkipIns = actions.skipInsurance
@@ -253,6 +255,8 @@ export default function MobilePlanningView({
                     onLogContribution={() => openContribution(entry)}
                     onDcaSkip={handleDcaSkip}
                     onDcaRestore={handleDcaRestore}
+                    onDcaPark={park.openPark}
+                    onDcaUnpark={park.askUnpark}
                   />
                 ))
               )}
@@ -514,6 +518,7 @@ export default function MobilePlanningView({
         onClose={() => setBookTopUp(null)}
         onDone={() => { onToast(isVI ? 'Đã nạp vào sổ' : 'Topped up book'); onRefresh() }}
       />
+      {park.dialogs}
       <SuccessorBookSheet
         target={successor}
         isVi={isVI}

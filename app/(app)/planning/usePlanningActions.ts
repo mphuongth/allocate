@@ -176,6 +176,20 @@ export function usePlanningActions(ctx: PlanningActionsCtx) {
     done(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
   }
 
+  // Undo "Gửi tiết kiệm thay": delete the deposit the DCA was parked in. Its
+  // skip goes with it (FK cascade) and the next load asks for the DCA again.
+  // The server's reason is shown when it refuses — a renewed deposit, say.
+  async function unparkDca(item: GoalItem) {
+    if (!item.parkedIn) return
+    const res = await fetch(`/api/v1/investment-transactions/${item.parkedIn.transactionId}`, { method: 'DELETE' }).catch(() => null)
+    if (!res?.ok) {
+      const body = await res?.json().catch(() => ({})) ?? {}
+      toast.error(typeof body?.error === 'string' ? body.error : failMsg)
+      return
+    }
+    done(isVI ? `Đã khôi phục ${item.name}` : `Restored ${item.name}`)
+  }
+
   // The single source of truth for an override write, keyed by line type.
   async function saveOverride(input: { type: OverrideType; id: string; amount: number }): Promise<boolean> {
     if (!plan) return false
@@ -247,7 +261,7 @@ export function usePlanningActions(ctx: PlanningActionsCtx) {
     skipFixedExpense, restoreFixedExpense,
     skipInsurance, restoreInsurance,
     skipRecurring, restoreRecurring,
-    skipDca, restoreDca,
+    skipDca, restoreDca, unparkDca,
     saveOverride, probeRecurringRecord,
   }
 }

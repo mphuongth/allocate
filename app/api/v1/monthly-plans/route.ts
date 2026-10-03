@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
         .eq('plan_id', plan.id).eq('asset_type', 'fund'),
       supabase
         .from('investment_transactions')
-        .select('transaction_id, plan_id, goal_id, amount_vnd, interest_rate, expiry_date, investment_date, savings_goals(goal_name)')
+        .select('transaction_id, plan_id, goal_id, amount_vnd, interest_rate, expiry_date, investment_date, renewed_from_transaction_id, savings_goals(goal_name)')
         .eq('plan_id', plan.id).eq('asset_type', 'bank'),
       supabase
         .from('fixed_expense_overrides')
@@ -108,7 +108,9 @@ export async function GET(request: NextRequest) {
         .select('recurring_saving_id, monthly_amount_override_vnd').eq('plan_id', plan.id),
       supabase
         .from('plan_dca_skips')
-        .select('fund_id').eq('plan_id', plan.id),
+        // A skip that parked the DCA in a term deposit names it (20261002000002),
+        // so the line can say where the money went.
+        .select('fund_id, parked_in_tx_id, parked:investment_transactions!parked_in_tx_id(transaction_id, notes, amount_vnd)').eq('plan_id', plan.id),
       // A recurring recorded via maturity-combine / book top-up writes a
       // fulfillment row instead of a plan-scoped deposit. The Plan page uses
       // these to mark such lines recorded and count them toward goal progress

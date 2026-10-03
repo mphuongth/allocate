@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  skippedDcaLines,
   resolveRecurringSavings,
   recurringSavingsTotal,
   buildByGoal,
@@ -350,5 +351,85 @@ describe('buildByGoal — fulfillment-based recording', () => {
     ]
     const [row] = buildByGoal([], directSavings, recurring, goalsById)
     expect(row.items[0].recorded).toBe(true)
+  })
+})
+
+describe('buildByGoal — a DCA parked in a term deposit', () => {
+  // This month's DCA for a fund went into a term deposit instead (to move into
+  // the fund at maturity — park_dca_in_deposit). The line is still the month's
+  // plan for the goal, and the deposit is the money that went in: planned keeps
+  // the DCA amount, contributed gets the deposit, and the line says where it
+  // went rather than reading as a bare skip.
+  const goalsById = new Map([['g-1', 'Wealth Max']])
+  const parkedDca: GoalInvestment = {
+    goal_id: 'g-1', amount_vnd: 5_000_000, is_dca_seeded: true, skipped: true,
+    fund_id: 'f-e1', funds: { name: 'VFMVN30 ETF' },
+    parked: { transactionId: 'dep-1', name: 'Sổ VCB 6 th.', amount: 5_000_000 },
+  }
+  const deposit = (o: Partial<GoalDirectSaving> = {}): GoalDirectSaving => ({
+    goal_id: 'g-1', amount_vnd: 5_000_000, transaction_id: 'dep-1', ...o,
+  })
+
+  it('keeps the DCA planned, counts the deposit, and names where it went', () => {
+    const [row] = buildByGoal([parkedDca], [deposit()], [], goalsById)
+    expect(row.totalAllocated).toBe(5_000_000)
+    expect(row.contributed).toBe(5_000_000)
+    expect(row.items).toHaveLength(1)
+    expect(row.items[0]).toMatchObject({
+      isFundDca: true, fundId: 'f-e1', amount: 5_000_000, skipped: false,
+      parkedIn: { transactionId: 'dep-1', name: 'Sổ VCB 6 th.', amount: 5_000_000 },
+    })
+  })
+
+  it('does not let the parked deposit mark a recurring line of the same amount as saved', () => {
+    const recurring = resolveRecurringSavings([saving({ goal_id: 'g-1', amount_vnd: 5_000_000 })], [])
+    const [row] = buildByGoal([parkedDca], [deposit()], recurring, goalsById)
+    expect(row.items.find((i) => i.isRecurring)?.recorded).toBe(false)
+  })
+
+  it('still knows its deposit after a renewal moved the month onto the first cycle', () => {
+    // After a renewal the plan's row is the first cycle's snapshot (#742).
+    const snapshot = deposit({ transaction_id: 'snap-1', renewed_from_transaction_id: 'dep-1' })
+    const recurring = resolveRecurringSavings([saving({ goal_id: 'g-1', amount_vnd: 5_000_000 })], [])
+    const [row] = buildByGoal([parkedDca], [snapshot], recurring, goalsById)
+    expect(row.contributed).toBe(5_000_000)
+    expect(row.items.find((i) => i.isRecurring)?.recorded).toBe(false)
+  })
+
+  it('leaves a plain skip as it was — struck through, nothing planned', () => {
+    const [row] = buildByGoal([{ ...parkedDca, parked: undefined }], [], [], goalsById)
+    expect(row.totalAllocated).toBe(0)
+    expect(row.items[0]).toMatchObject({ skipped: true, amount: 0 })
+    expect(row.items[0].parkedIn).toBeUndefined()
+  })
+})
+
+describe('skippedDcaLines', () => {
+  // Skipped DCA funds are not seeded, so their lines are built from the fund
+  // config and the plan's skips — carrying the deposit a parked one went into.
+  const funds = [
+    { id: 'f-e1', name: 'VFMVN30 ETF', is_dca: true, dca_monthly_amount_vnd: 5_000_000, dca_goal_id: 'g-1' },
+    { id: 'f-dc', name: 'DCDS', is_dca: true, dca_monthly_amount_vnd: 2_000_000, dca_goal_id: 'g-1' },
+    { id: 'f-off', name: 'Off', is_dca: false, dca_monthly_amount_vnd: null, dca_goal_id: null },
+  ]
+
+  it('builds a line per skipped DCA fund, parked ones naming their deposit', () => {
+    const lines = skippedDcaLines(funds, [
+      { fund_id: 'f-e1', parked_in_tx_id: 'dep-1', parked: { transaction_id: 'dep-1', notes: 'Sổ VCB', amount_vnd: 5_000_000 } },
+      { fund_id: 'f-dc' },
+      { fund_id: 'f-off' },
+    ])
+    expect(lines).toEqual([
+      { goal_id: 'g-1', amount_vnd: 5_000_000, is_dca_seeded: true, skipped: true, fund_id: 'f-e1', funds: { name: 'VFMVN30 ETF' },
+        parked: { transactionId: 'dep-1', name: 'Sổ VCB', amount: 5_000_000 } },
+      { goal_id: 'g-1', amount_vnd: 2_000_000, is_dca_seeded: true, skipped: true, fund_id: 'f-dc', funds: { name: 'DCDS' } },
+    ])
+  })
+
+  it('reads the embed as an array too, as PostgREST may return it', () => {
+    const [line] = skippedDcaLines(funds, [
+      { fund_id: 'f-e1', parked_in_tx_id: 'dep-1', parked: [{ transaction_id: 'dep-1', notes: null, amount_vnd: 5_000_000 }] },
+    ])
+    expect(line.parked).toEqual({ transactionId: 'dep-1', name: null, amount: 5_000_000 })
   })
 })

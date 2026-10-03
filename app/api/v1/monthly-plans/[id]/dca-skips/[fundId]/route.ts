@@ -32,6 +32,11 @@ export async function DELETE(
     .eq('plan_id', planId)
     .eq('fund_id', cleanFundId)
 
+  // A DCA parked in a deposit is restored by deleting the deposit, which takes
+  // the skip with it; the table refuses deleting the skip alone (20261002000002).
+  if (error?.message?.startsWith('park dca: ')) {
+    return NextResponse.json({ error: error.message.slice('park dca: '.length), code: 'dca_parked' }, { status: 409 })
+  }
   if (error) return NextResponse.json({ error: 'Skip not found' }, { status: 404 })
   return new NextResponse(null, { status: 204 })
 }
