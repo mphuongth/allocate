@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { Wallet, RefreshCw, Plus, ChevronUp, ChevronDown, Calendar } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { EditIcon, TrashIcon } from './planningIcons'
+import { planRemaining } from '@/features/planning/planModel'
 
 function StackedBar({ segments, total, height = 8 }: {
   segments: Array<{ value: number; color: string }>
@@ -149,7 +150,7 @@ export function SalaryCard({ amount, isVI, onEdit, onDelete }: { amount: number;
 // ─── AllocationSummaryCard ────────────────────────────────────────────────────
 
 export function AllocationSummaryCard({
-  salary, totalGoals, totalFixed, totalInsurance, totalOther, contributedTotal, isVI,
+  salary, totalGoals, totalFixed, totalInsurance, totalOther, contributedTotal, challengeSaved = 0, isVI,
 }: {
   salary: number
   totalGoals: number
@@ -157,10 +158,12 @@ export function AllocationSummaryCard({
   totalInsurance: number
   totalOther: number
   contributedTotal: number
+  // Set aside in this month's savings challenge — off "Còn lại", as on the strip.
+  challengeSaved?: number
   isVI: boolean
 }) {
   const totalAllocated = totalGoals + totalFixed + totalInsurance + totalOther
-  const remaining = salary - totalAllocated
+  const remaining = planRemaining(salary, totalAllocated, challengeSaved)
   const pct = (v: number) => salary > 0 ? `${Math.round((v / salary) * 100)}%` : '—'
 
   const rows = [

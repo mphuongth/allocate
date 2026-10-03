@@ -57,6 +57,15 @@ const challengeStub = {
   toggleDay: vi.fn(async () => true),
 }
 
+// Days 1–4 ticked at a 10,000 step in May 2026 (31 days): (31+30+29+28) × 10,000.
+const SAVED_IN_CHALLENGE = 1_180_000
+const challengeWithSavings = {
+  ...challengeStub,
+  unitVnd: 10_000,
+  days: [1, 2, 3, 4],
+  view: challengeMonthState({ year: 2026, month: 5, unitVnd: 10_000, checkedDays: [1, 2, 3, 4] }),
+}
+
 const defaultProps = {
   challenge: challengeStub,
   month: 5,
@@ -512,6 +521,21 @@ describe('DesktopPlanningView — summary strip & sections', () => {
     )
     // fmtCompact mock renders millions as "<n>.0M ₫".
     expect(within(screen.getByTestId('planning-summary-strip')).getByText('17.0M ₫')).toBeInTheDocument()
+  })
+
+  it("takes what this month's savings challenge set aside off Remaining — strip and card agree", () => {
+    expect(challengeWithSavings.view.savedVnd).toBe(SAVED_IN_CHALLENGE)
+    render(
+      <DesktopPlanningView
+        {...defaultProps}
+        challenge={challengeWithSavings}
+        plan={{ id: 'plan-1', month: 5, year: 2026, salary_vnd: 20_000_000 }}
+        fixedExpenses={[{ expense_id: 'fe1', expense_name: 'Rent', amount_vnd: 3_000_000 }]}
+      />,
+    )
+    // 20M − 3M − 1.18M = 15.82M
+    expect(within(screen.getByTestId('planning-summary-strip')).getByText('15.8M ₫')).toBeInTheDocument()
+    expect(within(screen.getByTestId('planning-alloc-card')).getByText('+15.8M ₫')).toBeInTheDocument()
   })
 
   it('renders line-item amounts in full (fmt), not abbreviated (fmtCompact)', () => {

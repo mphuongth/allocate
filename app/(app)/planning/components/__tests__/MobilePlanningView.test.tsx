@@ -98,6 +98,15 @@ const challengeStub = {
   toggleDay: vi.fn(async () => true),
 }
 
+// Days 1–4 ticked at a 10,000 step in May 2026 (31 days): (31+30+29+28) × 10,000.
+const SAVED_IN_CHALLENGE = 1_180_000
+const challengeWithSavings = {
+  ...challengeStub,
+  unitVnd: 10_000,
+  days: [1, 2, 3, 4],
+  view: challengeMonthState({ year: 2026, month: 5, unitVnd: 10_000, checkedDays: [1, 2, 3, 4] }),
+}
+
 const defaultProps = {
   challenge: challengeStub,
   month: 5,
@@ -190,6 +199,14 @@ describe('MobilePlanningView — with plan', () => {
     expect(within(card).getByText('+35.3M ₫')).toHaveStyle({ whiteSpace: 'nowrap' })
     // Per-row percentage chip.
     expect(within(card).getByText('22%', { exact: true })).toHaveStyle({ whiteSpace: 'nowrap' })
+  })
+
+  it("takes what this month's savings challenge set aside off Remaining — strip and card agree", () => {
+    expect(challengeWithSavings.view.savedVnd).toBe(SAVED_IN_CHALLENGE)
+    // 45M − 9.7M − 1.18M = 34.12M
+    render(<MobilePlanningView {...defaultProps} challenge={challengeWithSavings} plan={basePlan} fixedExpenses={baseFixedExpenses} />)
+    expect(within(screen.getByTestId('planning-alloc-card')).getByText('+34.1M ₫')).toBeInTheDocument()
+    expect(screen.getAllByText('34.1M ₫').length).toBeGreaterThan(0)
   })
 
   it('shows edit (pencil) and delete (trash) buttons on salary card', () => {

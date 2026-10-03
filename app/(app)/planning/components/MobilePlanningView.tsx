@@ -99,6 +99,7 @@ export default function MobilePlanningView({
     plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
     recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, isVI,
     ym: `${year}-${String(month).padStart(2, '0')}`,
+    challengeSavedVnd: challenge.view.savedVnd,
   })
   const savedPct = plan ? savedPercent({ goals: totalGoals, insurance: totalInsurance }, plan.salary_vnd) : null
 
@@ -213,6 +214,7 @@ export default function MobilePlanningView({
               totalInsurance={totalInsurance}
               totalOther={totalOther}
               contributedTotal={contributedTotal}
+              challengeSaved={challenge.view.savedVnd}
               isVI={isVI}
             />
 

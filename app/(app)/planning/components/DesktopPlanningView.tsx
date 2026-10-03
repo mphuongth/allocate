@@ -126,6 +126,7 @@ export default function DesktopPlanningView({
     plan, investments, savings, fixedExpenses, insuranceMembers, otherExpenses,
     recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, isVI,
     ym: `${year}-${String(month).padStart(2, '0')}`,
+    challengeSavedVnd: challenge.view.savedVnd,
   })
   const savedPct = (plan && savedPercent({ goals: totalGoalAmount, insurance: insTotal }, plan.salary_vnd)) ?? 0
 
@@ -615,6 +616,7 @@ export default function DesktopPlanningView({
               insTotal={insTotal}
               otherTotal={otherTotal}
               contributedTotal={contributedTotal}
+              challengeSaved={challenge.view.savedVnd}
               isVI={isVI}
             />
           </div>

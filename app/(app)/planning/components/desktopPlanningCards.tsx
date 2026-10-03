@@ -9,6 +9,7 @@ import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { fmt, fmtCompact } from '@/lib/formatters'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import { clickAway } from '@/components/ui/clickAway'
+import { planRemaining } from '@/features/planning/planModel'
 
 export function DModal({ onClose, title, width = 400, children }: {
   onClose: () => void; title: string; width?: number; children: React.ReactNode
@@ -108,11 +109,14 @@ function StackedBar({ segments, total }: { segments: { color: string; value: num
 
 // ─── Allocation card (navy sidebar) ──────────────────────────────────────────
 
-export function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTotal, contributedTotal, isVI }: {
-  salary: number; totalGoalAmount: number; fixedTotal: number; insTotal: number; otherTotal: number; contributedTotal: number; isVI: boolean
+export function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, otherTotal, contributedTotal, challengeSaved = 0, isVI }: {
+  salary: number; totalGoalAmount: number; fixedTotal: number; insTotal: number; otherTotal: number; contributedTotal: number
+  // Set aside in this month's savings challenge — off "Còn lại", as on the strip.
+  challengeSaved?: number
+  isVI: boolean
 }) {
   const totalAllocated = totalGoalAmount + fixedTotal + insTotal + otherTotal
-  const remaining = salary - totalAllocated
+  const remaining = planRemaining(salary, totalAllocated, challengeSaved)
   const pct = (v: number) => salary > 0 ? `${Math.round(v / salary * 100)}%` : '—'
 
   const rows = [
