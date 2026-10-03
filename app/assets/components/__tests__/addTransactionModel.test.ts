@@ -226,6 +226,20 @@ describe('buildBuyPayload', () => {
 })
 
 describe('buildEditPayload', () => {
+  // Choosing "Tích luỹ" on a term deposit used to send nothing: the save said
+  // it worked and the deposit stayed a term deposit.
+  it('asks for an accumulating book when "Tích luỹ" is chosen, with its lock window', () => {
+    expect(ok(buildEditPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'accumulating', topUpLockDays: '30' }))))
+      .toMatchObject({ accumulating: true, top_up_lock_days: 30 })
+    expect(ok(buildEditPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'accumulating', topUpLockDays: '' }))))
+      .not.toHaveProperty('top_up_lock_days')
+  })
+
+  it('does not ask for a book when the deposit stays term or flex', () => {
+    expect(ok(buildEditPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'term' })))).not.toHaveProperty('accumulating')
+    expect(ok(buildEditPayload(form({ assetType: 'bank', bankAmount: '5000000', depositType: 'flex' })))).not.toHaveProperty('accumulating')
+  })
+
   it('fund: no transaction_type / plan_id', () => {
     const p = ok(buildEditPayload(form({ assetType: 'fund', fundId: 'f1', amount: '1000000', nav: '25000' })))
     expect(p).toEqual({

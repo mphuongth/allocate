@@ -245,6 +245,10 @@ export function buildEditPayload(form: TxForm): BuildResult {
       // A book is edited through update_deposit_book, which has no target fund,
       // so the field is left out rather than sent as a no-op.
       ...(form.depositType === 'accumulating' ? {} : { target_fund_id: targetFund(form) }),
+      // "Tích luỹ" on a term deposit makes it a book: the route self-groups it.
+      // On a row that already is one, the route reads this as nothing to do.
+      ...(form.depositType === 'accumulating' ? { accumulating: true } : {}),
+      ...(form.depositType === 'accumulating' && form.topUpLockDays != null && form.topUpLockDays !== '' ? { top_up_lock_days: Number(form.topUpLockDays) } : {}),
     } }
   }
   const gold = normalizeGold(form.goldQty, form.goldPrice, form.goldUnit)
