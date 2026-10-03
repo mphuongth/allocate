@@ -56,10 +56,13 @@ export function buildRenewBody(args: {
   /** The bank the deposit sits at today — `bank_code` is sent only when it moves. */
   currentBank: string
   selectedHeld: RenewSource[]
+  /** A book only: whether the renewed deposit stays an accumulating book. */
+  keepBook: boolean
 }): Record<string, unknown> {
   const {
     mode, isBook, newPrincipal, redepositNum, rate, newMaturity, baseDate, iNum,
     pickedCand, markFulfilled, fulfillYm, linkedAmt, selectedSources, mergeRecv, destBank, currentBank, selectedHeld,
+    keepBook,
   } = args
   const isCombine = mode === 'combine'
   // The new cycle can be placed at a different bank — on any renewal, not only
@@ -80,7 +83,10 @@ export function buildRenewBody(args: {
     interest_rate: Number(rate),
     expiry_date: newMaturity,
     investment_date: baseDate,
-    ...(isBook ? {} : { interest_earned_vnd: iNum }),
+    // A book's interest is derived per tranche server-side; what it does need
+    // to be told is whether the renewal stays a book, so its recurring keeps
+    // topping it up rather than opening a new deposit each month.
+    ...(isBook ? { keep_book: keepBook } : { interest_earned_vnd: iNum }),
     fulfill_recurring: isCombine && pickedCand && markFulfilled
       ? { saving_id: pickedCand.saving_id, ym: fulfillYm, amount: linkedAmt }
       : undefined,
