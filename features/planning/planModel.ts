@@ -138,6 +138,16 @@ export function insuranceRow(member: InsuranceMember): InsuranceLine {
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 /**
+ * What is left of the month's income: income minus what the plan allocates,
+ * minus what this month's savings challenge has already set aside. The
+ * challenge is a tracker, not a transaction (lib/savingsChallenge), so nothing
+ * else counts that money — this is the one place it comes off.
+ */
+export function planRemaining(salaryVnd: number, allocatedVnd: number, challengeSavedVnd: number): number {
+  return salaryVnd - allocatedVnd - challengeSavedVnd
+}
+
+/**
  * The share of income the month plans to save: its goal allocations (fund DCA,
  * recurring savings) and its insurance premiums, which this app treats as a
  * saving/investment rather than spending. Null when there is no income to

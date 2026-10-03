@@ -6,6 +6,7 @@ import {
   fixedExpenseRow,
   insuranceRow,
   savedPercent,
+  planRemaining,
 } from '../planModel'
 import type { FixedExpense, InsuranceMember } from '../contracts'
 import type { GoalItem, GoalRow } from '@/lib/planning'
@@ -211,5 +212,21 @@ describe('savedPercent', () => {
 
   it('is null without income to divide by', () => {
     expect(savedPercent({ goals: 1_000_000, insurance: 500_000 }, 0)).toBeNull()
+  })
+})
+
+// "Còn lại" is income not yet spoken for. Money the user already set aside in
+// this month's savings challenge is spoken for, so it comes off as well.
+describe('planRemaining', () => {
+  it('is income minus what is allocated', () => {
+    expect(planRemaining(20_000_000, 3_000_000, 0)).toBe(17_000_000)
+  })
+
+  it("also takes off what this month's savings challenge has set aside", () => {
+    expect(planRemaining(20_000_000, 3_000_000, 1_180_000)).toBe(15_820_000)
+  })
+
+  it('goes negative when the month is over-committed', () => {
+    expect(planRemaining(5_000_000, 4_500_000, 1_000_000)).toBe(-500_000)
   })
 })

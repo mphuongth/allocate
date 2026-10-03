@@ -10,6 +10,7 @@ import type {
   MonthlyPlan, FundInvestment, DirectSaving, FixedExpense, InsuranceMember,
   OtherExpense, RecurringSaving, RecurringSavingOverride, RecurringFulfillment, DcaSkip, Fund, Goal,
 } from '@/features/planning/contracts'
+import { planRemaining } from '@/features/planning/planModel'
 
 // Effective monthly totals. A `override === 0` fixed expense is skipped for the
 // month; an `excluded` insurance member is skipped; otherwise the override (if
@@ -46,6 +47,9 @@ export interface PlanningDerivationsInput {
   // August was still intact in July — the warning must not reach months that
   // predate it (#655).
   ym?: string
+  // What this month's savings challenge has set aside so far; it comes off
+  // "Còn lại" (planRemaining).
+  challengeSavedVnd?: number
 }
 
 // The single source of truth for the planning page's derived model: the by-goal
@@ -91,10 +95,11 @@ export function usePlanningDerivations(input: PlanningDerivationsInput) {
   const totalInsurance = useMemo(() => getInsTotal(insuranceMembers), [insuranceMembers])
   const totalOther = useMemo(() => otherExpenses.reduce((s, e) => s + e.amount_vnd, 0), [otherExpenses])
   const totalOutflow = totalGoals + totalFixed + totalInsurance + totalOther
-  const remaining = plan ? plan.salary_vnd - totalOutflow : 0
+  const challengeSaved = input.challengeSavedVnd ?? 0
+  const remaining = plan ? planRemaining(plan.salary_vnd, totalOutflow, challengeSaved) : 0
 
   return {
     goalsById, resolvedRecurring, skippedDcaInvestments, fulfillments, byGoal,
-    totalGoals, contributedTotal, totalFixed, totalInsurance, totalOther, totalOutflow, remaining,
+    totalGoals, contributedTotal, totalFixed, totalInsurance, totalOther, totalOutflow, remaining, challengeSaved,
   }
 }
