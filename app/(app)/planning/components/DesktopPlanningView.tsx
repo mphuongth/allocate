@@ -128,7 +128,7 @@ export default function DesktopPlanningView({
     ym: `${year}-${String(month).padStart(2, '0')}`,
     challengeSavedVnd: challenge.view.savedVnd,
   })
-  const savedPct = (plan && savedPercent({ goals: totalGoalAmount, insurance: insTotal }, plan.salary_vnd)) ?? 0
+  const savedPct = (plan && savedPercent({ goals: totalGoalAmount, insurance: insTotal, challenge: challenge.view.savedVnd }, plan.salary_vnd)) ?? 0
 
   const monthLabel = formatMonthLabel(month, year, isVI)
   const shortLabel = formatMonthLabel(month, year, isVI, { short: true })

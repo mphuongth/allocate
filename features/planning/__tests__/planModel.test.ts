@@ -197,21 +197,27 @@ describe('insuranceRow', () => {
 
 describe('savedPercent', () => {
   it('is the planned-goal share of income', () => {
-    expect(savedPercent({ goals: 9_000_000, insurance: 0 }, 30_000_000)).toBe(30)
+    expect(savedPercent({ goals: 9_000_000, insurance: 0, challenge: 0 }, 30_000_000)).toBe(30)
   })
 
   // Insurance premiums are a saving/investment to this user, not spending: the
   // "% Tiết kiệm" tile counts them alongside DCA and recurring savings.
   it('counts insurance as saved', () => {
-    expect(savedPercent({ goals: 9_000_000, insurance: 3_000_000 }, 30_000_000)).toBe(40)
+    expect(savedPercent({ goals: 9_000_000, insurance: 3_000_000, challenge: 0 }, 30_000_000)).toBe(40)
+  })
+
+  // What the savings challenge has set aside so far — the days ticked, not the
+  // month's target — is money saved, and the same money "Còn lại" takes off.
+  it("counts what this month's savings challenge has set aside", () => {
+    expect(savedPercent({ goals: 9_000_000, insurance: 3_000_000, challenge: 3_000_000 }, 30_000_000)).toBe(50)
   })
 
   it('rounds to a whole percent', () => {
-    expect(savedPercent({ goals: 1_000_000, insurance: 0 }, 3_000_000)).toBe(33)
+    expect(savedPercent({ goals: 1_000_000, insurance: 0, challenge: 0 }, 3_000_000)).toBe(33)
   })
 
   it('is null without income to divide by', () => {
-    expect(savedPercent({ goals: 1_000_000, insurance: 500_000 }, 0)).toBeNull()
+    expect(savedPercent({ goals: 1_000_000, insurance: 500_000, challenge: 100_000 }, 0)).toBeNull()
   })
 })
 
