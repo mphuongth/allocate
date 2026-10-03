@@ -100,7 +100,7 @@ export default function MobilePlanningView({
     recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, isVI,
     ym: `${year}-${String(month).padStart(2, '0')}`,
   })
-  const savedPct = plan ? savedPercent(totalGoals, plan.salary_vnd) : null
+  const savedPct = plan ? savedPercent({ goals: totalGoals, insurance: totalInsurance }, plan.salary_vnd) : null
 
   // ─── Skip/restore handlers ─────────────────────────────────────────────────
   // Shared with the desktop view via usePlanningActions so both surfaces stay
