@@ -4,9 +4,13 @@
 // deposit instead of buying the fund — when deposit rates are high — to move
 // into the fund at maturity (move_deposit_to_fund). The Plan page's DCA line
 // opens this with the DCA amount; the user names the bank, rate and term. One
-// POST to the park route (park_dca_in_deposit) files the deposit under this
-// month, the DCA's goal, with the DCA fund as its target, and marks the line
-// parked — together, or none of it.
+// POST to the park route (park_dca_lines_in_deposit) files the deposit under
+// this month and the DCA's goal, and marks the line parked — together, or none
+// of it.
+//
+// One real deposit often carries several small DCAs: the goal's other DCA
+// lines still waiting to be bought are offered, and the amount follows the
+// pick until the user types one of their own.
 
 import { useEffect, useState, type CSSProperties } from 'react'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
@@ -14,11 +18,16 @@ import DialogShell from '@/components/ui/DialogShell'
 import PendingButton from '@/components/ui/PendingButton'
 import { todayIso, addMonths } from '@/lib/dates'
 
-export interface ParkDcaTarget {
-  planId: string
+interface ParkDcaLine {
   fundId: string
   fundName: string
   amount: number
+}
+
+export interface ParkDcaTarget extends ParkDcaLine {
+  planId: string
+  // The goal's other DCA lines that can go into the same deposit.
+  others?: ParkDcaLine[]
 }
 
 const DEFAULT_TERM_MONTHS = 6
@@ -38,11 +47,15 @@ export default function ParkDcaSheet({
   target: ParkDcaTarget | null
   isVi: boolean
   onClose: () => void
-  onDone: () => void
+  // The names of the funds whose DCA went into the deposit.
+  onDone: (fundNames: string[]) => void
 }) {
   const [banks, setBanks] = useState<{ code: string; name: string }[]>([])
   const [bankCode, setBankCode] = useState('')
   const [amount, setAmount] = useState('')
+  // Typed by the user: the pick no longer rewrites it.
+  const [amountTouched, setAmountTouched] = useState(false)
+  const [picked, setPicked] = useState<string[]>([])
   const [rate, setRate] = useState('')
   const [term, setTerm] = useState(String(DEFAULT_TERM_MONTHS))
   const [date, setDate] = useState(() => todayIso())
@@ -53,6 +66,8 @@ export default function ParkDcaSheet({
   useEffect(() => {
     if (!target) return
     setAmount(String(target.amount))
+    setAmountTouched(false)
+    setPicked([])
     setRate('')
     setTerm(String(DEFAULT_TERM_MONTHS))
     setDate(todayIso())
@@ -70,6 +85,20 @@ export default function ParkDcaSheet({
   }, [target])
 
   if (!target) return null
+  const others = target.others ?? []
+  const pickedLines = others.filter((o) => picked.includes(o.fundId))
+  const lineCount = 1 + pickedLines.length
+
+  function togglePick(fundId: string) {
+    if (!target) return
+    const next = picked.includes(fundId) ? picked.filter((f) => f !== fundId) : [...picked, fundId]
+    setPicked(next)
+    if (!amountTouched) {
+      const extra = (target.others ?? []).filter((o) => next.includes(o.fundId)).reduce((sum, o) => sum + o.amount, 0)
+      setAmount(String(target.amount + extra))
+    }
+  }
+
   const amt = Number(amount)
   const rateNum = Number(rate)
   const termNum = Number(term)
@@ -84,7 +113,7 @@ export default function ParkDcaSheet({
       const res = await fetch(`/api/v1/monthly-plans/${target.planId}/dca-skips/park`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fund_id: target.fundId,
+          fund_ids: [target.fundId, ...pickedLines.map((o) => o.fundId)],
           amount_vnd: Math.round(amt),
           interest_rate: rateNum,
           investment_date: date,
@@ -100,7 +129,7 @@ export default function ParkDcaSheet({
         setSaving(false)
         return
       }
-      onDone(); onClose()
+      onDone([target.fundName, ...pickedLines.map((o) => o.fundName)]); onClose()
     } catch { setError(isVi ? 'Lỗi kết nối' : 'Connection error') } finally { setSaving(false) }
   }
 
@@ -118,9 +147,13 @@ export default function ParkDcaSheet({
       <div>
         <div id={TITLE_ID} style={{ fontSize: 15, fontWeight: 700 }}>{isVi ? 'Gửi tiết kiệm thay' : 'Park in a deposit instead'}</div>
         <div style={{ fontSize: 12, color: 'var(--c-muted)', marginTop: 2, lineHeight: 1.45 }}>
-          {isVi
-            ? `DCA ${target.fundName} tháng này vào sổ có kỳ hạn. Khi đáo hạn, gốc + lãi có thể chuyển vào ${target.fundName}.`
-            : `This month's ${target.fundName} DCA goes into a term deposit. At maturity, principal + interest can move into ${target.fundName}.`}
+          {lineCount > 1
+            ? (isVi
+              ? `DCA tháng này của ${lineCount} quỹ vào một sổ có kỳ hạn. Khi đáo hạn, gốc + lãi có thể chia lại vào các quỹ.`
+              : `This month's DCA for ${lineCount} funds goes into one term deposit. At maturity, principal + interest can be split back into the funds.`)
+            : (isVi
+              ? `DCA ${target.fundName} tháng này vào sổ có kỳ hạn. Khi đáo hạn, gốc + lãi có thể chuyển vào ${target.fundName}.`
+              : `This month's ${target.fundName} DCA goes into a term deposit. At maturity, principal + interest can move into ${target.fundName}.`)}
         </div>
       </div>
       <div>
@@ -130,10 +163,25 @@ export default function ParkDcaSheet({
           {banks.map((b) => <option key={b.code} value={b.code}>{b.name}</option>)}
         </select>
       </div>
+      {others.length > 0 && (
+        <div data-testid="park-dca-others">
+          <div style={lbl}>{isVi ? 'Gộp thêm DCA khác cùng mục tiêu' : "Add the goal's other DCAs"}</div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {others.map((o) => (
+              <label key={o.fundId} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', border: '1px solid var(--c-line)', borderRadius: 10, fontSize: 13, color: 'var(--c-ink)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={picked.includes(o.fundId)} onChange={() => togglePick(o.fundId)}
+                  style={{ accentColor: 'var(--c-navy)', width: 16, height: 16, flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0 }}>{o.fundName}</span>
+                <span style={{ color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>{formatIntVN(String(o.amount))}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <div>
         <label htmlFor="park-dca-amount" style={lbl}>{isVi ? 'Số tiền gửi (₫)' : 'Amount (₫)'}</label>
         <input id="park-dca-amount" data-testid="park-dca-amount" type="text" inputMode="numeric"
-          value={formatIntVN(amount)} onChange={(e) => setAmount(parseIntVN(e.target.value))} style={field} />
+          value={formatIntVN(amount)} onChange={(e) => { setAmount(parseIntVN(e.target.value)); setAmountTouched(true) }} style={field} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <div>
