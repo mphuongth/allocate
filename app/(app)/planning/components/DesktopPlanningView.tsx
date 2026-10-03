@@ -469,8 +469,8 @@ export default function DesktopPlanningView({
                           onRecordDeposit={() => recordRecurring(g, inv)}
                           onDcaSkip={() => handleDcaSkip(inv)}
                           onDcaRestore={() => handleDcaRestore(inv)}
-                          onDcaPark={() => park.openPark(inv)}
-                          onDcaUnpark={() => park.askUnpark(inv)}
+                          onDcaPark={() => park.openPark(inv, g.items)}
+                          onDcaUnpark={() => park.askUnpark(inv, g.items)}
                         />
                       ))}
                     </React.Fragment>

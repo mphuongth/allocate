@@ -8,6 +8,7 @@ import { NextRequest } from 'next/server'
 
 const PLAN = '11111111-1111-4111-8111-111111111111'
 const FUND = '33333333-3333-4333-8333-333333333333'
+const FUND2 = '44444444-4444-4444-8444-444444444444'
 
 const h = vi.hoisted(() => ({
   user: { id: 'user-1' } as { id: string } | null,
@@ -52,10 +53,27 @@ describe('POST /api/v1/monthly-plans/[id]/dca-skips/park', () => {
     const res = await call(BODY)
     expect(res.status).toBe(201)
     expect(await res.json()).toEqual({ deposit_id: 'dep-1' })
-    expect(h.calls).toEqual([{ name: 'park_dca_in_deposit', args: {
-      p_plan_id: PLAN, p_fund_id: FUND, p_amount_vnd: 5_000_000, p_interest_rate: 6.5,
+    expect(h.calls).toEqual([{ name: 'park_dca_lines_in_deposit', args: {
+      p_plan_id: PLAN, p_fund_ids: [FUND], p_amount_vnd: 5_000_000, p_interest_rate: 6.5,
       p_investment_date: '2026-10-02', p_expiry_date: '2027-04-02', p_bank_code: 'VCB', p_notes: 'Vietcombank',
     } }])
+  })
+
+  // Several DCA lines of one goal parked in one real deposit (20261003000002).
+  it('parks several DCA lines in one deposit', async () => {
+    const res = await call({ ...BODY, fund_id: undefined, fund_ids: [FUND, FUND2] })
+    expect(res.status).toBe(201)
+    expect(h.calls[0]).toMatchObject({ name: 'park_dca_lines_in_deposit', args: { p_fund_ids: [FUND, FUND2] } })
+  })
+
+  it.each([
+    ['an empty list', { fund_id: undefined, fund_ids: [] }],
+    ['a malformed id in the list', { fund_id: undefined, fund_ids: [FUND, 'nope'] }],
+    ['a fund named twice', { fund_id: undefined, fund_ids: [FUND, FUND] }],
+    ['a list that is not an array', { fund_id: undefined, fund_ids: FUND }],
+  ])('refuses %s without calling the database', async (_l, over) => {
+    expect((await call({ ...BODY, ...over })).status).toBe(400)
+    expect(h.calls).toHaveLength(0)
   })
 
   it('sends no bank or note when none is given', async () => {

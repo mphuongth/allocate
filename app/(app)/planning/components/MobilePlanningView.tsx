@@ -255,8 +255,8 @@ export default function MobilePlanningView({
                     onLogContribution={() => openContribution(entry)}
                     onDcaSkip={handleDcaSkip}
                     onDcaRestore={handleDcaRestore}
-                    onDcaPark={park.openPark}
-                    onDcaUnpark={park.askUnpark}
+                    onDcaPark={(item) => park.openPark(item, entry.items)}
+                    onDcaUnpark={(item) => park.askUnpark(item, entry.items)}
                   />
                 ))
               )}
