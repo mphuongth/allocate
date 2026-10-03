@@ -148,12 +148,14 @@ export function planRemaining(salaryVnd: number, allocatedVnd: number, challenge
 }
 
 /**
- * The share of income the month plans to save: its goal allocations (fund DCA,
- * recurring savings) and its insurance premiums, which this app treats as a
- * saving/investment rather than spending. Null when there is no income to
- * divide by — the views show a dash rather than a misleading 0%.
+ * The share of income the month saves: its goal allocations (fund DCA,
+ * recurring savings) and insurance premiums as planned — this app treats
+ * insurance as a saving/investment, not spending — plus what the savings
+ * challenge has set aside so far (the days ticked, the same money planRemaining
+ * takes off). Null when there is no income to divide by — the views show a
+ * dash rather than a misleading 0%.
  */
-export function savedPercent(planned: { goals: number; insurance: number }, salaryVnd: number): number | null {
+export function savedPercent(saved: { goals: number; insurance: number; challenge: number }, salaryVnd: number): number | null {
   if (salaryVnd <= 0) return null
-  return Math.round(((planned.goals + planned.insurance) / salaryVnd) * 100)
+  return Math.round(((saved.goals + saved.insurance + saved.challenge) / salaryVnd) * 100)
 }

@@ -539,6 +539,8 @@ describe('DesktopPlanningView — summary strip & sections', () => {
     // 20M − 3M − 1.18M = 15.82M
     expect(within(screen.getByTestId('planning-summary-strip')).getByText('15.8M ₫')).toBeInTheDocument()
     expect(within(screen.getByTestId('planning-alloc-card')).getByText('+15.8M ₫')).toBeInTheDocument()
+    // …and the same money counts as saved: 1.18M of 20M ≈ 6%.
+    expect(within(screen.getByTestId('planning-summary-strip')).getByText('6%')).toBeInTheDocument()
   })
 
   it('renders line-item amounts in full (fmt), not abbreviated (fmtCompact)', () => {
