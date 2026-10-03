@@ -111,4 +111,50 @@ describe('POST /api/v1/investment-transactions/[id]/move-to-fund', () => {
     h.result = { data: null, error: { code: 'XX000', message: 'connection reset' } }
     expect((await call(BODY)).status).toBe(500)
   })
+
+  // A deposit that parked several DCA lines goes back into all their funds at
+  // once (move_deposit_to_funds, 20261003000003): one call, one pair per fund.
+  describe('several funds', () => {
+    const FUND2 = '44444444-4444-4444-8444-444444444444'
+    const LEGS = [
+      { fund_id: FUND, received_vnd: 1_030_000.4, units: 41.2, unit_price: 25_000 },
+      { fund_id: FUND2, received_vnd: 1_545_000, units: 77.25, unit_price: 20_000 },
+    ]
+
+    it('moves into every fund in one call', async () => {
+      h.result = { data: [{ withdrawal_id: 'wd-1', purchase_id: 'buy-1' }, { withdrawal_id: 'wd-2', purchase_id: 'buy-2' }], error: null }
+      const res = await call({ legs: LEGS, date: '2026-04-01' })
+      expect(res.status).toBe(201)
+      expect(await res.json()).toEqual({ moves: [{ withdrawal_id: 'wd-1', purchase_id: 'buy-1' }, { withdrawal_id: 'wd-2', purchase_id: 'buy-2' }] })
+      expect(h.calls).toEqual([{ name: 'move_deposit_to_funds', args: {
+        p_deposit_id: DEP,
+        p_legs: [
+          { fund_id: FUND, received_vnd: 1_030_000, units: 41.2, unit_price: 25_000 },
+          { fund_id: FUND2, received_vnd: 1_545_000, units: 77.25, unit_price: 20_000 },
+        ],
+        p_date: '2026-04-01',
+      } }])
+    })
+
+    it.each([
+      ['an empty list', []],
+      ['a list that is not an array', 'nope'],
+      ['a malformed fund', [{ ...LEGS[0], fund_id: 'nope' }]],
+      ['a fund named twice', [LEGS[0], LEGS[0]]],
+      ['no payout', [{ ...LEGS[0], received_vnd: 0 }]],
+      ['no units', [{ ...LEGS[0], units: 0 }]],
+      ['no NAV', [{ ...LEGS[0], unit_price: 0 }]],
+    ])('refuses %s without calling the database', async (_l, legs) => {
+      expect((await call({ legs })).status).toBe(400)
+      expect(h.calls).toHaveLength(0)
+    })
+
+    it("states the function's own rule as a 400", async () => {
+      h.result = { data: null, error: { code: '23514', message: 'move to fund: the deposit has not matured yet' } }
+      const res = await call({ legs: LEGS })
+      expect(res.status).toBe(400)
+      expect(await res.json()).toMatchObject({ error: 'the deposit has not matured yet', code: 'move_refused' })
+    })
+  })
 })
+

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { interestAtMaturity, fundUnitsFor, isUnitEstimateDue } from '@/lib/depositMove'
+import { interestAtMaturity, fundUnitsFor, isUnitEstimateDue, splitByShares } from '@/lib/depositMove'
 import { suggestMaturityAction, resolveRenewThreshold, DEFAULT_RENEW_MIN_RATE_PCT } from '@/lib/renewThreshold'
 
 // What a matured term deposit pays and where it goes. Interest is simple, on
@@ -100,5 +100,34 @@ describe('isUnitEstimateDue', () => {
 
   it('does not ask about a date it cannot read', () => {
     expect(isUnitEstimateDue('', today)).toBe(false)
+  })
+})
+
+// A deposit that parked several DCA lines goes back into those funds at
+// maturity. The sheet suggests each fund's part of the payout from the share it
+// put in; the parts must add up to the payout to the đồng, or the purchases
+// would not be the money the bank paid.
+describe('splitByShares', () => {
+  it('splits in proportion to the shares', () => {
+    expect(splitByShares(5_150_000, [1_000_000, 1_500_000, 2_500_000])).toEqual([1_030_000, 1_545_000, 2_575_000])
+  })
+
+  it('gives the rounding remainder to the last part, so the parts sum to the total', () => {
+    const parts = splitByShares(100, [1, 1, 1])
+    expect(parts).toEqual([33, 33, 34])
+    expect(parts.reduce((a, b) => a + b, 0)).toBe(100)
+  })
+
+  it('splits evenly when no share is known', () => {
+    expect(splitByShares(90, [0, 0, 0])).toEqual([30, 30, 30])
+  })
+
+  it('returns the whole total for one share', () => {
+    expect(splitByShares(5_150_000, [5_000_000])).toEqual([5_150_000])
+  })
+
+  it('returns nothing for no shares, and zeros for no money', () => {
+    expect(splitByShares(1000, [])).toEqual([])
+    expect(splitByShares(0, [1, 2])).toEqual([0, 0])
   })
 })
