@@ -43,6 +43,7 @@ const bodyBase = {
   pickedCand: null as { saving_id: string } | null, markFulfilled: true, fulfillYm: '2026-07', linkedAmt: 0,
   selectedSources: [] as { id: string; name?: string | null }[], mergeRecv: {} as Record<string, string>,
   destBank: '', currentBank: '', selectedHeld: [] as { id: string; name?: string | null }[],
+  keepBook: false,
 }
 
 describe('buildRenewBody', () => {
@@ -62,6 +63,17 @@ describe('buildRenewBody', () => {
   it('book collapse omits interest_earned_vnd (derived per tranche server-side)', () => {
     const b = buildRenewBody({ mode: 'principal_interest', ...bodyBase, isBook: true })
     expect('interest_earned_vnd' in b).toBe(false)
+  })
+
+  // A renewed book used to come back as a term deposit, every time: the linked
+  // recurring then opened a new deposit each month instead of topping it up.
+  it('book collapse says whether the renewed deposit stays a book', () => {
+    expect(buildRenewBody({ mode: 'principal_interest', ...bodyBase, isBook: true, keepBook: true }).keep_book).toBe(true)
+    expect(buildRenewBody({ mode: 'combine', ...bodyBase, isBook: true, keepBook: false }).keep_book).toBe(false)
+  })
+
+  it('a single deposit renewal sends no keep_book', () => {
+    expect('keep_book' in buildRenewBody({ mode: 'principal_interest', ...bodyBase, keepBook: true })).toBe(false)
   })
 
   it('combine sends the BASE re-deposit and folds in merge + held sources + bank + fulfillment', () => {

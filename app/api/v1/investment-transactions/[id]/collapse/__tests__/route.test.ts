@@ -206,6 +206,23 @@ describe('POST /api/v1/investment-transactions/[id]/collapse', () => {
     expect((await call()).status).toBe(500)
   })
 
+  // A renewed book can stay a book (20261003000001), so its recurring keeps
+  // topping it up instead of opening a new deposit every month.
+  it('forwards keep_book to the RPC', async () => {
+    await call({ ...VALID_BODY, keep_book: true })
+    expect(h.rpcCalls[0].args.p_keep_book).toBe(true)
+  })
+
+  it('collapses into a term deposit when keep_book is omitted', async () => {
+    await call()
+    expect(h.rpcCalls[0].args.p_keep_book).toBe(false)
+  })
+
+  it('rejects a keep_book that is not a boolean', async () => {
+    expect((await call({ ...VALID_BODY, keep_book: 'yes' })).status).toBe(400)
+    expect(h.rpcCalls).toHaveLength(0)
+  })
+
   it('returns the collapsed row on success', async () => {
     const res = await call()
     expect(res.status).toBe(200)

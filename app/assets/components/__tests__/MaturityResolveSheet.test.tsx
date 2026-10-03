@@ -1235,3 +1235,63 @@ describe('MaturityResolveBody — the maturity payout is the user’s to correct
     await waitFor(() => expect(onWithdraw).toHaveBeenCalledWith(36_800_000))
   })
 })
+
+// Renewing an accumulating book used to always turn it into a term deposit. Its
+// recurring saving stayed linked, so every month after that "Đã gửi" opened a
+// brand-new deposit instead of topping the book up. The sheet now asks, and the
+// answer that keeps things working is the default.
+describe('MaturityResolveBody — a renewed book can stay a book', () => {
+  function stubRecurring() {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === 'string' && url.startsWith('/api/v1/recurring-savings')) {
+        return Promise.resolve({ ok: true, json: async () => ({ savings: [] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => [] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+  const book: InvRow = { ...maturedDeposit, depositGroupId: maturedDeposit.id }
+  const collapseBody = (fetchMock: { mock: { calls: unknown[][] } }) => {
+    const c = fetchMock.mock.calls.find((x) => String(x[0]).endsWith('/collapse'))!
+    return JSON.parse((c[1] as { body: string }).body)
+  }
+
+  it('keeps a renewed book a book by default', async () => {
+    const user = userEvent.setup()
+    const fetchMock = stubRecurring()
+    render(<MaturityResolveBody inv={book} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />)
+
+    expect((screen.getByRole('checkbox', { name: /Keep it an accumulating book/i }) as HTMLInputElement).checked).toBe(true)
+    await user.click(screen.getByRole('button', { name: /Confirm renewal/i }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith('/collapse'))).toBe(true))
+    expect(collapseBody(fetchMock).keep_book).toBe(true)
+  })
+
+  it('collapses into a term deposit when the user unticks it', async () => {
+    const user = userEvent.setup()
+    const fetchMock = stubRecurring()
+    render(<MaturityResolveBody inv={book} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />)
+
+    await user.click(screen.getByRole('checkbox', { name: /Keep it an accumulating book/i }))
+    await user.click(screen.getByRole('button', { name: /Confirm renewal/i }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith('/collapse'))).toBe(true))
+    expect(collapseBody(fetchMock).keep_book).toBe(false)
+  })
+
+  it('does not offer it for a single term deposit', () => {
+    stubRecurring()
+    render(<MaturityResolveBody inv={maturedDeposit} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />)
+    expect(screen.queryByRole('checkbox', { name: /Keep it an accumulating book/i })).toBeNull()
+  })
+
+  it('does not offer it when the book is being withdrawn', async () => {
+    const user = userEvent.setup()
+    stubRecurring()
+    render(<MaturityResolveBody inv={book} isVi={false} onClose={() => {}} onRenewed={() => {}} onWithdraw={() => {}} />)
+    await user.click(screen.getByRole('button', { name: /withdraw/i }))
+    expect(screen.queryByRole('checkbox', { name: /Keep it an accumulating book/i })).toBeNull()
+  })
+})
