@@ -26,8 +26,8 @@ import { fieldLabel, moneyInput, dateInput, MoneyField, WithdrawSection, HeldPoo
 import { MergeSourcesSection } from './maturityResolveMergeSources'
 import { RecurringRedepositSection } from './maturityResolveRecurring'
 import { CombineNewCycleSection } from './maturityResolveNewCycle'
-import { RenewOrMoveAdvisor, MoveToFundSection, fundLabel, type MoveFund } from './maturityResolveMoveToFund'
-import { interestAtMaturity, fundUnitsFor } from '@/lib/depositMove'
+import { RenewOrMoveAdvisor, MoveToFundSection, MultiMoveToFundSection, fundLabel, type MoveFund, type MoveLeg } from './maturityResolveMoveToFund'
+import { interestAtMaturity, fundUnitsFor, splitByShares } from '@/lib/depositMove'
 import { resolveRenewThreshold, suggestMaturityAction } from '@/lib/renewThreshold'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { iconHit } from './iconHit'
@@ -174,6 +174,12 @@ export function MaturityResolveBody({
   // The NAV follows the chosen fund until the user types their own.
   const [moveNavOverride, setMoveNavOverride] = useState<string | null>(null)
   const [movedDone, setMovedDone] = useState<null | { fund: string }>(null)
+  // A deposit parked for several DCA lines (20261003000002) goes back into all
+  // their funds: each fund's part of the payout is suggested from its share and
+  // stands once the user types their own, as does each NAV.
+  const [parkedLines, setParkedLines] = useState<{ fund_id: string; share: number }[]>([])
+  const [legReceivedOverride, setLegReceivedOverride] = useState<Record<string, string>>({})
+  const [legNavOverride, setLegNavOverride] = useState<Record<string, string>>({})
 
   // ── Combine ("settle & re-deposit", merge recurring) ────────────────────────
   // A recurring bank saving due for this goal this month can be folded into the
@@ -294,8 +300,13 @@ export function MaturityResolveBody({
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled) setFunds(Array.isArray(d?.funds) ? d.funds : []) })
       .catch(() => {})
+    // Optional too: without it, the move is the single-fund one.
+    fetch(`/api/v1/investment-transactions/${inv.id}/parked-lines`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && Array.isArray(d)) setParkedLines(d) })
+      .catch(() => {})
     return () => { cancelled = true }
-  }, [canMoveToFund])
+  }, [canMoveToFund, inv.id])
 
   const threshold = resolveRenewThreshold(storedThreshold)
   const currentRateNum = currentRate.trim() === '' ? NaN : Number(currentRate)
@@ -310,6 +321,19 @@ export function MaturityResolveBody({
   const moveNav = moveNavOverride ?? (moveFund ? String(moveFund.nav) : '')
   const moveReceivedNum = moveReceived.trim() === '' ? 0 : Number(moveReceived)
   const moveUnits = fundUnitsFor(moveReceivedNum, Number(moveNav) || null)
+
+  const parkedFunds = parkedLines.flatMap((l) => {
+    const fund = funds.find((f) => f.id === l.fund_id)
+    return fund ? [{ fund, share: l.share }] : []
+  })
+  const isMultiMove = parkedFunds.length > 1
+  const suggestedParts = splitByShares(Math.round(moveReceivedNum), parkedFunds.map((p) => p.share))
+  const moveLegs: MoveLeg[] = parkedFunds.map((p, i) => {
+    const received = legReceivedOverride[p.fund.id] ?? String(suggestedParts[i] ?? 0)
+    const nav = legNavOverride[p.fund.id] ?? String(p.fund.nav)
+    return { fund: p.fund, received, nav, units: fundUnitsFor(Number(received) || 0, Number(nav) || null) }
+  })
+  const legsReady = moveLegs.every((l) => Number(l.received) > 0 && l.units != null)
 
   useEffect(() => {
     // Combine needs the deposit's goal scope. When the caller doesn't wire it
@@ -552,6 +576,7 @@ export function MaturityResolveBody({
   // Close the deposit and buy the fund with the payout, in one call
   // (move_deposit_to_fund): the goal keeps the money, now in the fund.
   async function handleMove() {
+    if (isMultiMove) { await handleMoveMany(); return }
     if (!moveFund || !(moveReceivedNum > 0) || moveUnits == null) return
     setSaving(true); setError('')
     try {
@@ -573,6 +598,39 @@ export function MaturityResolveBody({
         return
       }
       setMovedDone({ fund: fundLabel(moveFund) })
+      setTimeout(() => { onRenewed(); onClose() }, SUCCESS_FLASH_MS)
+    } catch {
+      setError(isVi ? 'Lỗi kết nối' : 'Connection error')
+      setSaving(false)
+    }
+  }
+
+  // Into every fund the deposit was parked for, in one call
+  // (move_deposit_to_funds): one purchase + withdrawal pair per fund.
+  async function handleMoveMany() {
+    if (!legsReady) return
+    setSaving(true); setError('')
+    try {
+      const res = await fetch(`/api/v1/investment-transactions/${inv.id}/move-to-fund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          legs: moveLegs.map((l) => ({
+            fund_id: l.fund.id,
+            received_vnd: Math.round(Number(l.received)),
+            units: l.units,
+            unit_price: Number(l.nav),
+          })),
+          date: todayIso(),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body.error ?? (isVi ? 'Không chuyển được sang quỹ' : 'Could not move to the funds'))
+        setSaving(false)
+        return
+      }
+      setMovedDone({ fund: moveLegs.map((l) => fundLabel(l.fund)).join(', ') })
       setTimeout(() => { onRenewed(); onClose() }, SUCCESS_FLASH_MS)
     } catch {
       setError(isVi ? 'Lỗi kết nối' : 'Connection error')
@@ -794,6 +852,7 @@ export function MaturityResolveBody({
           isVi={isVi} interestAtMaturity={maturityInterest} threshold={threshold}
           currentRate={currentRate} setCurrentRate={setCurrentRate}
           suggestion={suggestion} targetFund={targetFund}
+          targetName={isMultiMove ? moveLegs.map((l) => fundLabel(l.fund)).join(', ') : undefined}
         />
       )}
 
@@ -894,7 +953,14 @@ export function MaturityResolveBody({
       )}
 
       {/* Inputs per mode */}
-      {!hasSuccessor && mode === 'move' && (
+      {!hasSuccessor && mode === 'move' && isMultiMove && (
+        <MultiMoveToFundSection
+          isVi={isVi} received={moveReceived} setReceived={setMoveReceived} legs={moveLegs}
+          setLegReceived={(id, v) => setLegReceivedOverride((o) => ({ ...o, [id]: v }))}
+          setLegNav={(id, v) => setLegNavOverride((o) => ({ ...o, [id]: v }))}
+        />
+      )}
+      {!hasSuccessor && mode === 'move' && !isMultiMove && (
         <MoveToFundSection
           isVi={isVi} funds={funds} fundId={moveFundId} setFundId={(v) => { setMoveFundId(v); setMoveNavOverride(null) }}
           received={moveReceived} setReceived={setMoveReceived}
@@ -1068,7 +1134,9 @@ export function MaturityResolveBody({
           // at full opacity so the loader stays legible against the fill.
           // Moving is closing the deposit at maturity, so the same "not before
           // maturity" rule renewal follows applies (the RPC enforces it too).
-          const canMove = !tooEarlyToRenew && !!moveFund && moveReceivedNum > 0 && moveUnits != null
+          const canMove = !tooEarlyToRenew && (isMultiMove
+            ? legsReady
+            : !!moveFund && moveReceivedNum > 0 && moveUnits != null)
           const disabled = mode === 'move'
             ? !canMove
             : (mode !== 'withdraw' && !canRenew) || (holding && !(holdReceivedNum > 0)) || (mode === 'withdraw' && !holding && !(payoutNum > 0))

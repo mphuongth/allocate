@@ -44,3 +44,19 @@ export function isUnitEstimateDue(investmentDate: string, today: string = todayI
   const since = -daysUntilIso(investmentDate, today)
   return Number.isFinite(since) && since >= 0 && since <= UNIT_ESTIMATE_REMINDER_DAYS
 }
+
+/**
+ * A payout divided by shares: each part in proportion to its share, rounded
+ * down to the đồng, the last part taking what rounding left so the parts sum
+ * to the total exactly. With no share known (all zero) the split is even.
+ * Used to suggest how a deposit that parked several DCA lines goes back into
+ * their funds at maturity (move_deposit_to_funds).
+ */
+export function splitByShares(total: number, shares: number[]): number[] {
+  if (shares.length === 0) return []
+  const weights = shares.some((s) => s > 0) ? shares.map((s) => Math.max(0, s)) : shares.map(() => 1)
+  const sum = weights.reduce((a, b) => a + b, 0)
+  const parts = weights.map((w) => Math.floor((total * w) / sum))
+  parts[parts.length - 1] = total - parts.slice(0, -1).reduce((a, b) => a + b, 0)
+  return parts
+}

@@ -20,7 +20,7 @@ export interface MoveFund { id: string; name: string; code: string | null; nav: 
 export const fundLabel = (f: MoveFund) => f.code || f.name
 
 export function RenewOrMoveAdvisor({
-  isVi, interestAtMaturity, threshold, currentRate, setCurrentRate, suggestion, targetFund,
+  isVi, interestAtMaturity, threshold, currentRate, setCurrentRate, suggestion, targetFund, targetName,
 }: {
   isVi: boolean
   interestAtMaturity: number
@@ -29,8 +29,10 @@ export function RenewOrMoveAdvisor({
   setCurrentRate: (v: string) => void
   suggestion: 'renew' | 'move' | null
   targetFund: MoveFund | null
+  // A deposit parked for several funds has no single target: name them all.
+  targetName?: string
 }) {
-  const fundName = targetFund ? fundLabel(targetFund) : (isVi ? 'quỹ đích' : 'the target fund')
+  const fundName = targetName ?? (targetFund ? fundLabel(targetFund) : (isVi ? 'quỹ đích' : 'the target fund'))
   return (
     <div data-testid="renew-or-move" style={{ display: 'grid', gap: 10, padding: '12px 14px', border: '1px solid var(--c-line)', borderRadius: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
@@ -119,6 +121,69 @@ export function MoveToFundSection({
         {isVi
           ? 'Sổ được tất toán và tiền mua quỹ, vẫn thuộc mục tiêu của sổ. Số CCQ tính theo NAV hiện tại — khi lệnh khớp, hãy sửa lại giao dịch mua cho đúng.'
           : 'The deposit is closed and the money buys the fund, staying in the deposit’s goal. Units are priced at today’s NAV — correct the purchase once the order fills.'}
+      </p>
+    </div>
+  )
+}
+
+/** One fund of a move into several: its part of the payout, at its NAV. */
+export interface MoveLeg {
+  fund: MoveFund
+  received: string
+  nav: string
+  units: number | null
+}
+
+// A deposit parked for several DCA lines goes back into all their funds: the
+// total the bank paid, then one row per fund with its part (suggested from the
+// share it put in, editable) and the units that part buys.
+export function MultiMoveToFundSection({
+  isVi, received, setReceived, legs, setLegReceived, setLegNav,
+}: {
+  isVi: boolean
+  received: string
+  setReceived: (v: string) => void
+  legs: MoveLeg[]
+  setLegReceived: (fundId: string, v: string) => void
+  setLegNav: (fundId: string, v: string) => void
+}) {
+  const legsTotal = legs.reduce((sum, l) => sum + (Number(l.received) || 0), 0)
+  const off = Math.round(legsTotal) !== Math.round(Number(received) || 0)
+  return (
+    <div data-testid="move-to-fund" style={{ display: 'grid', gap: 12 }}>
+      <MoneyField label={isVi ? 'Tiền thực nhận' : 'Cash received'} value={received} onChange={setReceived} testId="move-received" />
+      <div data-testid="move-legs" style={{ display: 'grid', gap: 8 }}>
+        <div style={fieldLabel}>{isVi ? 'Chia vào các quỹ' : 'Split into the funds'}</div>
+        {legs.map((l) => (
+          <div key={l.fund.id} style={{ display: 'grid', gap: 6, padding: '10px 12px', border: '1px solid var(--c-line)', borderRadius: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{fundLabel(l.fund)}</span>
+              <span data-testid={`move-leg-units-${l.fund.id}`} style={{ fontSize: 12, color: 'var(--c-navy)', fontVariantNumeric: 'tabular-nums' }}>
+                {l.units != null ? `${fmtUnits(l.units)} ${isVi ? 'CCQ' : 'units'}` : '—'}
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 8 }}>
+              <MoneyField label={isVi ? 'Số tiền' : 'Amount'} value={l.received} onChange={(v) => setLegReceived(l.fund.id, v)} testId={`move-leg-received-${l.fund.id}`} />
+              <div>
+                <label htmlFor={`move-leg-nav-${l.fund.id}`} style={fieldLabel}>NAV</label>
+                <input id={`move-leg-nav-${l.fund.id}`} data-testid={`move-leg-nav-${l.fund.id}`} type="text" inputMode="decimal"
+                  value={formatDecimalVN(l.nav)} onChange={(e) => setLegNav(l.fund.id, parseDecimalVN(e.target.value))} style={moneyInput} />
+              </div>
+            </div>
+          </div>
+        ))}
+        {off && (
+          <p data-testid="move-legs-off" style={{ margin: 0, fontSize: 11.5, color: 'var(--c-neg)', lineHeight: 1.4 }}>
+            {isVi
+              ? `Tổng các quỹ (${fmt(legsTotal)}) khác tiền thực nhận.`
+              : `The funds add up to ${fmt(legsTotal)}, not the cash received.`}
+          </p>
+        )}
+      </div>
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.45 }}>
+        {isVi
+          ? 'Gợi ý chia theo phần DCA mỗi quỹ đã gửi vào sổ. Sổ được tất toán và tiền mua các quỹ, vẫn thuộc mục tiêu của sổ. Số CCQ tính theo NAV hiện tại — khi lệnh khớp, hãy sửa lại từng giao dịch mua.'
+          : 'Suggested by each fund’s share of the deposit. The deposit is closed and the money buys the funds, staying in its goal. Units are priced at today’s NAV — correct each purchase once its order fills.'}
       </p>
     </div>
   )
