@@ -196,14 +196,20 @@ describe('insuranceRow', () => {
 
 describe('savedPercent', () => {
   it('is the planned-goal share of income', () => {
-    expect(savedPercent(9_000_000, 30_000_000)).toBe(30)
+    expect(savedPercent({ goals: 9_000_000, insurance: 0 }, 30_000_000)).toBe(30)
+  })
+
+  // Insurance premiums are a saving/investment to this user, not spending: the
+  // "% Tiết kiệm" tile counts them alongside DCA and recurring savings.
+  it('counts insurance as saved', () => {
+    expect(savedPercent({ goals: 9_000_000, insurance: 3_000_000 }, 30_000_000)).toBe(40)
   })
 
   it('rounds to a whole percent', () => {
-    expect(savedPercent(1_000_000, 3_000_000)).toBe(33)
+    expect(savedPercent({ goals: 1_000_000, insurance: 0 }, 3_000_000)).toBe(33)
   })
 
   it('is null without income to divide by', () => {
-    expect(savedPercent(1_000_000, 0)).toBeNull()
+    expect(savedPercent({ goals: 1_000_000, insurance: 500_000 }, 0)).toBeNull()
   })
 })

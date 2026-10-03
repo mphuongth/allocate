@@ -138,10 +138,12 @@ export function insuranceRow(member: InsuranceMember): InsuranceLine {
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 /**
- * The share of income the month plans to save. Null when there is no income to
+ * The share of income the month plans to save: its goal allocations (fund DCA,
+ * recurring savings) and its insurance premiums, which this app treats as a
+ * saving/investment rather than spending. Null when there is no income to
  * divide by — the views show a dash rather than a misleading 0%.
  */
-export function savedPercent(totalGoals: number, salaryVnd: number): number | null {
+export function savedPercent(planned: { goals: number; insurance: number }, salaryVnd: number): number | null {
   if (salaryVnd <= 0) return null
-  return Math.round((totalGoals / salaryVnd) * 100)
+  return Math.round(((planned.goals + planned.insurance) / salaryVnd) * 100)
 }

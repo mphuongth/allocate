@@ -127,7 +127,7 @@ export default function DesktopPlanningView({
     recurringSavings, recurringSavingOverrides, recurringFulfillments, dcaSkips, funds, goals, isVI,
     ym: `${year}-${String(month).padStart(2, '0')}`,
   })
-  const savedPct = (plan && savedPercent(totalGoalAmount, plan.salary_vnd)) ?? 0
+  const savedPct = (plan && savedPercent({ goals: totalGoalAmount, insurance: insTotal }, plan.salary_vnd)) ?? 0
 
   const monthLabel = formatMonthLabel(month, year, isVI)
   const shortLabel = formatMonthLabel(month, year, isVI, { short: true })
