@@ -210,6 +210,10 @@ export function MaturityResolveBody({
   // the settling deposit's bank; the user can move the money to another bank.
   const [banks, setBanks] = useState<{ code: string; name: string }[]>([])
   const [destBank, setDestBank] = useState<string>(inv.bankCode ?? '')
+  // A renewed book stays a book unless the user says otherwise: collapsing it
+  // into a term deposit left its recurring saving opening a new deposit every
+  // month instead of topping the book up.
+  const [keepBook, setKeepBook] = useState(true)
 
   // ── Settle-with-hold ("Để dành gộp") ─────────────────────────────────────────
   // When THIS maturing deposit has a later-maturing eligible anchor in the same
@@ -602,7 +606,7 @@ export function MaturityResolveBody({
         body: JSON.stringify(buildRenewBody({
           mode, isBook, newPrincipal, redepositNum, rate, newMaturity, baseDate, iNum,
           pickedCand, markFulfilled, fulfillYm, linkedAmt, selectedSources, mergeRecv,
-          destBank, currentBank: inv.bankCode ?? '', selectedHeld,
+          destBank, currentBank: inv.bankCode ?? '', selectedHeld, keepBook,
         })),
       })
       if (!res.ok) {
@@ -1025,6 +1029,17 @@ export function MaturityResolveBody({
           label={t.destBankLabel} noneLabel={t.destBankNone}
           hint={destBank && destBank !== (inv.bankCode ?? '') ? t.destBankHint : undefined}
         />
+      )}
+
+      {/* A renewed book: stay a book (the default), or become a term deposit. */}
+      {isBook && !hasSuccessor && mode !== 'withdraw' && mode !== 'move' && (
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '10px 12px', background: 'var(--c-navy-tint)', borderRadius: 10, fontSize: 12.5, color: 'var(--c-ink)', lineHeight: 1.4, cursor: 'pointer' }}>
+          <input data-testid="maturity-keep-book" type="checkbox" checked={keepBook} onChange={(e) => setKeepBook(e.target.checked)} style={{ accentColor: 'var(--c-navy)', width: 16, height: 16, flexShrink: 0, marginTop: 1 }} />
+          <span>
+            <span style={{ fontWeight: 600 }}>{t.keepBookLabel}</span>
+            <span style={{ display: 'block', color: 'var(--c-muted)', fontSize: 11.5 }}>{t.keepBookHint}</span>
+          </span>
+        </label>
       )}
 
       {/* Actions */}

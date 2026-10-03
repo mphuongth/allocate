@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
   const body = parsed.body
-  const { amount_vnd, interest_rate, expiry_date, investment_date, fulfill_recurring, bank_code } = body
+  const { amount_vnd, interest_rate, expiry_date, investment_date, fulfill_recurring, bank_code, keep_book } = body
 
   let groupId: string
   let cleanAmount: number
@@ -40,6 +40,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Destination bank for the collapsed deposit. null (or omitted) leaves the
   // book's own bank untouched — the RPC coalesces, exactly as the renew path does.
   let cleanBankCode: string | null = null
+  // Whether the renewed deposit stays an accumulating book (20261003000001).
+  // Omitted = false: it collapses into a plain term deposit, as it always has.
+  let cleanKeepBook = false
   try {
     groupId = validateUUID(id, 'group_id')
     cleanAmount = validateAmount(amount_vnd, 'amount_vnd')
@@ -58,6 +61,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       cleanFulfillAmount = Math.round(a)
     }
     if (bank_code != null && bank_code !== '') cleanBankCode = validateBankCode(bank_code, 'bank_code')
+    if (keep_book != null) {
+      if (typeof keep_book !== 'boolean') throw new ValidationError('keep_book must be a boolean')
+      cleanKeepBook = keep_book
+    }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
     throw e
@@ -146,6 +153,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       p_fulfill_source: cleanFulfillSavingId ? 'maturity-collapse' : null,
       // Where the collapsed deposit lands; null leaves the book's bank as is.
       p_bank_code: cleanBankCode,
+      // true keeps the renewed deposit a book, so its recurring tops it up next month.
+      p_keep_book: cleanKeepBook,
     })
     .single()
   if (rpcErr || !collapsed) {
