@@ -377,7 +377,7 @@ export default function DesktopPlanningView({
                       </div>
                     ),
                   },
-                  { l: isVI ? 'Tổng chi' : 'Outflow',    v: totalOutflow, c: 'var(--c-ink)' },
+                  { l: isVI ? 'Đã phân bổ' : 'Allocated', v: totalOutflow, c: 'var(--c-ink)' },
                   { l: isVI ? 'Còn lại'  : 'Remaining',  v: remaining,    c: remaining >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' },
                   { l: isVI ? '% Tiết kiệm' : 'Saved %', v: null as number | null, c: 'var(--c-navy)', custom: `${savedPct}%` },
                 ] as Array<{ l: string; v: number | null; c: string; custom?: string; extra?: React.ReactNode }>).map((k, i) => (
