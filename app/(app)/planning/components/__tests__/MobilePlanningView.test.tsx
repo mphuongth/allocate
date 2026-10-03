@@ -169,9 +169,12 @@ describe('MobilePlanningView — with plan', () => {
     expect(valueEl).not.toHaveTextContent('45.0M')
   })
 
-  it('shows Outflow label in summary strip', () => {
+  // The tile sums savings, insurance and expenses alike — "Outflow"/"Tổng chi"
+  // read as spending, so it is named for what it is: income already allocated.
+  it('shows the Allocated label in summary strip', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} />)
-    expect(screen.getByText(/Outflow/i)).toBeInTheDocument()
+    expect(screen.getByText(/^Allocated$/)).toBeInTheDocument()
+    expect(screen.queryByText(/^Outflow$/)).not.toBeInTheDocument()
   })
 
   it('shows Remaining label in summary strip', () => {

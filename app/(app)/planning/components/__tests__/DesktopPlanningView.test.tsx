@@ -502,11 +502,14 @@ describe('DesktopPlanningView — empty state', () => {
 })
 
 describe('DesktopPlanningView — summary strip & sections', () => {
-  it('shows the Income / Outflow / Remaining / Saved % strip when a plan exists', () => {
+  // "Allocated", not "Outflow": the tile sums savings and insurance alongside
+  // expenses, so naming it spending misread the month.
+  it('shows the Income / Allocated / Remaining / Saved % strip when a plan exists', () => {
     render(<DesktopPlanningView {...defaultProps} plan={basePlan} />)
     const strip = within(screen.getByTestId('planning-summary-strip'))
     expect(strip.getByText('Income')).toBeInTheDocument()
-    expect(strip.getByText('Outflow')).toBeInTheDocument()
+    expect(strip.getByText('Allocated')).toBeInTheDocument()
+    expect(strip.queryByText('Outflow')).not.toBeInTheDocument()
     expect(strip.getByText('Remaining')).toBeInTheDocument()
     expect(strip.getByText('Saved %')).toBeInTheDocument()
   })
