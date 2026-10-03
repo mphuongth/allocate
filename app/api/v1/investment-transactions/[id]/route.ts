@@ -44,7 +44,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const parsed = await readJsonBody(request)
   if (!parsed.ok) return parsed.response
   const body = parsed.body
-  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, target_fund_id } = body
+  const { goal_id, asset_type, investment_date, amount_vnd, unit_price, units, interest_rate, expiry_date, notes, fund_id, bank_code, target_fund_id, accumulating, top_up_lock_days } = body
 
   let txId: string
   let cleanAssetType: typeof ASSET_TYPES[number] | undefined
@@ -59,6 +59,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   let cleanFundId: string | null | undefined
   let cleanBankCode: string | null | undefined
   let cleanTargetFundId: string | null | undefined
+  // "Tích luỹ" chosen on a term deposit: it becomes an accumulating book.
+  let toBook = false
+  let cleanLockDays: number | null = null
 
   try {
     txId = validateUUID(id, 'transaction_id')
@@ -103,6 +106,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
     if (target_fund_id !== undefined) {
       cleanTargetFundId = target_fund_id === null || target_fund_id === '' ? null : validateUUID(target_fund_id, 'target_fund_id')
+    }
+    if (accumulating !== undefined && accumulating !== null) {
+      if (typeof accumulating !== 'boolean') throw new ValidationError('accumulating must be a boolean')
+      toBook = accumulating
+    }
+    if (toBook && top_up_lock_days != null && top_up_lock_days !== '') {
+      const days = Number(top_up_lock_days)
+      if (!Number.isInteger(days) || days < 0) throw new ValidationError('top_up_lock_days must be a whole number of days')
+      cleanLockDays = days
     }
   } catch (e) {
     if (e instanceof ValidationError) return NextResponse.json({ error: e.message }, { status: 400 })
@@ -157,11 +169,28 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   // fields to the edited row together. Non-book holdings use the generic path below.
   const { data: existing } = await supabase
     .from('investment_transactions')
-    .select('deposit_group_id, asset_type')
+    .select('deposit_group_id, asset_type, transaction_type, renewed_from_transaction_id, held_for_merge')
     .eq('transaction_id', txId)
     .eq('user_id', user.id)
     .single()
   if (!existing) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 })
+
+  // A deposit that becomes a book must be one a book can be made of: a live bank
+  // deposit (20260815000002) — not a withdrawal, not a closed cycle, not cash
+  // waiting to be merged into another deposit. A row that already is a book has
+  // nothing to become, and is edited through the book RPC below.
+  const becomesBook = toBook && !existing.deposit_group_id
+  if (becomesBook && (
+    (cleanAssetType ?? existing.asset_type) !== 'bank'
+    || existing.transaction_type !== 'investment'
+    || existing.renewed_from_transaction_id
+    || existing.held_for_merge
+  )) {
+    return NextResponse.json(
+      { error: 'Only a live bank deposit can become an accumulating book.', code: 'not_a_book_candidate' },
+      { status: 400 },
+    )
+  }
 
   const changesAssetType = Boolean(cleanAssetType && existing.asset_type && cleanAssetType !== existing.asset_type)
 
@@ -267,6 +296,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     updates.bank_code = effType === 'bank' ? cleanBankCode : null
   }
   if (target_fund_id !== undefined) updates.target_fund_id = cleanTargetFundId
+  // The anchor of a book is the row whose group is its own id — what POST
+  // writes for a new one. A book has no target fund: its tranches are settled
+  // by the book flows, and the table refuses the pair (20261001000001).
+  if (becomesBook) {
+    updates.deposit_group_id = txId
+    updates.target_fund_id = null
+    if (cleanLockDays != null) updates.top_up_lock_days = cleanLockDays
+  }
   // A purchase made by moving a deposit is priced at the NAV the app knew and
   // flagged as estimated (20261001000001). Saving it here is the user's
   // correction, so the flag goes; and a row that stops being a fund cannot
