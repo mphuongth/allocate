@@ -192,7 +192,7 @@ export default function MobilePlanningView({
               gap: 1, overflow: 'hidden', background: 'var(--c-line)',
             } as React.CSSProperties}>
               {[
-                { l: isVI ? 'Tổng chi' : 'Outflow', v: fmtCompact(totalOutflow), c: 'var(--c-ink)' },
+                { l: isVI ? 'Đã phân bổ' : 'Allocated', v: fmtCompact(totalOutflow), c: 'var(--c-ink)' },
                 { l: isVI ? 'Còn lại' : 'Remaining', v: fmtCompact(remaining), c: remaining >= 0 ? 'var(--c-pos)' : 'var(--c-neg)' },
                 { l: isVI ? '% Tiết kiệm' : 'Saved %', v: savedPct != null ? `${savedPct}%` : '—', c: 'var(--c-navy)' },
               ].map((k, i) => (
