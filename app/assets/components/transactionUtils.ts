@@ -45,8 +45,10 @@ export const ASSET_TYPES = ['fund', 'bank', 'stock', 'gold'] as const
 export type AssetType = (typeof ASSET_TYPES)[number]
 
 // The funds relation can come back as an object or a single-element array
-// depending on the Supabase join shape — normalize to the fund name.
-function fundNameOf(tx: LedgerTransaction): string | null {
+// depending on the Supabase join shape — normalize to the fund name. Exported
+// for describeHistoryRow: the goal-detail History tab renders the same API rows.
+type FundsEmbed = { name: string } | { name: string }[] | null | undefined
+export function fundNameOf(tx: { funds?: FundsEmbed }): string | null {
   const f = tx.funds
   if (!f) return null
   const fund = Array.isArray(f) ? f[0] : f
