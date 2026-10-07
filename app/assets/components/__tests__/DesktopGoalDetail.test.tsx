@@ -693,3 +693,42 @@ describe('DesktopGoalDetail — purchasing power', () => {
     expect(screen.getAllByTestId('inflation-outlook')).toHaveLength(1)
   })
 })
+
+// The History tab read `fund_name`, which the transactions API never sends —
+// the fund's name arrives on the `funds` embed — so every fund row read
+// "Investment" / "Khoản đầu tư" with nothing saying which fund it was.
+describe('DesktopGoalDetail — History names the fund', () => {
+  const fundBuy = {
+    transaction_id: 'tx-fund-1',
+    transaction_type: 'investment',
+    asset_type: 'fund',
+    fund_id: 'fund-1',
+    parent_transaction_id: null,
+    investment_date: '2026-03-01',
+    amount_vnd: 4_000_000,
+    units: 150,
+    interest_rate: null,
+    expiry_date: null,
+    notes: null,
+    principal_withdrawn: null,
+    units_withdrawn: null,
+    funds: { id: 'fund-1', name: 'DCDS', nav: 26_000 },
+  }
+
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('investment-transactions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ transactions: [fundBuy] }) })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  })
+
+  it('shows the fund name on its History row', async () => {
+    render(<DesktopGoalDetail {...baseProps} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'History' }))
+
+    await waitFor(() => expect(screen.getByText('DCDS')).toBeInTheDocument())
+    expect(screen.queryByText('Investment')).not.toBeInTheDocument()
+  })
+})

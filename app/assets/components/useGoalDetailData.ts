@@ -8,7 +8,8 @@ interface InvestmentTx {
   transaction_type: string
   asset_type: string
   fund_id: string | null
-  fund_name: string | null
+  // The fund's name, embedded by the API (object or one-element array).
+  funds?: { id: string; name: string; nav: number } | { id: string; name: string; nav: number }[] | null
   fund_code?: string | null
   parent_transaction_id: string | null
   investment_date: string

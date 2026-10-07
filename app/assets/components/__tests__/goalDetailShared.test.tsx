@@ -492,7 +492,7 @@ describe('computeGoalCalculator', () => {
 // DesktopGoalDetail; both now call this so the two surfaces can't drift.
 describe('describeHistoryRow', () => {
   it('an investment reads positive (green, up-arrow, +)', () => {
-    const d = describeHistoryRow({ transaction_type: 'investment', fund_name: 'VESAF' }, false, false)
+    const d = describeHistoryRow({ transaction_type: 'investment', funds: { name: 'VESAF' } }, false, false)
     expect(d.kind).toBe('investment')
     expect(d.ink).toBe('var(--c-pos)')
     expect(d.fill).toBe('var(--c-pos-tint)')
@@ -529,7 +529,7 @@ describe('describeHistoryRow', () => {
   })
 
   it('a renewed row reads neutral with the renew icon but keeps its + sign', () => {
-    const d = describeHistoryRow({ transaction_type: 'investment', fund_name: 'VESAF' }, true, false)
+    const d = describeHistoryRow({ transaction_type: 'investment', funds: { name: 'VESAF' } }, true, false)
     expect(d.Icon).toBe(RefreshCw)
     expect(d.ink).toBe('var(--c-muted)')   // renewed → neutral
     expect(d.sign).toBe('+')               // still an investment
@@ -539,6 +539,22 @@ describe('describeHistoryRow', () => {
     expect(describeHistoryRow({ transaction_type: 'investment', notes: 'Cash' }, false, false).name).toBe('Cash')
     expect(describeHistoryRow({ transaction_type: 'investment' }, false, false).name).toBe('Investment')
     expect(describeHistoryRow({ transaction_type: 'investment' }, false, true).name).toBe('Khoản đầu tư')
+  })
+
+  // The History tab named every fund row "Khoản đầu tư": it read `fund_name`,
+  // a field /api/v1/investment-transactions never sends — the fund's name rides
+  // on the `funds(id, name, nav)` embed, as an object or a one-element array.
+  it('names a fund row by the funds embed the API actually sends', () => {
+    expect(describeHistoryRow({ transaction_type: 'investment', funds: { name: 'DCDS' } }, false, true).name).toBe('DCDS')
+    expect(describeHistoryRow({ transaction_type: 'investment', funds: [{ name: 'DCDS' }] }, false, true).name).toBe('DCDS')
+    expect(describeHistoryRow({ transaction_type: 'withdrawal', funds: { name: 'DCDS' } }, false, true).name).toBe('DCDS')
+  })
+
+  it('an unnamed holding says what it is (its asset type), not just "an investment"', () => {
+    expect(describeHistoryRow({ transaction_type: 'investment', asset_type: 'gold' }, false, true).name).toBe('Vàng')
+    expect(describeHistoryRow({ transaction_type: 'investment', asset_type: 'bank' }, false, true).name).toBe('Ngân hàng')
+    expect(describeHistoryRow({ transaction_type: 'investment', asset_type: 'stock' }, false, false).name).toBe('Stock')
+    expect(describeHistoryRow({ transaction_type: 'withdrawal', asset_type: 'fund' }, false, true).name).toBe('Quỹ')
   })
 
   // #713 taught the ledger's txPrimaryName that a withdrawal's source name
@@ -565,7 +581,7 @@ describe('describeHistoryRow', () => {
 
   it('a fund name still wins over everything on a withdrawal, unaffected by the swap', () => {
     const d = describeHistoryRow(
-      { transaction_type: 'withdrawal', fund_name: 'VESAF', notes: 'Rút để gộp gửi', parentNotes: 'PVcombank' },
+      { transaction_type: 'withdrawal', funds: { name: 'VESAF' }, notes: 'Rút để gộp gửi', parentNotes: 'PVcombank' },
       false, false,
     )
     expect(d.name).toBe('VESAF')

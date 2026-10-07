@@ -3,7 +3,7 @@
 // shared UI file stays presentational and this pure logic can be tested/reused on
 // its own.
 import { RefreshCw, PiggyBank, GitMerge, ArrowDownRight, ArrowUpRight, type LucideIcon } from 'lucide-react'
-import { txKind, withdrawalSourceName, type TxKind, type TxKindFields } from './transactionUtils'
+import { txKind, withdrawalSourceName, fundNameOf, type TxKind, type TxKindFields } from './transactionUtils'
 import { monthsUntilYm, businessYearMonth } from '@/lib/dates'
 
 export interface HistoryRowDescriptor {
@@ -15,6 +15,15 @@ export interface HistoryRowDescriptor {
   name: string
 }
 
+// Mirrors messages' assetFund/assetBank/assetStock/assetGold, which the ledger
+// uses for the same fallback; this file speaks isVi rather than next-intl.
+const ASSET_LABELS: Record<string, { vi: string; en: string }> = {
+  fund: { vi: 'Quỹ', en: 'Fund' },
+  bank: { vi: 'Ngân hàng', en: 'Bank' },
+  stock: { vi: 'Cổ phiếu', en: 'Stock' },
+  gold: { vi: 'Vàng', en: 'Gold' },
+}
+
 // How a transaction-history row presents (#467): its kind → colour tokens, icon,
 // amount sign and display name. A held/merged settlement or a renewed row reads
 // NEUTRALLY (muted, no red "−") because the cash was parked/rolled forward, not
@@ -22,7 +31,11 @@ export interface HistoryRowDescriptor {
 // calls it and only maps the icon size + chrome in its own JSX.
 export function describeHistoryRow(
   tx: TxKindFields & {
-    fund_name?: string | null
+    // The `funds(id, name, nav)` embed /api/v1/investment-transactions sends —
+    // an object or a one-element array. The tab used to read `fund_name`, a
+    // field the API never sends, so every fund row read "Khoản đầu tư".
+    funds?: { name: string } | { name: string }[] | null
+    asset_type?: string | null
     notes?: string | null
     // The name of the row `parent_transaction_id` points at — the deposit a
     // withdrawal drew from. See withdrawalSourceName's doc.
@@ -38,9 +51,12 @@ export function describeHistoryRow(
   const fill = neutral ? 'var(--c-card-2)' : isWithdraw ? 'var(--c-neg-tint)' : 'var(--c-pos-tint)'
   const Icon = isRenewed ? RefreshCw : kind === 'held' ? PiggyBank : kind === 'consumed' ? GitMerge : isWithdraw ? ArrowDownRight : ArrowUpRight
   const sign = isWithdraw ? '-' : kind === 'investment' ? '+' : ''
-  const name = tx.fund_name
-    ?? (isWithdraw ? withdrawalSourceName(tx.notes, tx.parentNotes) || null : tx.notes)
-    ?? (isVi ? 'Khoản đầu tư' : 'Investment')
+  // An unnamed row still says what it is — the same asset-type label the
+  // ledger falls back to — rather than the bare "Khoản đầu tư".
+  const name = fundNameOf(tx)
+    || (isWithdraw ? withdrawalSourceName(tx.notes, tx.parentNotes) : tx.notes?.trim())
+    || (tx.asset_type ? ASSET_LABELS[tx.asset_type]?.[isVi ? 'vi' : 'en'] : null)
+    || (isVi ? 'Khoản đầu tư' : 'Investment')
   return { kind, ink, fill, Icon, sign, name }
 }
 
