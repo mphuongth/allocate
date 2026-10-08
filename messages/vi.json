@@ -658,7 +658,7 @@
     "codeExists": "Mã quỹ này đã tồn tại. Vui lòng dùng mã khác.",
     "error": "Đã xảy ra lỗi. Vui lòng thử lại sau.",
     "navInfoTitle": "Về cập nhật giá",
-    "navInfoDesc": "NAV quỹ mở do công ty quản lý quỹ công bố hàng ngày; chứng chỉ quỹ ETF lấy giá đóng cửa trên sàn. Nhấn \"{refreshNav}\" để lấy giá mới nhất. Giá thường có sau khi thị trường đóng cửa.",
+    "navInfoDesc": "NAV quỹ mở do công ty quản lý quỹ công bố hàng ngày; chứng chỉ quỹ ETF lấy giá đóng cửa trên sàn. Nhấn ↻ để lấy giá mới nhất. Giá thường có sau khi thị trường đóng cửa.",
     "searchPlaceholder": "Tìm theo tên hoặc mã quỹ...",
     "fundsCount": "{count} quỹ",
     "dcaGoalLabel": "Phân bổ vào",
