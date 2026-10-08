@@ -134,9 +134,11 @@ export function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, 
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
         {fmtCompact(totalAllocated)}
       </div>
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
-        {pct(totalAllocated)} {isVI ? 'thu nhập' : 'of income'}
-        {remaining < 0 && <span style={{ color: '#fca5a5', marginLeft: 8 }}>⚠ {isVI ? 'Vượt ngân sách' : 'Over budget'}</span>}
+      {/* Over budget, say how much over rather than a rounded share (#767). */}
+      <div data-testid="planning-alloc-headline" style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+        {remaining < 0
+          ? <span style={{ color: '#fca5a5' }}>⚠ {isVI ? 'Vượt ngân sách' : 'Over budget by'} {fmtCompact(-remaining)}</span>
+          : <>{pct(totalAllocated)} {isVI ? 'thu nhập' : 'of income'}</>}
       </div>
       <div style={{ marginTop: 14, padding: 2, background: 'rgba(255,255,255,0.08)', borderRadius: 999 }}>
         <StackedBar segments={rows.map(r => ({ color: r.c, value: r.v }))} total={salary} />
