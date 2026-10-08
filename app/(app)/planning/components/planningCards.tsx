@@ -300,7 +300,7 @@ export function BudgetSection({
           </div>
         </button>
         {action}
-        <button onClick={toggle} aria-label="Toggle section" style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--c-muted)', padding: 0 }}>
+        <button onClick={toggle} aria-label="Toggle section" className="hit-44" style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--c-muted)', padding: 0 }}>
           {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
       </div>

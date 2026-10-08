@@ -72,6 +72,8 @@ function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc:
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
       <button
         onClick={() => setOpen((v) => !v)}
+        data-testid="fund-sort-btn"
+        className="hit-44"
         style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', fontSize: 11, fontWeight: 500, background: 'var(--c-card)', color: 'var(--c-ink)', border: '1px solid var(--c-line)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
       >
         {current ? t(current.key) : ''} {sortAsc ? '↑' : '↓'}
@@ -407,6 +409,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 // optimistic value rather than at what the server holds (#590).
                 disabled={toggling}
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue(String(fund.dca_monthly_amount_vnd)); setDcaEditIsNew(false) }}
+                className="hit-44"
                 style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.5 : 1, fontFamily: 'inherit' }}
               >
                 {fmtCompact(fund.dca_monthly_amount_vnd)}
@@ -416,6 +419,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 type="button"
                 disabled={toggling}
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue(''); setDcaEditIsNew(false) }}
+                className="hit-44"
                 style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.5 : 1, fontFamily: 'inherit' }}
               >
                 {t('setAmount')}

@@ -198,6 +198,7 @@ export default function NetWorthCard({
             key={r}
             onClick={() => onRangeChange?.(r)}
             aria-pressed={timeRange === r}
+            className="hit-44"
             style={{
               flex: 1, padding: '5px 0',
               border: 'none', cursor: 'pointer',

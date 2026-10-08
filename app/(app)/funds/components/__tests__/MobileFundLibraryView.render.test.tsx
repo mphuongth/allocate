@@ -170,6 +170,26 @@ describe('MobileFundLibraryView — sheets', () => {
   })
 })
 
+// ─── Touch targets (#766) ────────────────────────────────────────────────────
+
+describe('MobileFundLibraryView — touch targets', () => {
+  it('gives the sort button a 44px hit area', () => {
+    render(<Harness initial={[makeFund()]} />)
+    expect(screen.getByTestId('fund-sort-btn')).toHaveClass('hit-44')
+  })
+
+  it('gives the DCA amount chip a 44px hit area', () => {
+    render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]} />)
+    expect(screen.getByTestId('dca-amount-btn-f1')).toHaveClass('hit-44')
+  })
+
+  it('gives the "set amount" chip a 44px hit area', () => {
+    render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: null })]} />)
+    const card = within(screen.getByTestId('fund-card-f1'))
+    expect(card.getByRole('button', { name: 'setAmount' })).toHaveClass('hit-44')
+  })
+})
+
 // ─── DCA inline controls ─────────────────────────────────────────────────────
 
 describe('MobileFundLibraryView — DCA inline controls', () => {
