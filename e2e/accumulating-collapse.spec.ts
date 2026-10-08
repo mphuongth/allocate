@@ -3,15 +3,21 @@ import * as api from './helpers/api'
 import { expectRenewalCommitted } from './helpers/maturity'
 
 // Book-level renewal for accumulating ("Loại 2") deposits: at maturity the whole
-// book COLLAPSES into one fresh plain term deposit. This closes the loop on the
-// design call from #349 — settle every tranche into one lump, but keep each
-// tranche's closed cycle in history so the "topped up N×" story survives.
+// book COLLAPSES into one fresh lump. This closes the loop on the design call
+// from #349 — settle every tranche into one lump, but keep each tranche's closed
+// cycle in history so the "topped up N×" story survives.
+//
+// Since #748 the renewed lump STAYS a book by default ("Tiếp tục là sổ tích
+// luỹ", ticked), so its linked recurring saving keeps topping it up; unticked it
+// becomes a plain term deposit, as every renewal did before. The two UI tests
+// below take one path each.
 //
 // What this asserts: (1) a matured book surfaces the "Handle maturity" action and
-// the collapse flow completes from the UI; (2) afterwards the anchor is a plain
-// term deposit (deposit_group_id cleared) with no surviving sibling tranche; and
-// (3) every tranche became its own history snapshot carrying real interest, so
-// nothing is double-counted and the lineage is preserved.
+// the collapse flow completes from the UI; (2) afterwards the anchor is the only
+// live row of the book — still self-grouped by default, a plain term deposit
+// (deposit_group_id cleared) when unticked; and (3) every tranche became its own
+// history snapshot carrying real interest, so nothing is double-counted and the
+// lineage is preserved.
 
 const iso = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10)
 
@@ -27,7 +33,7 @@ async function gotoFreshDashboard(page: Page) {
 }
 
 test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => {
-  test('a matured book collapses into one plain term deposit, snapshotting each tranche', async ({ page }) => {
+  test('a matured book collapses into one lump that stays a book by default, snapshotting each tranche', async ({ page }) => {
     test.slow()
     const goal = await api.createGoal({ goal_name: 'E2E Collapse Goal', target_amount: 200_000_000 })
     // A live book (future maturity) so the top-up is accepted, then mature it.
@@ -78,6 +84,8 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
       // Collapse form (defaults to roll principal + interest). Give it a clean term
       // and confirm — the route values each tranche's interest server-side.
       await page.getByTestId('maturity-term-input').fill('12')
+      // Left at its default: the renewed lump stays a book (#748).
+      await expect(page.getByTestId('maturity-keep-book')).toBeChecked()
       const [resp] = await Promise.all([
         page.waitForResponse((r) => r.url().includes('/collapse') && r.request().method() === 'POST'),
         page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click(),
@@ -89,14 +97,16 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
       const all = await (await page.request.get('/api/v1/investment-transactions?include_history=true&limit=1000')).json()
       const rows = all.transactions as Array<{ transaction_id: string; deposit_group_id: string | null; renewed_from_transaction_id: string | null; interest_earned_vnd: number | null; transaction_type: string }>
 
-      // (1) The anchor survived as a PLAIN term deposit (group cleared).
+      // (1) The anchor survived as a book of its own — still self-grouped, so the
+      // linked recurring saving tops it up next month instead of opening a deposit.
       const anchorNow = rows.find((r) => r.transaction_id === anchor.transaction_id)
       expect(anchorNow).toBeTruthy()
-      expect(anchorNow!.deposit_group_id).toBeNull()
+      expect(anchorNow!.deposit_group_id).toBe(anchor.transaction_id)
 
-      // (2) No live tranche still belongs to the old book — it's collapsed to one row.
+      // (2) The renewed book starts with exactly one member: the lump. Every old
+      // tranche was collapsed into it.
       const liveGrouped = rows.filter((r) => r.deposit_group_id === anchor.transaction_id && !r.renewed_from_transaction_id)
-      expect(liveGrouped).toHaveLength(0)
+      expect(liveGrouped.map((r) => r.transaction_id)).toEqual([anchor.transaction_id])
       // The non-anchor tranche row is gone entirely (folded into the lump + snapshot).
       expect(rows.some((r) => r.transaction_id === topUp.transaction_id)).toBe(false)
 
@@ -112,13 +122,15 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
       expect(savingNow!.linked_deposit_tx_id).toBe(anchor.transaction_id)
     } finally {
       await api.deleteRecurringSaving(saving.saving_id)
-      await api.deleteDepositGroup(anchor.transaction_id) // live tranches (if not collapsed)
+      // Snapshots first: a kept book's anchor is self-grouped, so the group
+      // delete would take the anchor out from under its own history.
       await api.deleteTransactionCascade(anchor.transaction_id) // collapsed anchor + snapshots
+      await api.deleteDepositGroup(anchor.transaction_id) // live tranches (if not collapsed)
       await api.deleteGoal(goal.goal_id)
     }
   })
 
-  test('a matured book collapses straight from the dashboard Needs-attention card', async ({ page }) => {
+  test('a matured book, unticked from staying a book, collapses into a plain term deposit from the Needs-attention card', async ({ page }) => {
     test.slow()
     const goal = await api.createGoal({ goal_name: 'E2E Card Collapse Goal', target_amount: 200_000_000 })
     const anchor = await (await page.request.post('/api/v1/investment-transactions', {
@@ -139,6 +151,8 @@ test.describe('Accumulating book collapse (Loại 2 book-level renewal)', () => 
         .getByRole('button', { name: /Handle|Xử lý/i }).first().click()
 
       await page.getByTestId('maturity-term-input').fill('12')
+      // Opt out of #748's default: this renewal becomes a plain term deposit.
+      await page.getByTestId('maturity-keep-book').uncheck()
       const [resp] = await Promise.all([
         page.waitForResponse((r) => r.url().includes('/collapse') && r.request().method() === 'POST'),
         page.getByRole('button', { name: /Confirm renewal|Xác nhận tái tục/i }).click(),
