@@ -271,12 +271,11 @@ describe('MobilePlanningView — fixed expenses section', () => {
       { expense_id: 'fe2', expense_name: 'Gym', amount_vnd: 600_000, override: 0 },
     ]
     render(<MobilePlanningView {...defaultProps} plan={basePlan} fixedExpenses={expenses} />)
-    // Section total should be the exact 8,500,000 only (gym is skipped)
-    const section = screen.getByTestId('section-fixed-expenses').closest('[data-testid="budget-section"]')
-    if (section) {
-      expect(section).toHaveTextContent('₫ 8500000')
-      expect(section).not.toHaveTextContent('₫ 9100000') // 8.5M + 0.6M
-    }
+    // Section total is 8.5M only (gym is skipped); totals are compact (#768).
+    const section = screen.getByTestId('section-fixed-expenses').closest('[data-testid="budget-section"]') as HTMLElement
+    const total = within(section).getByTestId('budget-section-total')
+    expect(total).toHaveTextContent('8.5M ₫')
+    expect(total).not.toHaveTextContent('9.1M ₫') // 8.5M + 0.6M
   })
 })
 

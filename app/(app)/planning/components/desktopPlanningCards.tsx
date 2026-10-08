@@ -6,7 +6,7 @@
 // owns the data and passes it in.
 import { useState, useRef } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
-import { fmt, fmtCompact } from '@/lib/formatters'
+import { fmtCompact } from '@/lib/formatters'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import { clickAway } from '@/components/ui/clickAway'
 import { planRemaining } from '@/features/planning/planModel'
@@ -63,7 +63,8 @@ export function PlanTable({ icon, iconColor, title, total, defaultOpen = true, a
             {icon}
           </div>
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', flex: 1 }}>{title}</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmt(total)}</span>
+          {/* Compact like every other total on the page; line items stay exact (#768). */}
+          <span data-testid="budget-section-total" style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtCompact(total)}</span>
         </button>
         {action}
         <button onClick={toggle} aria-label="Toggle section" style={{ border: 'none', cursor: 'pointer', background: 'transparent', display: 'flex', color: 'var(--c-muted)', padding: 0 }}>
