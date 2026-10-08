@@ -688,6 +688,7 @@
     "codePlaceholder": "e.g., VFMVF1",
     "navPlaceholder": "e.g., 36120",
     "editFund": "Edit fund",
+    "fundActions": "Fund actions",
     "enableDca": "Enable DCA",
     "disableDca": "Disable DCA",
     "refreshDisabledHint": "Turn on automatic price updates for a fund to use refresh.",

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useState } from 'react'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MobileFundLibraryView from '../MobileFundLibraryView'
 import type { Fund } from '../useFundsData'
 import { useFundsBusy } from './helpers/fundsBusy'
+import { chooseFundAction } from './helpers/fundCardMenu'
 
 // The mobile half of the ETF vocabulary (see the desktop file for why it
 // matters): `funds.nav` holds an ETF's MARKET price, which is not the NAV its
@@ -51,8 +52,7 @@ function Harness({ initial }: { initial: Fund[] }) {
   )
 }
 
-const openEdit = (id: string) =>
-  userEvent.click(within(screen.getByTestId(`fund-card-${id}`)).getByRole('button', { name: 'editFund' }))
+const openEdit = (id: string) => chooseFundAction('editFund', id)
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })))

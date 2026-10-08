@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
-import { Plus, RefreshCw, Search, X, ChevronDown, Check } from 'lucide-react'
+import { Plus, RefreshCw, Search, X, ChevronDown, Check, MoreHorizontal } from 'lucide-react'
 import { useNavigation } from '@/components/navigation/NavigationContext'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { SyncPill } from '@/components/ui/SyncPill'
@@ -12,7 +12,7 @@ import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/
 // the Plan feature today; reused here so Funds sheets behave the same.
 import { TYPE_META, TYPE_FILTERS, FORM_TYPES, filterAndSortFunds, nextSort, priceTerm } from '@/features/funds/fundListModel'
 import type { TypeFilter } from '@/features/funds/contracts'
-import { useDialogA11y } from '@/components/ui/useDialogA11y'
+import { useCloseOnScroll, useDialogA11y } from '@/components/ui/useDialogA11y'
 import PendingButton from '@/components/ui/PendingButton'
 import { FundsEmptyState } from './FundsEmptyState'
 import { FundNavAge } from './FundNavAge'
@@ -301,6 +301,13 @@ function FundForm({ existing, title, onClose, onSave, saving, formError }: {
 
 // ─── FundCard ────────────────────────────────────────────────────────────────
 
+// A row in the fund card's "⋯" menu: full-width, 44px tall for a thumb.
+const MENU_ITEM: React.CSSProperties = {
+  width: '100%', minHeight: 44, textAlign: 'left', padding: '10px 12px', fontSize: 13,
+  background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+  display: 'flex', alignItems: 'center', gap: 8,
+}
+
 function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel, unallocatedLabel, onEdit, onDelete, onToggleDca, onSaveDcaAmount, onCancelDcaEdit, onGoalChange, setDcaEditId, setDcaEditValue, setDcaEditIsNew }: {
   fund: Fund
   dcaEditId: string | null
@@ -325,6 +332,26 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
   const isEditing = dcaEditId === fund.id
   const toggling = togglingIds.has(fund.id)
 
+  // Edit and delete sit behind "⋯" (#769): a red delete on every card, a thumb
+  // from edit, was one slip from the delete sheet and noise down the list.
+  // position:fixed from the trigger's rect, like the Plan page's row menus.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
+  const menuBtnRef = useRef<HTMLButtonElement>(null)
+  useCloseOnScroll(menuOpen, () => setMenuOpen(false))
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [menuOpen])
+  const openMenu = () => {
+    const rect = menuBtnRef.current?.getBoundingClientRect()
+    if (rect) setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    setMenuOpen(true)
+  }
+  const choose = (action: () => void) => { setMenuOpen(false); action() }
+
   return (
     <div
       data-testid={`fund-card-${fund.id}`}
@@ -343,13 +370,30 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
           <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fund.name}</div>
         </div>
         <div style={{ display: 'flex', flexShrink: 0 }}>
-          {/* ≥44px touch targets (#4): icons stay 14px but the button fills 44×44. */}
-          <button onClick={onEdit} aria-label={t('editFund')} style={{ minWidth: 44, minHeight: 44, padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <IconEdit size={14} color="var(--c-muted)" />
+          {/* ≥44px touch target (#4): the icon stays 14px but the button fills 44×44. */}
+          <button
+            ref={menuBtnRef}
+            onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
+            aria-label={t('fundActions')}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            style={{ minWidth: 44, minHeight: 44, padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-muted)' }}
+          >
+            <MoreHorizontal size={16} />
           </button>
-          <button onClick={onDelete} aria-label={t('deleteBtn')} style={{ minWidth: 44, minHeight: 44, padding: 6, background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <IconTrash size={14} color="var(--c-neg)" />
-          </button>
+          {menuOpen && (
+            <>
+              <div data-testid="fund-menu-backdrop" onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+              <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 160, overflow: 'hidden' }}>
+                <button role="menuitem" onClick={() => choose(onEdit)} style={{ ...MENU_ITEM, borderBottom: '1px solid var(--c-line)', color: 'var(--c-ink)' }}>
+                  <IconEdit size={14} color="var(--c-muted)" />{t('editFund')}
+                </button>
+                <button role="menuitem" onClick={() => choose(onDelete)} style={{ ...MENU_ITEM, color: 'var(--c-neg)' }}>
+                  <IconTrash size={14} color="var(--c-neg)" />{t('deleteBtn')}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

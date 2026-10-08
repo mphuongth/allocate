@@ -688,6 +688,7 @@
     "codePlaceholder": "vd: VFMVF1",
     "navPlaceholder": "vd: 36120",
     "editFund": "Sửa quỹ",
+    "fundActions": "Thao tác với quỹ",
     "enableDca": "Bật DCA",
     "disableDca": "Tắt DCA",
     "refreshDisabledHint": "Bật tự động cập nhật giá cho một quỹ để dùng làm mới.",
