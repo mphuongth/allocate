@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useState } from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import MobileFundLibraryView from '../MobileFundLibraryView'
 import type { Fund } from '../useFundsData'
 import { useFundsBusy } from './helpers/fundsBusy'
+import { chooseFundAction } from './helpers/fundCardMenu'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -32,7 +32,7 @@ afterEach(() => vi.unstubAllGlobals())
 describe('MobileFundLibraryView — P2 parity/reversibility', () => {
   it('the delete sheet shows the permanent-delete impact line (parity with desktop)', async () => {
     render(<Harness initial={[makeFund()]} />)
-    await userEvent.click(screen.getByLabelText('deleteBtn'))
+    await chooseFundAction('deleteBtn')
     const sheet = screen.getByTestId('delete-fund-sheet')
     // Desktop shows deleteWarning + deleteCannotUndo; mobile must not drop the warning.
     expect(sheet.textContent).toContain('deleteWarning')
@@ -41,7 +41,7 @@ describe('MobileFundLibraryView — P2 parity/reversibility', () => {
 
   it('the Add/Edit form sheet does NOT close on a backdrop tap (avoids losing typed input)', async () => {
     render(<Harness initial={[makeFund()]} />)
-    await userEvent.click(screen.getByLabelText('editFund'))
+    await chooseFundAction('editFund')
     const sheet = screen.getByTestId('fund-sheet')
     fireEvent.click(sheet.parentElement as HTMLElement) // the backdrop overlay
     expect(screen.getByTestId('fund-sheet')).toBeInTheDocument()

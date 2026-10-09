@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useState } from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import MobileFundLibraryView from '../MobileFundLibraryView'
 import type { Fund } from '../useFundsData'
 import { useFundsBusy } from './helpers/fundsBusy'
+import { chooseFundAction } from './helpers/fundCardMenu'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -32,7 +32,7 @@ afterEach(() => vi.unstubAllGlobals())
 describe('MobileFundLibraryView — sheet a11y (Esc)', () => {
   it('Escape closes the edit sheet', async () => {
     render(<Harness />)
-    await userEvent.click(screen.getByLabelText('editFund'))
+    await chooseFundAction('editFund')
     expect(screen.getByTestId('fund-sheet')).toBeInTheDocument()
     fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByTestId('fund-sheet')).not.toBeInTheDocument())
@@ -44,13 +44,13 @@ describe('MobileFundLibraryView — sheet a11y (Esc)', () => {
 describe('MobileFundLibraryView — sheet dialog semantics + names', () => {
   it('the edit sheet is a role=dialog named by its title', async () => {
     render(<Harness />)
-    await userEvent.click(screen.getByLabelText('editFund'))
+    await chooseFundAction('editFund')
     expect(screen.getByRole('dialog', { name: 'editModal' })).toBeInTheDocument()
   })
 
   it('the delete sheet is a role=dialog with an accessible name', async () => {
     render(<Harness />)
-    await userEvent.click(screen.getByLabelText('deleteBtn'))
+    await chooseFundAction('deleteBtn')
     const sheet = screen.getByTestId('delete-fund-sheet')
     expect(sheet).toHaveAttribute('role', 'dialog')
     expect(sheet.getAttribute('aria-label')).toBeTruthy()

@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event'
 import MobileFundLibraryView from '../MobileFundLibraryView'
 import type { Fund } from '../useFundsData'
 import { useFundsBusy } from './helpers/fundsBusy'
+import { chooseFundAction } from './helpers/fundCardMenu'
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string, params?: Record<string, unknown>) =>
@@ -35,7 +36,7 @@ describe('MobileFundLibraryView — delete of an in-use fund is hard-blocked wit
   it('shows the in-use message and does NOT reload when the API returns 409', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ code: 'fund_in_use' }) })))
     render(<Harness reload={reload} />)
-    await userEvent.click(screen.getByLabelText('deleteBtn'))
+    await chooseFundAction('deleteBtn')
     const sheet = screen.getByTestId('delete-fund-sheet')
     await userEvent.click(within(sheet).getByRole('button', { name: 'deleteBtn' }))
 
@@ -47,7 +48,7 @@ describe('MobileFundLibraryView — delete of an in-use fund is hard-blocked wit
   it('a normal (204) delete still reloads and reports success', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve({}) })))
     render(<Harness reload={reload} />)
-    await userEvent.click(screen.getByLabelText('deleteBtn'))
+    await chooseFundAction('deleteBtn')
     const sheet = screen.getByTestId('delete-fund-sheet')
     await userEvent.click(within(sheet).getByRole('button', { name: 'deleteBtn' }))
 
@@ -62,7 +63,7 @@ describe('MobileFundLibraryView — delete-confirm label parity with desktop', (
   it('labels the confirm button "Delete fund" (deleteBtn), not the generic "Delete"', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve({}) })))
     render(<Harness reload={reload} />)
-    await userEvent.click(screen.getByLabelText('deleteBtn'))
+    await chooseFundAction('deleteBtn')
     const sheet = screen.getByTestId('delete-fund-sheet')
     expect(within(sheet).getByRole('button', { name: 'deleteBtn' })).toBeInTheDocument()
     expect(within(sheet).queryByRole('button', { name: 'delete' })).not.toBeInTheDocument()

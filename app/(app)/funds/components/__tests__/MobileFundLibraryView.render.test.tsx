@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import MobileFundLibraryView from '../MobileFundLibraryView'
 import type { Fund } from '../useFundsData'
 import { useFundsBusy } from './helpers/fundsBusy'
+import { chooseFundAction } from './helpers/fundCardMenu'
 
 // Presence/render + filter coverage for the mobile Funds list. Moved off E2E per
 // the test-layering policy. The header add/refresh actions live in the mobile top
@@ -97,12 +98,64 @@ describe('MobileFundLibraryView — fund card', () => {
     expect(card.getByRole('button', { name: 'enableDca' })).toBeInTheDocument()
   })
 
-  it('exposes localized edit/delete/DCA accessible names (uses t(), not hardcoded English)', () => {
+  it('exposes localized edit/delete/DCA accessible names (uses t(), not hardcoded English)', async () => {
     render(<Harness initial={[makeFund()]} />)
     const card = within(screen.getByTestId('fund-card-f1'))
-    expect(card.getByRole('button', { name: 'editFund' })).toBeInTheDocument()
-    expect(card.getByRole('button', { name: 'deleteBtn' })).toBeInTheDocument()
     expect(card.getByRole('button', { name: 'enableDca' })).toBeInTheDocument()
+    await userEvent.click(card.getByRole('button', { name: 'fundActions' }))
+    expect(screen.getByRole('menuitem', { name: 'editFund' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'deleteBtn' })).toBeInTheDocument()
+  })
+})
+
+// ─── Edit/delete menu (#769) ─────────────────────────────────────────────────
+
+// A red delete icon on every card, a thumb's width from edit, was one slip from
+// the delete sheet and visual noise on a list of funds. Both now sit behind "⋯".
+describe('MobileFundLibraryView — edit/delete menu', () => {
+  it('shows no delete control on the card until the menu is opened', () => {
+    render(<Harness initial={[makeFund()]} />)
+    const card = within(screen.getByTestId('fund-card-f1'))
+    expect(card.queryByRole('button', { name: 'deleteBtn' })).toBeNull()
+    expect(card.queryByRole('button', { name: 'editFund' })).toBeNull()
+    expect(screen.queryByRole('menu')).toBeNull()
+    const trigger = card.getByRole('button', { name: 'fundActions' })
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('opens a menu with edit and a delete marked as destructive', async () => {
+    render(<Harness initial={[makeFund()]} />)
+    const trigger = within(screen.getByTestId('fund-card-f1')).getByRole('button', { name: 'fundActions' })
+    await userEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    const menu = within(screen.getByRole('menu'))
+    const items = menu.getAllByRole('menuitem').map((i) => i.textContent)
+    expect(items).toEqual(['editFund', 'deleteBtn'])
+    expect(menu.getByRole('menuitem', { name: 'deleteBtn' })).toHaveStyle({ color: 'var(--c-neg)' })
+  })
+
+  it('closes the menu once an item is chosen', async () => {
+    render(<Harness initial={[makeFund()]} />)
+    await chooseFundAction('deleteBtn')
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.getByTestId('delete-fund-sheet')).toBeInTheDocument()
+  })
+
+  it('closes on Escape without opening anything', async () => {
+    render(<Harness initial={[makeFund()]} />)
+    await userEvent.click(within(screen.getByTestId('fund-card-f1')).getByRole('button', { name: 'fundActions' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(screen.queryByTestId('delete-fund-sheet')).toBeNull()
+    expect(screen.queryByTestId('fund-sheet')).toBeNull()
+  })
+
+  it('closes on a tap outside it', async () => {
+    render(<Harness initial={[makeFund()]} />)
+    await userEvent.click(within(screen.getByTestId('fund-card-f1')).getByRole('button', { name: 'fundActions' }))
+    await userEvent.click(screen.getByTestId('fund-menu-backdrop'))
+    expect(screen.queryByRole('menu')).toBeNull()
   })
 })
 
@@ -142,7 +195,7 @@ describe('MobileFundLibraryView — search & type filter', () => {
 describe('MobileFundLibraryView — sheets', () => {
   it('opens the edit sheet prefilled, with localized form placeholders', async () => {
     render(<Harness initial={[makeFund({ name: 'Editable Fund' })]} />)
-    await userEvent.click(within(screen.getByTestId('fund-card-f1')).getByRole('button', { name: 'editFund' }))
+    await chooseFundAction('editFund')
     const sheet = within(screen.getByTestId('fund-sheet'))
     expect(sheet.getByDisplayValue('Editable Fund')).toBeInTheDocument()
     // Placeholders come from t() (namePlaceholder), not hardcoded English.
@@ -153,7 +206,7 @@ describe('MobileFundLibraryView — sheets', () => {
   // must show the VN format and accept that comma as the decimal separator.
   it('shows the NAV in VN format and accepts a comma decimal (issue #445)', async () => {
     render(<Harness initial={[makeFund({ name: 'Editable Fund', nav: 36120.5 })]} />)
-    await userEvent.click(within(screen.getByTestId('fund-card-f1')).getByRole('button', { name: 'editFund' }))
+    await chooseFundAction('editFund')
     const sheet = within(screen.getByTestId('fund-sheet'))
     const navInput = sheet.getByPlaceholderText('navPlaceholder') as HTMLInputElement
     expect(navInput.value).toBe('36.120,5')
@@ -163,7 +216,7 @@ describe('MobileFundLibraryView — sheets', () => {
 
   it('opens the delete sheet with a localized title key', async () => {
     render(<Harness initial={[makeFund({ code: 'DELME' })]} />)
-    await userEvent.click(within(screen.getByTestId('fund-card-f1')).getByRole('button', { name: 'deleteBtn' }))
+    await chooseFundAction('deleteBtn')
     const sheet = within(screen.getByTestId('delete-fund-sheet'))
     // Title uses t('deleteModal', { name }) — not a hardcoded "Delete DELME?".
     expect(sheet.getByText(/deleteModal.*DELME/)).toBeInTheDocument()
