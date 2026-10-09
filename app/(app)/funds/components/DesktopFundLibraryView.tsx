@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
-import { Plus, RefreshCw, Search, X } from 'lucide-react'
+import { ChevronDown, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { fmtCompact, fmtNav } from '@/lib/formatters'
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -260,6 +260,8 @@ function DcaToggle({ fund, editId, editValue, toggling, goals, goalLabel, unallo
       )}
       {/* Goal target — recurring contributions for this fund count toward this goal */}
       {fund.is_dca && (
+        // appearance:none drops the native arrow, so draw one (#765).
+        <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', minWidth: 0, maxWidth: 120 }}>
         <select
           data-testid={`dca-goal-${fund.id}`}
           value={fund.dca_goal_id ?? ''}
@@ -269,7 +271,8 @@ function DcaToggle({ fund, editId, editValue, toggling, goals, goalLabel, unallo
           onClick={e => e.stopPropagation()}
           onChange={e => { e.stopPropagation(); onGoalChange(e.target.value || null) }}
           style={{
-            fontSize: 11, fontWeight: 500, padding: '3px 6px', maxWidth: 120,
+            fontSize: 11, fontWeight: 500, padding: '3px 20px 3px 6px', width: '100%', minWidth: 0,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             border: '1px solid var(--c-line)', borderRadius: 6,
             // --c-ink-2 (not --c-muted): the select holds a real chosen goal, so
             // it needs readable contrast, not faint placeholder-grey.
@@ -280,6 +283,14 @@ function DcaToggle({ fund, editId, editValue, toggling, goals, goalLabel, unallo
           {goals.map(g => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
           <option value="">{unallocatedLabel}</option>
         </select>
+        <ChevronDown
+          data-testid={`dca-goal-chevron-${fund.id}`}
+          aria-hidden="true"
+          size={12}
+          color="var(--c-muted)"
+          style={{ position: 'absolute', right: 5, pointerEvents: 'none' }}
+        />
+        </span>
       )}
     </div>
   )
@@ -729,7 +740,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
           <div style={{ width: 18, height: 18, borderRadius: 9, background: 'var(--c-accent-fund, #2563eb)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 10, fontWeight: 700 }}>i</div>
           <div style={{ fontSize: 12, color: 'var(--c-muted)', lineHeight: 1.5 }}>
             <span style={{ fontWeight: 600, color: 'var(--c-navy)' }}>{t('navInfoTitle')}: </span>
-            {t('navInfoDesc', { refreshNav: t('refreshNav') })}
+            {t('navInfoDesc')}
           </div>
         </div>
       </div>

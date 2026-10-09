@@ -170,6 +170,26 @@ describe('MobileFundLibraryView — sheets', () => {
   })
 })
 
+// ─── Touch targets (#766) ────────────────────────────────────────────────────
+
+describe('MobileFundLibraryView — touch targets', () => {
+  it('gives the sort button a 44px hit area', () => {
+    render(<Harness initial={[makeFund()]} />)
+    expect(screen.getByTestId('fund-sort-btn')).toHaveClass('hit-44')
+  })
+
+  it('gives the DCA amount chip a 44px hit area', () => {
+    render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]} />)
+    expect(screen.getByTestId('dca-amount-btn-f1')).toHaveClass('hit-44')
+  })
+
+  it('gives the "set amount" chip a 44px hit area', () => {
+    render(<Harness initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: null })]} />)
+    const card = within(screen.getByTestId('fund-card-f1'))
+    expect(card.getByRole('button', { name: 'setAmount' })).toHaveClass('hit-44')
+  })
+})
+
 // ─── DCA inline controls ─────────────────────────────────────────────────────
 
 describe('MobileFundLibraryView — DCA inline controls', () => {
@@ -181,6 +201,19 @@ describe('MobileFundLibraryView — DCA inline controls', () => {
     const select = card.getByTestId('dca-goal-f1')
     expect(select).toBeInTheDocument()
     expect(select).toHaveValue('')
+  })
+
+  // appearance:none strips the native arrow, so without one of our own the
+  // goal picker reads as plain text nobody thinks to tap (#765).
+  it('draws a chevron on the goal dropdown, hidden from screen readers', async () => {
+    render(<Harness initial={[makeFund()]} />)
+    const card = within(screen.getByTestId('fund-card-f1'))
+    await userEvent.click(card.getByRole('button', { name: 'enableDca' }))
+    const chevron = card.getByTestId('dca-goal-chevron-f1')
+    expect(chevron).toHaveAttribute('aria-hidden', 'true')
+    // Clicks fall through to the select underneath.
+    expect(chevron).toHaveStyle({ pointerEvents: 'none' })
+    expect(chevron.parentElement).toContainElement(card.getByTestId('dca-goal-f1'))
   })
 })
 
