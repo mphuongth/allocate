@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl'
 import { TrendingUp, TrendingDown } from 'lucide-react'
-import { fmt, fmtCompact, fmtPct } from '@/lib/formatters'
+import { fmt, fmtCompact, fmtGoldUnits, fmtPct } from '@/lib/formatters'
 import { CairnLoader } from '@/components/ui/CairnLoader'
 import { TIME_RANGES, type TimeRange, type ChartPoint } from './netWorthHistory'
 import Sparkline from './Sparkline'
@@ -34,14 +34,11 @@ function AllocationBar({ fund, bank, gold, stock, etf = 0, goldUnits, locale }: 
     { key: 'stock', value: stock, color: ALLOC_COLORS.stock, label: isVi ? 'Cổ phiếu'  : 'Stock' },
   ].filter((s) => s.value > 0)
 
-  const formatDetail = (key: string, value: number) => {
-    if (key === 'gold' && goldUnits != null && goldUnits > 0) {
-      const u = goldUnits.toFixed(goldUnits < 10 ? 1 : 0)
-      if (isVi) return `${u} chỉ`
-      return `${u} ${goldUnits === 1 ? 'unit' : 'units'}`
-    }
-    return fmtCompact(value)
-  }
+  // The value column is how rows compare, so it is VND on every row. Gold's
+  // quantity is extra detail, shown under its label rather than instead of the
+  // money (#763).
+  const unitsFor = (key: string) =>
+    key === 'gold' && goldUnits != null && goldUnits > 0 ? fmtGoldUnits(goldUnits, isVi) : null
 
   return (
     <div data-testid="allocation-bar" style={{ marginTop: 14 }}>
@@ -76,12 +73,19 @@ function AllocationBar({ fund, bank, gold, stock, etf = 0, goldUnits, locale }: 
               }}
             >
               <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color, display: 'inline-block', flexShrink: 0 }} />
-              <span style={{ fontSize: 13, color: 'var(--c-ink)', fontWeight: 500 }}>{s.label}</span>
+              <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <span style={{ fontSize: 13, color: 'var(--c-ink)', fontWeight: 500 }}>{s.label}</span>
+                {unitsFor(s.key) && (
+                  <span data-testid={`allocation-units-${s.key}`} style={{ fontSize: 11, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                    {unitsFor(s.key)}
+                  </span>
+                )}
+              </span>
               <span style={{ fontSize: 12, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums', minWidth: 36, textAlign: 'right' }}>
                 {pct.toFixed(pct < 10 ? 1 : 0)}%
               </span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', minWidth: 64, textAlign: 'right' }}>
-                {formatDetail(s.key, s.value)}
+              <span data-testid={`allocation-value-${s.key}`} style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', minWidth: 64, textAlign: 'right' }}>
+                {fmtCompact(s.value)}
               </span>
             </div>
           )

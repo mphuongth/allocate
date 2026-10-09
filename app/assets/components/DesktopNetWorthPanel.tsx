@@ -1,7 +1,7 @@
 'use client'
 
 import { ArrowDownToLine } from 'lucide-react'
-import { fmtCompact, fmtPct, fmtTimeAgo } from '@/lib/formatters'
+import { fmtCompact, fmtGoldUnits, fmtPct, fmtTimeAgo } from '@/lib/formatters'
 import { CairnLoader } from '@/components/ui/CairnLoader'
 import type { DashboardData } from '@/features/dashboard/contracts'
 import type { AllocationTotals } from '@/features/dashboard/overviewData'
@@ -182,14 +182,20 @@ export default function DesktopNetWorthPanel({ data, allocationTotals, goldUnits
                   }}
                 >
                   <div style={{ width: 8, height: 8, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: 'var(--c-ink)', fontWeight: 500 }}>{seg.label}</span>
+                  {/* Gold's quantity sits under its label; the value column stays VND (#763). */}
+                  <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                    <span style={{ fontSize: 12, color: 'var(--c-ink)', fontWeight: 500 }}>{seg.label}</span>
+                    {seg.type === 'gold' && goldUnits != null && goldUnits > 0 && (
+                      <span data-testid="allocation-units-gold" style={{ fontSize: 11, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                        {fmtGoldUnits(goldUnits, isVi)}
+                      </span>
+                    )}
+                  </span>
                   <span style={{ fontSize: 11, color: 'var(--c-muted)', fontVariantNumeric: 'tabular-nums', minWidth: 32, textAlign: 'right' }}>
                     {seg.pct.toFixed(seg.pct < 10 ? 1 : 0)}%
                   </span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', minWidth: 64, textAlign: 'right' }}>
-                    {seg.type === 'gold' && goldUnits != null && goldUnits > 0
-                      ? (isVi ? `${goldUnits.toFixed(goldUnits < 10 ? 1 : 0)} chỉ` : `${goldUnits.toFixed(goldUnits < 10 ? 1 : 0)} ${goldUnits === 1 ? 'unit' : 'units'}`)
-                      : fmtCompact(seg.value)}
+                  <span data-testid={`allocation-value-${seg.type}`} style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', minWidth: 64, textAlign: 'right' }}>
+                    {fmtCompact(seg.value)}
                   </span>
                 </div>
               ))}

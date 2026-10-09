@@ -202,6 +202,19 @@ describe('MobileFundLibraryView — DCA inline controls', () => {
     expect(select).toBeInTheDocument()
     expect(select).toHaveValue('')
   })
+
+  // appearance:none strips the native arrow, so without one of our own the
+  // goal picker reads as plain text nobody thinks to tap (#765).
+  it('draws a chevron on the goal dropdown, hidden from screen readers', async () => {
+    render(<Harness initial={[makeFund()]} />)
+    const card = within(screen.getByTestId('fund-card-f1'))
+    await userEvent.click(card.getByRole('button', { name: 'enableDca' }))
+    const chevron = card.getByTestId('dca-goal-chevron-f1')
+    expect(chevron).toHaveAttribute('aria-hidden', 'true')
+    // Clicks fall through to the select underneath.
+    expect(chevron).toHaveStyle({ pointerEvents: 'none' })
+    expect(chevron.parentElement).toContainElement(card.getByTestId('dca-goal-f1'))
+  })
 })
 
 // ─── Localization (vi) ───────────────────────────────────────────────────────
