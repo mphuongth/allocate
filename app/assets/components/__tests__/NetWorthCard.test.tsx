@@ -83,14 +83,31 @@ describe('NetWorthCard', () => {
     expect(screen.queryByTestId('allocation-bar')).not.toBeInTheDocument()
   })
 
-  it('renders gold row with units (chỉ) when goldUnits provided', () => {
+  // The value column compares rows, so every row speaks VND — gold too. The
+  // quantity moves under the label instead of replacing the money (#763).
+  it('shows gold in VND in the value column, with its units underneath', () => {
     render(<NetWorthCard {...baseProps} allocationBar={{ fund: 100_000_000, bank: 0, gold: 80_000_000, stock: 0, goldUnits: 12 }} />)
-    expect(screen.getByText('12 units')).toBeInTheDocument()
+    expect(screen.getByTestId('allocation-value-gold')).toHaveTextContent('80.0M ₫')
+    expect(screen.getByTestId('allocation-value-fund')).toHaveTextContent('100.0M ₫')
+    expect(screen.getByTestId('allocation-units-gold')).toHaveTextContent('12 units')
+  })
+
+  it('shows no units line for gold when goldUnits is not provided', () => {
+    render(<NetWorthCard {...baseProps} allocationBar={{ fund: 100_000_000, bank: 0, gold: 80_000_000, stock: 0 }} />)
+    expect(screen.queryByTestId('allocation-units-gold')).toBeNull()
   })
 
   it('falls back to monetary value for gold when goldUnits not provided', () => {
     render(<NetWorthCard {...baseProps} allocationBar={{ fund: 100_000_000, bank: 0, gold: 80_000_000, stock: 0 }} />)
     // No goldUnits → shows the compact value (80.0M)
     expect(screen.getByText(/80\.0M/)).toBeInTheDocument()
+  })
+
+  // The range pills are 22px tall; their tap area must still be 44 (#766).
+  it('gives every range pill a 44px hit area', () => {
+    render(<NetWorthCard {...baseProps} />)
+    const pills = screen.getAllByRole('button').filter((b) => b.hasAttribute('aria-pressed'))
+    expect(pills.length).toBeGreaterThan(0)
+    for (const pill of pills) expect(pill).toHaveClass('hit-44')
   })
 })

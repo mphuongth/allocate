@@ -6,7 +6,7 @@
 // owns the data and passes it in.
 import { useState, useRef } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
-import { fmt, fmtCompact } from '@/lib/formatters'
+import { fmtCompact } from '@/lib/formatters'
 import { useDialogA11y } from '@/components/ui/useDialogA11y'
 import { clickAway } from '@/components/ui/clickAway'
 import { planRemaining } from '@/features/planning/planModel'
@@ -63,7 +63,8 @@ export function PlanTable({ icon, iconColor, title, total, defaultOpen = true, a
             {icon}
           </div>
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', flex: 1 }}>{title}</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmt(total)}</span>
+          {/* Compact like every other total on the page; line items stay exact (#768). */}
+          <span data-testid="budget-section-total" style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtCompact(total)}</span>
         </button>
         {action}
         <button onClick={toggle} aria-label="Toggle section" style={{ border: 'none', cursor: 'pointer', background: 'transparent', display: 'flex', color: 'var(--c-muted)', padding: 0 }}>
@@ -134,9 +135,11 @@ export function AllocationCard({ salary, totalGoalAmount, fixedTotal, insTotal, 
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
         {fmtCompact(totalAllocated)}
       </div>
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
-        {pct(totalAllocated)} {isVI ? 'thu nhập' : 'of income'}
-        {remaining < 0 && <span style={{ color: '#fca5a5', marginLeft: 8 }}>⚠ {isVI ? 'Vượt ngân sách' : 'Over budget'}</span>}
+      {/* Over budget, say how much over rather than a rounded share (#767). */}
+      <div data-testid="planning-alloc-headline" style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+        {remaining < 0
+          ? <span style={{ color: '#fca5a5' }}>⚠ {isVI ? 'Vượt ngân sách' : 'Over budget by'} {fmtCompact(-remaining)}</span>
+          : <>{pct(totalAllocated)} {isVI ? 'thu nhập' : 'of income'}</>}
       </div>
       <div style={{ marginTop: 14, padding: 2, background: 'rgba(255,255,255,0.08)', borderRadius: 999 }}>
         <StackedBar segments={rows.map(r => ({ color: r.c, value: r.v }))} total={salary} />

@@ -72,6 +72,8 @@ function SortDropdown({ sortKey, sortAsc, onSort }: { sortKey: SortKey; sortAsc:
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
       <button
         onClick={() => setOpen((v) => !v)}
+        data-testid="fund-sort-btn"
+        className="hit-44"
         style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', fontSize: 11, fontWeight: 500, background: 'var(--c-card)', color: 'var(--c-ink)', border: '1px solid var(--c-line)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
       >
         {current ? t(current.key) : ''} {sortAsc ? '↑' : '↓'}
@@ -451,6 +453,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 // optimistic value rather than at what the server holds (#590).
                 disabled={toggling}
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue(String(fund.dca_monthly_amount_vnd)); setDcaEditIsNew(false) }}
+                className="hit-44"
                 style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.5 : 1, fontFamily: 'inherit' }}
               >
                 {fmtCompact(fund.dca_monthly_amount_vnd)}
@@ -460,6 +463,7 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
                 type="button"
                 disabled={toggling}
                 onClick={() => { setDcaEditId(fund.id); setDcaEditValue(''); setDcaEditIsNew(false) }}
+                className="hit-44"
                 style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', background: 'var(--c-navy-tint)', color: 'var(--c-navy)', border: '1px solid var(--c-navy-tint)', borderRadius: 6, cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.5 : 1, fontFamily: 'inherit' }}
               >
                 {t('setAmount')}
@@ -469,6 +473,10 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
 
           {/* Goal target — recurring contributions for this fund count toward this goal */}
           {fund.is_dca && (
+            // appearance:none drops the native arrow, so the wrapper draws one —
+            // without it the picker reads as plain text (#765). The wrapper owns
+            // the width cap so the select can still shrink and ellipsize (#363).
+            <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', minWidth: 0, maxWidth: 130 }}>
             <select
               data-testid={`dca-goal-${fund.id}`}
               value={fund.dca_goal_id ?? ''}
@@ -484,7 +492,8 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
               style={{
                 // 16px (not 13) so iOS Safari doesn't zoom the viewport on focus
                 // and persist that zoom across reloads (#321).
-                fontSize: 16, fontWeight: 500, padding: '3px 6px', maxWidth: 130,
+                // Right padding keeps a long name clear of the chevron.
+                fontSize: 16, fontWeight: 500, padding: '3px 22px 3px 6px', width: '100%',
                 // minWidth:0 lets the select shrink below its content width so a long
                 // goal name truncates with an ellipsis instead of overflowing the card
                 // and getting hard-clipped at the right edge (#363).
@@ -500,6 +509,14 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
               {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
               <option value="">{unallocatedLabel}</option>
             </select>
+            <ChevronDown
+              data-testid={`dca-goal-chevron-${fund.id}`}
+              aria-hidden="true"
+              size={14}
+              color="var(--c-muted)"
+              style={{ position: 'absolute', right: 6, pointerEvents: 'none', opacity: toggling ? 0.5 : 1 }}
+            />
+            </span>
           )}
         </div>
       </div>
@@ -841,7 +858,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
             <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-accent-fund, #2563eb)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 11, fontWeight: 700 }}>i</div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', marginBottom: 2 }}>{t('navInfoTitle')}</div>
-              <div style={{ fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('navInfoDesc', { refreshNav: t('refreshNav') })}</div>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('navInfoDesc')}</div>
             </div>
           </div>
         )}

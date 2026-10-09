@@ -41,10 +41,13 @@
   --c-accent-other: #475569;
   /* Fund-type palette (equity/debt/balanced/gold). Each pairs an accent text
      colour with a tinted surface; both flip in dark mode (see .dark) so the
-     chips/icon tiles adapt to the dark canvas instead of staying pastel. */
-  --c-fund-equity: #16a34a;   --c-fund-equity-bg: #f0fdf4;
-  --c-fund-debt: #2563eb;     --c-fund-debt-bg: #eff6ff;
-  --c-fund-balanced: #7c3aed; --c-fund-balanced-bg: #f5f3ff;
+     chips/icon tiles adapt to the dark canvas instead of staying pastel.
+     Equity/debt/balanced keep clear of the asset-type hues the Overview uses
+     (Quỹ blue, Tiết kiệm green, Cổ phiếu violet), so a colour means one thing
+     across tabs (#762). Gold and ETF match their asset slices on purpose. */
+  --c-fund-equity: #be185d;   --c-fund-equity-bg: #fdf2f8;
+  --c-fund-debt: #475569;     --c-fund-debt-bg: #f1f5f9;
+  --c-fund-balanced: #4d7c0f; --c-fund-balanced-bg: #f7fee7;
   --c-fund-gold: #b45309;     --c-fund-gold-bg: #fef7e6;
   --c-fund-etf: #0891b2;      --c-fund-etf-bg: #ecfeff;
   /* Primary button fill — stays dark navy in both modes so white text is always legible */
@@ -163,9 +166,9 @@
   --c-navy: #f8fafc;
   --c-navy-tint: #1a2540;
   /* Fund-type palette — lightened accents on translucent tints for dark mode */
-  --c-fund-equity: #4ade80;   --c-fund-equity-bg: rgba(22, 163, 74, 0.18);
-  --c-fund-debt: #60a5fa;     --c-fund-debt-bg: rgba(37, 99, 235, 0.18);
-  --c-fund-balanced: #a78bfa; --c-fund-balanced-bg: rgba(124, 58, 237, 0.18);
+  --c-fund-equity: #f472b6;   --c-fund-equity-bg: rgba(190, 24, 93, 0.2);
+  --c-fund-debt: #94a3b8;     --c-fund-debt-bg: rgba(71, 85, 105, 0.28);
+  --c-fund-balanced: #a3e635; --c-fund-balanced-bg: rgba(77, 124, 15, 0.22);
   --c-fund-gold: #fbbf24;     --c-fund-gold-bg: rgba(180, 83, 9, 0.22);
   --c-fund-etf: #22d3ee;      --c-fund-etf-bg: rgba(8, 145, 178, 0.18);
   /* Tab bar goes dark in dark mode */
@@ -305,6 +308,21 @@
 .cn-btn.primary:hover { background: var(--c-btn-primary-hover); border-color: var(--c-btn-primary-hover); }
 .cn-btn.ghost { border: none; background: transparent; }
 .cn-btn.ghost:hover { background: var(--c-card-2); }
+
+/* A tap area of at least 44×44 (Apple HIG, WCAG 2.5.5) for a chip or pill whose
+   drawn size is smaller on purpose. The invisible ::after, centred on the
+   control, is part of the button, so it takes the tap without growing the
+   layout (#766). A bare icon button can take minWidth/minHeight 44 instead. */
+.hit-44 { position: relative; }
+.hit-44::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
 
 .cn-input {
   display: block; width: 100%;
