@@ -6,7 +6,14 @@ export const fmtNav = (n: number) =>
 export const fmtUnits = (n: number) =>
   n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 
-export const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+// A gold holding's quantity: "9.2 chỉ" / "12 units". One decimal under 10.
+export const fmtGoldUnits = (units: number, isVi: boolean) => {
+  const u = units.toFixed(units < 10 ? 1 : 0)
+  if (isVi) return `${u} chỉ`
+  return `${u} ${units === 1 ? 'unit' : 'units'}`
+}
+
+export const fmtPct =(n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 
 /**
  * Coarse "N ago" for the NAV-updated label under the net-worth figure. Reports

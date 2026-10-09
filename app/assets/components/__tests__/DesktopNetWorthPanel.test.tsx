@@ -96,4 +96,15 @@ describe('DesktopNetWorthPanel', () => {
     // total-assets KPI label — correct Vietnamese casing
     expect(screen.getByText('Tổng tài sản')).toBeInTheDocument()
   })
+
+  // Same rule as the mobile card: the value column is VND on every row (#763).
+  it('shows gold in VND in the value column, with its chỉ underneath', () => {
+    renderPanel({
+      locale: 'vi',
+      allocationTotals: { ...allocationTotals, goldTotal: 9_200_000 } as unknown as AllocationTotals,
+      goldUnits: 9.2,
+    })
+    expect(screen.getByTestId('allocation-value-gold')).toHaveTextContent('9.2M ₫')
+    expect(screen.getByTestId('allocation-units-gold')).toHaveTextContent('9.2 chỉ')
+  })
 })
