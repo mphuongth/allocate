@@ -294,10 +294,11 @@ export function BudgetSection({
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
-            {/* Full total sits under the title (next to the count) so the wider
-                exact amount doesn't collide with the action/chevron on the right. */}
+            {/* The total sits under the title (next to the count) so it doesn't
+                collide with the action/chevron on the right. Compact like every
+                other total on the page; line items stay exact (#768). */}
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>{fmt(total)}</span>
+              <span data-testid="budget-section-total" style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--c-ink)' }}>{fmtCompact(total)}</span>
               {count && <span style={{ fontSize: 11, color: 'var(--c-muted)' }}>· {count}</span>}
             </div>
           </div>
