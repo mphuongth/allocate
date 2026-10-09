@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { fmt, fmtNav, fmtUnits, fmtPct, fmtTimeAgo } from '../formatters'
+import { fmt, fmtNav, fmtUnits, fmtPct, fmtTimeAgo, fmtGoldUnits } from '../formatters'
 
 describe('fmt', () => {
   it('formats whole VND amounts with vi-VN thousands separator', () => {
@@ -46,6 +46,19 @@ describe('fmtUnits', () => {
   })
   it('formats zero', () => {
     expect(fmtUnits(0)).toBe('0')
+  })
+})
+
+describe('fmtGoldUnits', () => {
+  it('keeps one decimal under 10', () => {
+    expect(fmtGoldUnits(9.2, true)).toBe('9.2 chỉ')
+  })
+  it('rounds to whole units from 10 up', () => {
+    expect(fmtGoldUnits(12.4, true)).toBe('12 chỉ')
+  })
+  it('says unit / units in English', () => {
+    expect(fmtGoldUnits(1, false)).toBe('1.0 unit')
+    expect(fmtGoldUnits(12, false)).toBe('12 units')
   })
 })
 
