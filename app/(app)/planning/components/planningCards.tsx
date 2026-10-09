@@ -187,12 +187,15 @@ export function AllocationSummaryCard({
       <div style={{ fontSize: 26, fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.025em', marginTop: 4, whiteSpace: 'nowrap' }}>
         {fmtCompact(totalAllocated)}
       </div>
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
-        {pct(totalAllocated)} {isVI ? 'thu nhập' : 'of income'}
-        {remaining < 0 && (
-          <span style={{ color: '#fca5a5', marginLeft: 8 }}>
-            ⚠ {isVI ? 'Vượt ngân sách' : 'Over budget'}
+      {/* Over budget, the share of income stops being the news — and rounding
+          made 100.4% read "100%" beside the warning. Say how much over (#767). */}
+      <div data-testid="planning-alloc-headline" style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+        {remaining < 0 ? (
+          <span style={{ color: '#fca5a5' }}>
+            ⚠ {isVI ? 'Vượt ngân sách' : 'Over budget by'} {fmtCompact(-remaining)}
           </span>
+        ) : (
+          <>{pct(totalAllocated)} {isVI ? 'thu nhập' : 'of income'}</>
         )}
       </div>
 
