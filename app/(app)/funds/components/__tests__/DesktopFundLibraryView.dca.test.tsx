@@ -216,6 +216,21 @@ describe('DesktopFundLibraryView — DCA goal dropdown wiring', () => {
     { goal_id: 'g2', goal_name: 'University' },
   ]
 
+  // Same as mobile: the select has no native arrow, so it draws one (#765).
+  it('draws a chevron on the goal dropdown, hidden from screen readers', () => {
+    render(
+      <Harness
+        goals={GOALS}
+        reload={reload}
+        initial={[makeFund({ is_dca: true, dca_monthly_amount_vnd: 2_000_000 })]}
+      />,
+    )
+    const chevron = screen.getByTestId('dca-goal-chevron-f1')
+    expect(chevron).toHaveAttribute('aria-hidden', 'true')
+    expect(chevron).toHaveStyle({ pointerEvents: 'none' })
+    expect(chevron.parentElement).toContainElement(screen.getByTestId('dca-goal-f1'))
+  })
+
   it('persists the chosen goal and keeps DCA on, without touching the amount', async () => {
     render(
       <Harness

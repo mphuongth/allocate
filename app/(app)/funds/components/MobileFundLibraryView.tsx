@@ -425,6 +425,10 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
 
           {/* Goal target — recurring contributions for this fund count toward this goal */}
           {fund.is_dca && (
+            // appearance:none drops the native arrow, so the wrapper draws one —
+            // without it the picker reads as plain text (#765). The wrapper owns
+            // the width cap so the select can still shrink and ellipsize (#363).
+            <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', minWidth: 0, maxWidth: 130 }}>
             <select
               data-testid={`dca-goal-${fund.id}`}
               value={fund.dca_goal_id ?? ''}
@@ -440,7 +444,8 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
               style={{
                 // 16px (not 13) so iOS Safari doesn't zoom the viewport on focus
                 // and persist that zoom across reloads (#321).
-                fontSize: 16, fontWeight: 500, padding: '3px 6px', maxWidth: 130,
+                // Right padding keeps a long name clear of the chevron.
+                fontSize: 16, fontWeight: 500, padding: '3px 22px 3px 6px', width: '100%',
                 // minWidth:0 lets the select shrink below its content width so a long
                 // goal name truncates with an ellipsis instead of overflowing the card
                 // and getting hard-clipped at the right edge (#363).
@@ -456,6 +461,14 @@ function FundCard({ fund, dcaEditId, dcaEditValue, togglingIds, goals, goalLabel
               {goals.map((g) => <option key={g.goal_id} value={g.goal_id}>{g.goal_name}</option>)}
               <option value="">{unallocatedLabel}</option>
             </select>
+            <ChevronDown
+              data-testid={`dca-goal-chevron-${fund.id}`}
+              aria-hidden="true"
+              size={14}
+              color="var(--c-muted)"
+              style={{ position: 'absolute', right: 6, pointerEvents: 'none', opacity: toggling ? 0.5 : 1 }}
+            />
+            </span>
           )}
         </div>
       </div>
