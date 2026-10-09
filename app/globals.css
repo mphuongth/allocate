@@ -309,6 +309,21 @@
 .cn-btn.ghost { border: none; background: transparent; }
 .cn-btn.ghost:hover { background: var(--c-card-2); }
 
+/* A tap area of at least 44×44 (Apple HIG, WCAG 2.5.5) for a chip or pill whose
+   drawn size is smaller on purpose. The invisible ::after, centred on the
+   control, is part of the button, so it takes the tap without growing the
+   layout (#766). A bare icon button can take minWidth/minHeight 44 instead. */
+.hit-44 { position: relative; }
+.hit-44::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+
 .cn-input {
   display: block; width: 100%;
   padding: 9px 12px;

@@ -102,4 +102,12 @@ describe('NetWorthCard', () => {
     // No goldUnits → shows the compact value (80.0M)
     expect(screen.getByText(/80\.0M/)).toBeInTheDocument()
   })
+
+  // The range pills are 22px tall; their tap area must still be 44 (#766).
+  it('gives every range pill a 44px hit area', () => {
+    render(<NetWorthCard {...baseProps} />)
+    const pills = screen.getAllByRole('button').filter((b) => b.hasAttribute('aria-pressed'))
+    expect(pills.length).toBeGreaterThan(0)
+    for (const pill of pills) expect(pill).toHaveClass('hit-44')
+  })
 })
