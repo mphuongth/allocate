@@ -810,7 +810,7 @@ export default function MobileFundLibraryView({ funds, setFunds, goals, loading,
             <div style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--c-accent-fund, #2563eb)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 11, fontWeight: 700 }}>i</div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-navy)', marginBottom: 2 }}>{t('navInfoTitle')}</div>
-              <div style={{ fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('navInfoDesc', { refreshNav: t('refreshNav') })}</div>
+              <div style={{ fontSize: 11, color: 'var(--c-muted)', lineHeight: 1.5 }}>{t('navInfoDesc')}</div>
             </div>
           </div>
         )}

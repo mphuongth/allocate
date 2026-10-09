@@ -740,7 +740,7 @@ export default function DesktopFundLibraryView({ funds, setFunds, goals, loading
           <div style={{ width: 18, height: 18, borderRadius: 9, background: 'var(--c-accent-fund, #2563eb)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, fontSize: 10, fontWeight: 700 }}>i</div>
           <div style={{ fontSize: 12, color: 'var(--c-muted)', lineHeight: 1.5 }}>
             <span style={{ fontWeight: 600, color: 'var(--c-navy)' }}>{t('navInfoTitle')}: </span>
-            {t('navInfoDesc', { refreshNav: t('refreshNav') })}
+            {t('navInfoDesc')}
           </div>
         </div>
       </div>
