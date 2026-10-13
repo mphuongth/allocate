@@ -51,8 +51,20 @@ test('mobile funds card touch targets are at least 44px (#4)', async ({ page }) 
   const card = page.getByTestId('mobile-funds').getByTestId(`fund-card-${fund.id}`)
   await expect(card).toBeVisible({ timeout: 10_000 })
 
-  for (const name of [/dca/i, /edit fund|sửa quỹ/i, /delete fund|xóa quỹ/i]) {
+  // Edit and delete moved behind "⋯" (#769): the card's own targets are the
+  // DCA toggle and the menu trigger; the menu's rows must be 44px tall too.
+  for (const name of [/dca/i, /fund actions|thao tác với quỹ/i]) {
     const box = await card.getByRole('button', { name }).boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.width).toBeGreaterThanOrEqual(44)
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+  }
+
+  await card.getByRole('button', { name: /fund actions|thao tác với quỹ/i }).click()
+  const menu = page.getByRole('menu')
+  await expect(menu).toBeVisible()
+  for (const name of [/edit fund|sửa quỹ/i, /delete fund|xóa quỹ/i]) {
+    const box = await menu.getByRole('menuitem', { name }).boundingBox()
     expect(box).not.toBeNull()
     expect(box!.width).toBeGreaterThanOrEqual(44)
     expect(box!.height).toBeGreaterThanOrEqual(44)
