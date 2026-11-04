@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import DialogShell from '@/components/ui/DialogShell'
 import PendingButton from '@/components/ui/PendingButton'
 import { todayIso } from '@/lib/dates'
-import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload, type TxForm } from './addTransactionModel'
+import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload, pickTopUpBooks, type TxForm, type BookCandidateRow } from './addTransactionModel'
 import { BuyFundFields, BuyBankFields, BuyGoldFields, SellForm } from './addTransactionForms'
 
 export interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string; is_dca?: boolean; dca_goal_id?: string | null }
@@ -200,6 +200,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
   const [rate, setRate] = useState('')
   const [maturity, setMaturity] = useState('')
   const [topUpLockDays, setTopUpLockDays] = useState('')
+  // Accumulating only: the existing book this deposit joins ('' = start a new one).
+  const [topUpBookId, setTopUpBookId] = useState('')
+  const [bookRows, setBookRows] = useState<BookCandidateRow[]>([])
   // Where a term deposit's money goes at maturity when not renewed. Defaults to
   // the fund whose DCA feeds the deposit's goal — the money was parked from
   // that DCA — until the user picks for themselves (or an edit loads a stored
@@ -328,6 +331,26 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     setTargetFundId(dca?.id ?? '')
   }, [open, existing, targetTouched, assetType, depositType, goalId, funds])
 
+  // An accumulating deposit can join a book the goal already has (#782). Only the
+  // chosen goal's bank rows are fetched — a book's anchor is its oldest row, so a
+  // page of the newest rows across every goal would lose it as tranches pile up.
+  useEffect(() => {
+    if (!open || existing || dir !== 'buy' || assetType !== 'bank' || depositType !== 'accumulating') return
+    let cancelled = false
+    const scope = goalId ? `goal_id=${encodeURIComponent(goalId)}` : 'unassigned=true'
+    fetch(`/api/v1/investment-transactions?asset_type=bank&limit=1000&${scope}`)
+      .then((r) => (r.ok ? r.json() : { transactions: [] }))
+      .then((d) => { if (!cancelled) setBookRows(Array.isArray(d?.transactions) ? d.transactions : []) })
+      .catch(() => { if (!cancelled) setBookRows([]) })
+    return () => { cancelled = true }
+  }, [open, existing, dir, assetType, depositType, goalId])
+
+  const topUpBooks = useMemo(() => pickTopUpBooks(bookRows, goalId, date), [bookRows, goalId, date])
+  // A choice the goal or date has since ruled out is not a choice any more.
+  useEffect(() => {
+    if (topUpBookId && !topUpBooks.some((b) => b.id === topUpBookId)) setTopUpBookId('')
+  }, [topUpBooks, topUpBookId])
+
   // Lazily load sellable holdings from the overview the first time the user
   // switches to "Sell" — most opens are buys, so we don't pay for it up front.
   useEffect(() => {
@@ -364,6 +387,8 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     setRate('')
     setMaturity('')
     setTopUpLockDays('')
+    setTopUpBookId('')
+    setBookRows([])
     setTargetFundId('')
     setTargetTouched(false)
     setGoldProvider('PNJ')
@@ -456,7 +481,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     const form: TxForm = {
       assetType, date, goalId, note,
       fundId, amount, units, nav, selectedFundNav: selectedFund?.nav,
-      bankCode, selectedBankName, depositType, bankAmount, rate, maturity, topUpLockDays, targetFundId,
+      bankCode, selectedBankName, depositType, bankAmount, rate, maturity, topUpLockDays, topUpBookId, targetFundId,
       goldProvider, goldUnit, goldQty, goldPrice,
     }
 
@@ -607,6 +632,13 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
               topUpLockDays={topUpLockDays} setTopUpLockDays={setTopUpLockDays}
               funds={funds} targetFundId={targetFundId}
               setTargetFundId={(v) => { setTargetFundId(v); setTargetTouched(true) }}
+              topUpBooks={topUpBooks} topUpBookId={topUpBookId}
+              setTopUpBookId={(id) => {
+                setTopUpBookId(id)
+                // A book's own rate is the sensible default for the tranche.
+                const b = topUpBooks.find((x) => x.id === id)
+                if (b?.rate != null) setRate(String(b.rate))
+              }}
               lockType={Boolean(existing?.deposit_group_id)}
               inputStyle={inputStyle} labelStyle={labelStyle}
             />

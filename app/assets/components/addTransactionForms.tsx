@@ -9,7 +9,7 @@ import { X, Wallet, TrendingUp, Building2, Coins, ArrowDownToLine, Shield } from
 import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/numberFormat'
 import LoadError from './LoadError'
 import type { Fund, Bank, Holding } from './AddTransactionSheet'
-import type { SellPreview, AssetType } from './addTransactionModel'
+import type { SellPreview, AssetType, TopUpBook } from './addTransactionModel'
 import { bankReceivedPrefill } from './addTransactionModel'
 
 const GOLD_PROVIDERS = ['PNJ', 'DOJI', 'SJC', 'Bảo Tín']
@@ -103,6 +103,7 @@ export function BuyBankFields({
   banks, bankCode, setBankCode, depositType, setDepositType,
   bankAmount, setBankAmount, rate, setRate, maturity, setMaturity, topUpLockDays, setTopUpLockDays, date,
   funds = [], targetFundId = '', setTargetFundId,
+  topUpBooks = [], topUpBookId = '', setTopUpBookId,
   lockType = false, inputStyle, labelStyle,
 }: {
   banks: Bank[]
@@ -123,6 +124,10 @@ export function BuyBankFields({
   funds?: Fund[]
   targetFundId?: string
   setTargetFundId?: (v: string) => void
+  /** Accumulating only: live books of the chosen goal this deposit can join. */
+  topUpBooks?: TopUpBook[]
+  topUpBookId?: string
+  setTopUpBookId?: (v: string) => void
   /** Editing a book: the savings type and its lock window are fixed — the PUT
    *  has no way to group or ungroup a deposit, so offering the switch would
    *  promise a change that silently never happens. */
@@ -131,11 +136,14 @@ export function BuyBankFields({
   labelStyle: React.CSSProperties
 }) {
   const t = useTranslations('addTx')
+  // Joining a book: the bank, maturity and lock window are the book's, not asked again.
+  const joining = depositType === 'accumulating' && topUpBookId !== ''
   return (
     <>
       {/* Structured bank (FK) — the deposit points at a real bank, and the
           chosen bank's name is the deposit's name (no separate name field).
           A general "note" further down covers any extra memo. */}
+      {!joining && (
       <div>
         <label style={labelStyle}>{t('bank')}</label>
         <select
@@ -150,6 +158,7 @@ export function BuyBankFields({
           ))}
         </select>
       </div>
+      )}
       <div>
         <label style={labelStyle}>{t('depositType')}</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
@@ -179,6 +188,24 @@ export function BuyBankFields({
           })}
         </div>
       </div>
+      {depositType === 'accumulating' && !lockType && topUpBooks.length > 0 && setTopUpBookId && (
+        <div>
+          <label htmlFor="top-up-book" style={labelStyle}>{t('topUpBook')}</label>
+          <select
+            id="top-up-book"
+            data-testid="top-up-book-select"
+            value={topUpBookId}
+            onChange={(e) => setTopUpBookId(e.target.value)}
+            style={inputStyle}
+          >
+            <option value="">{t('topUpBookNew')}</option>
+            {topUpBooks.map((b) => (
+              <option key={b.id} value={b.id}>{(b.name || t('topUpBookUnnamed')) + (b.expiryDate ? ` · ${b.expiryDate}` : '')}</option>
+            ))}
+          </select>
+          <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('topUpBookHint')}</div>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: depositType !== 'flex' ? '1.2fr 1fr' : '1fr', gap: 10 }}>
         <div>
           <label style={labelStyle}>{t('principal')}</label>
@@ -205,7 +232,7 @@ export function BuyBankFields({
           </div>
         )}
       </div>
-      {depositType !== 'flex' && (
+      {depositType !== 'flex' && !joining && (
         <div>
           <label style={labelStyle}>{t('maturity')}</label>
           <input
@@ -234,14 +261,14 @@ export function BuyBankFields({
           <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('targetFundHint')}</div>
         </div>
       )}
-      {depositType === 'accumulating' && (
+      {depositType === 'accumulating' && !joining && (
         <div>
           <label style={labelStyle}>{t('topUpLockDays')}</label>
           <input type="number" min="0" step="1" value={topUpLockDays} onChange={(e) => setTopUpLockDays(e.target.value)} disabled={lockType} placeholder="30" style={{ ...inputStyle, ...(lockType ? { opacity: 0.6 } : null) }} />
           <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('topUpLockHint')}</div>
         </div>
       )}
-      {depositType !== 'flex' && Number(bankAmount) > 0 && Number(rate) > 0 && maturity && (() => {
+      {depositType !== 'flex' && !joining && Number(bankAmount) > 0 && Number(rate) > 0 && maturity && (() => {
         // Interest the user actually receives by maturity, prorated over
         // the term (deposit date → maturity) — not the full-year figure.
         const termDays = (Date.parse(maturity) - Date.parse(date)) / 86_400_000

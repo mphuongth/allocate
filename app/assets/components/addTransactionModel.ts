@@ -5,6 +5,7 @@
 // directly. The DB-write payload builders inside handleSave are a separate concern
 // and stay in the component for now.
 
+import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
 import { previewBankWithdrawal, estimateReceivedForPrincipal } from '@/lib/bankWithdrawal'
 import { goldCostBasis, goldUnitCost } from '@/lib/goldWithdrawal'
 import { fundSaleFigures } from '@/lib/fundWithdrawal'
@@ -185,6 +186,8 @@ export interface TxForm {
   rate: string
   maturity: string
   topUpLockDays?: string
+  /** Accumulating only: join this existing book (its anchor id) instead of starting one. */
+  topUpBookId?: string
   /** Term deposit only: the fund its money moves to when it is not renewed. */
   targetFundId?: string
   goldProvider: string
@@ -281,6 +284,16 @@ export function buildBuyPayload(form: TxForm, planId: string | null): BuildResul
   if (assetType === 'bank') {
     const amt = Number(form.bankAmount.replace(/\./g, ''))
     if (!amt) return { ok: false, errorKey: 'amountRequired' }
+    // Joining a book: its goal, bank and maturity are the book's, copied down by
+    // the route — sending ours would only say them twice.
+    if (form.depositType === 'accumulating' && form.topUpBookId) {
+      const { goal_id: _goal, ...joining } = base
+      return { ok: true, payload: {
+        ...joining, amount_vnd: amt, notes: form.note || null,
+        interest_rate: form.rate ? Number(form.rate) : null,
+        tops_up_deposit_id: form.topUpBookId,
+      } }
+    }
     return { ok: true, payload: {
       ...base, amount_vnd: amt, notes: form.selectedBankName || note || null,
       bank_code: form.bankCode || null, interest_rate: form.rate ? Number(form.rate) : null,
@@ -381,4 +394,35 @@ export function buildSellPayload(
     } }
   }
   return { ok: false, errorKey: 'holdingRequired' }
+}
+
+/** The subset of a bank transaction row that decides whether it is a book to top up. */
+export interface BookCandidateRow {
+  transaction_id: string
+  goal_id: string | null
+  asset_type: string
+  transaction_type: string
+  deposit_group_id: string | null
+  successor_deposit_tx_id: string | null
+  expiry_date: string | null
+  top_up_lock_days: number | null
+  notes: string | null
+  interest_rate: number | null
+}
+
+export interface TopUpBook { id: string; name: string; rate: number | null; expiryDate: string | null }
+
+// The books a deposit entered on `date` toward `goalId` ('' = unallocated) can
+// join: the ANCHOR of a live accumulating book in that goal that has not handed
+// over and whose maturity / lock window still takes a top-up on that date — the
+// same rules the POST route enforces, so every option listed is one that saves.
+export function pickTopUpBooks(rows: BookCandidateRow[], goalId: string, date: string): TopUpBook[] {
+  return rows
+    .filter((r) =>
+      r.asset_type === 'bank' && r.transaction_type === 'investment' &&
+      r.deposit_group_id != null && r.deposit_group_id === r.transaction_id &&
+      !r.successor_deposit_tx_id &&
+      (r.goal_id ?? '') === goalId &&
+      classifyAccumulatingTopUp({ topUpDate: date, expiryDate: r.expiry_date, lockDays: r.top_up_lock_days }).status === 'allowed')
+    .map((r) => ({ id: r.transaction_id, name: r.notes ?? '', rate: r.interest_rate, expiryDate: r.expiry_date }))
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  computeFundPricing, computeSellPreview, bankReceivedPrefill, buildBuyPayload, buildEditPayload, buildSellPayload,
+  computeFundPricing, computeSellPreview, bankReceivedPrefill, buildBuyPayload, buildEditPayload, buildSellPayload, pickTopUpBooks,
   type PreviewHolding, type TxForm,
 } from '../addTransactionModel'
 
@@ -354,5 +354,70 @@ describe('buildSellPayload', () => {
     expect(buildSellPayload(fund, { ...zero, numSell: 3_000_000, sellOverMax: true }, { date, note: '' })).toEqual({ ok: false, errorKey: 'exceedsBalance' })
     const bank = { type: 'bank' as const, transactionId: 't1', currentValue: 5_000_000 }
     expect(buildSellPayload(bank, { ...zero, numSell: 5_000_000, numReceived: 0 }, { date, note: '' })).toEqual({ ok: false, errorKey: 'amountRequired' })
+  })
+})
+
+// A deposit made from the Plan page's goal "+" used to be able to start a book but
+// never join one (#782): the only way in was the Assets goal detail. A top-up
+// carries the book's id and nothing the book already owns (goal, bank, maturity).
+describe('buildBuyPayload — topping up an existing book', () => {
+  it('sends tops_up_deposit_id and leaves the book-level fields to the server', () => {
+    const p = ok(buildBuyPayload(form({
+      assetType: 'bank', depositType: 'accumulating', topUpBookId: 'book-1', bankAmount: '3.000.000', rate: '5,5'.replace(',', '.'),
+      goalId: 'g1', bankCode: 'VCB', selectedBankName: 'Vietcombank', maturity: '2027-01-01', topUpLockDays: '30',
+    }), 'plan-9'))
+    expect(p).toMatchObject({ tops_up_deposit_id: 'book-1', asset_type: 'bank', transaction_type: 'investment', amount_vnd: 3_000_000, interest_rate: 5.5, plan_id: 'plan-9' })
+    expect(p).not.toHaveProperty('accumulating')
+    expect(p).not.toHaveProperty('expiry_date')
+    expect(p).not.toHaveProperty('bank_code')
+    expect(p).not.toHaveProperty('top_up_lock_days')
+    expect(p).not.toHaveProperty('goal_id')
+  })
+
+  it('still requires an amount', () => {
+    expect(buildBuyPayload(form({ assetType: 'bank', depositType: 'accumulating', topUpBookId: 'book-1' }), null)).toEqual({ ok: false, errorKey: 'amountRequired' })
+  })
+
+  it('ignores a stale book id once the deposit is no longer an accumulating one', () => {
+    const p = ok(buildBuyPayload(form({ assetType: 'bank', depositType: 'term', topUpBookId: 'book-1', bankAmount: '1000000' }), null))
+    expect(p).not.toHaveProperty('tops_up_deposit_id')
+  })
+})
+
+describe('pickTopUpBooks', () => {
+  const row = (over: Record<string, unknown>) => ({
+    transaction_id: 'b1', goal_id: 'g1', asset_type: 'bank', transaction_type: 'investment',
+    deposit_group_id: 'b1', successor_deposit_tx_id: null, expiry_date: '2027-06-01', top_up_lock_days: null,
+    notes: 'Y Tế', interest_rate: 5, ...over,
+  })
+
+  it('offers the live book anchors of the goal', () => {
+    const books = pickTopUpBooks([row({})], 'g1', '2026-11-04')
+    expect(books).toEqual([{ id: 'b1', name: 'Y Tế', rate: 5, expiryDate: '2027-06-01' }])
+  })
+
+  it('drops tranches, plain term deposits, withdrawals, other goals and handed-over books', () => {
+    const rows = [
+      row({ transaction_id: 't2', deposit_group_id: 'b1' }),                // tranche
+      row({ transaction_id: 't3', deposit_group_id: null }),                // term deposit
+      row({ transaction_id: 't4', deposit_group_id: 't4', transaction_type: 'withdrawal' }),
+      row({ transaction_id: 't5', deposit_group_id: 't5', goal_id: 'g2' }), // other goal
+      row({ transaction_id: 't6', deposit_group_id: 't6', successor_deposit_tx_id: 'x' }),
+      row({ transaction_id: 't7', deposit_group_id: 't7', asset_type: 'fund' }),
+    ]
+    expect(pickTopUpBooks(rows, 'g1', '2026-11-04')).toEqual([])
+  })
+
+  it('drops a book that would refuse the entered date (matured, or inside its lock window)', () => {
+    const rows = [
+      row({ transaction_id: 'm', deposit_group_id: 'm', expiry_date: '2026-11-04' }),
+      row({ transaction_id: 'l', deposit_group_id: 'l', expiry_date: '2026-11-20', top_up_lock_days: 30 }),
+    ]
+    expect(pickTopUpBooks(rows, 'g1', '2026-11-04')).toEqual([])
+  })
+
+  it('treats no goal as the unallocated bucket', () => {
+    expect(pickTopUpBooks([row({ goal_id: null })], '', '2026-11-04')).toHaveLength(1)
+    expect(pickTopUpBooks([row({ goal_id: 'g1' })], '', '2026-11-04')).toHaveLength(0)
   })
 })
