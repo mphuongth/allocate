@@ -839,3 +839,68 @@ describe('AddTransactionSheet — a term deposit\'s target fund', () => {
     await waitFor(() => expect(sent(fetchMock, 'PUT')?.target_fund_id).toBe('f-other'))
   })
 })
+
+describe('AddTransactionSheet — topping up an existing accumulating book (#782)', () => {
+  const book = {
+    transaction_id: 'book-1', goal_id: 'g1', asset_type: 'bank', transaction_type: 'investment',
+    deposit_group_id: 'book-1', successor_deposit_tx_id: null, expiry_date: '2099-01-01', top_up_lock_days: null,
+    notes: 'Y Tế book', interest_rate: 5, investment_date: '2026-01-01',
+  }
+  const fetchWith = () => vi.fn((url: string, _init?: RequestInit) => {
+    const u = String(url)
+    if (u.includes('/api/funds')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ funds: [] }) })
+    if (u.includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [{ goal_id: 'g1', goal_name: 'Y Tế' }] }) })
+    if (u.includes('/investment-transactions?')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [book] }) })
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+  })
+  const prefill = { asset_type: 'bank' as const, goal_id: 'g1', amount_vnd: 3_000_000, investment_date: '2026-11-04' }
+  const posted = (m: ReturnType<typeof fetchWith>) => {
+    const c = m.mock.calls.find((x) => (x[1] as RequestInit)?.method === 'POST')
+    return c ? JSON.parse(String((c[1] as RequestInit).body)) : undefined
+  }
+
+  it('lists the goal\'s live book once the deposit is an accumulating one, and tops it up', async () => {
+    const m = fetchWith()
+    vi.stubGlobal('fetch', m)
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} prefill={prefill} />)
+
+    fireEvent.click(await screen.findByTestId('deposit-type-accumulating'))
+    const sel = await screen.findByTestId('top-up-book-select') as HTMLSelectElement
+    expect(within(sel).getByRole('option', { name: /Y Tế book/ })).toBeInTheDocument()
+
+    fireEvent.change(sel, { target: { value: 'book-1' } })
+    // Maturity, lock window and bank belong to the book — none of them is asked again.
+    expect(screen.queryByText('topUpLockDays')).not.toBeInTheDocument()
+    expect(screen.queryByText('maturity')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('save'))
+    await waitFor(() => expect(posted(m)).toBeTruthy())
+    expect(posted(m)).toMatchObject({ tops_up_deposit_id: 'book-1', amount_vnd: 3_000_000, asset_type: 'bank' })
+    expect(posted(m)).not.toHaveProperty('accumulating')
+  })
+
+  it('starts a new book when "new book" is left selected', async () => {
+    const m = fetchWith()
+    vi.stubGlobal('fetch', m)
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} prefill={prefill} />)
+
+    fireEvent.click(await screen.findByTestId('deposit-type-accumulating'))
+    await screen.findByTestId('top-up-book-select')
+    fireEvent.click(screen.getByText('save'))
+    await waitFor(() => expect(posted(m)).toBeTruthy())
+    expect(posted(m)).toMatchObject({ accumulating: true })
+    expect(posted(m)).not.toHaveProperty('tops_up_deposit_id')
+  })
+
+  it('shows no picker when the goal has no live book', async () => {
+    const m = vi.fn((url: string) => String(url).includes('/investment-transactions?')
+      ? Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: [] }) })
+      : Promise.resolve({ ok: true, json: () => Promise.resolve([]) }))
+    vi.stubGlobal('fetch', m)
+    render(<AddTransactionSheet open onClose={vi.fn()} prefill={prefill} />)
+
+    fireEvent.click(await screen.findByTestId('deposit-type-accumulating'))
+    await waitFor(() => expect(m.mock.calls.some((c) => String(c[0]).includes('/investment-transactions?'))).toBe(true))
+    expect(screen.queryByTestId('top-up-book-select')).not.toBeInTheDocument()
+  })
+})
