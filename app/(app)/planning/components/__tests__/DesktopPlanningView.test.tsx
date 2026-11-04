@@ -97,7 +97,7 @@ const defaultProps = {
 describe('DesktopPlanningView — goal header "+" log contribution', () => {
   it('renders a Log contribution button on each goal header', () => {
     render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
-    expect(screen.getByRole('button', { name: /Log contribution/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Add more/i })).toBeInTheDocument()
   })
 
   it('opens the Add-Transaction sheet when the goal "+" is clicked', async () => {
@@ -110,7 +110,7 @@ describe('DesktopPlanningView — goal header "+" log contribution', () => {
     vi.stubGlobal('fetch', fetchMock)
     try {
       render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
-      await userEvent.click(screen.getByRole('button', { name: /Log contribution/i }))
+      await userEvent.click(screen.getByRole('button', { name: /Add more/i }))
       // The canonical sheet exposes the asset-type picker (Fund / Bank / Gold).
       expect(await screen.findByText('Gold')).toBeInTheDocument()
     } finally {
@@ -196,6 +196,29 @@ describe('DesktopPlanningView — recurring deep-link edit', () => {
 })
 
 describe('DesktopPlanningView — recurring bank "Saved" deposit', () => {
+  // The action reads as an action and the done state as a state: "Record" until
+  // the month is in, "✓ Saved" after — they used to share the word "Saved" (#782).
+  it('labels the pending action "Record", not the done state\'s "Saved"', () => {
+    render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    expect(screen.getByRole('button', { name: /Record deposit/i })).toHaveTextContent(/^Record$/)
+  })
+
+  it('says "Add more" in words on the goal header, and opens it for adding money only', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve({
+      ok: true, json: () => Promise.resolve(String(url).includes('savings-goals') ? { goals: [] } : String(url).includes('investment-transactions') ? { transactions: [] } : []),
+    })))
+    try {
+      render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+      const add = screen.getByRole('button', { name: /Add more/i })
+      expect(add).toHaveTextContent('Add more')
+      await userEvent.click(add)
+      await screen.findByText('Gold')
+      expect(screen.queryByRole('button', { name: 'withdraw' })).not.toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('renders a Saved button on a recurring bank saving row', () => {
     render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
     expect(screen.getByText('VCB Savings')).toBeInTheDocument()

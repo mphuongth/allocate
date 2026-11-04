@@ -186,7 +186,7 @@ export interface TxForm {
   rate: string
   maturity: string
   topUpLockDays?: string
-  /** Accumulating only: join this existing book (its anchor id) instead of starting one. */
+  /** Bank only: join this existing book (its anchor id) instead of opening a deposit. */
   topUpBookId?: string
   /** Term deposit only: the fund its money moves to when it is not renewed. */
   targetFundId?: string
@@ -286,7 +286,7 @@ export function buildBuyPayload(form: TxForm, planId: string | null): BuildResul
     if (!amt) return { ok: false, errorKey: 'amountRequired' }
     // Joining a book: its goal, bank and maturity are the book's, copied down by
     // the route — sending ours would only say them twice.
-    if (form.depositType === 'accumulating' && form.topUpBookId) {
+    if (form.topUpBookId) {
       const { goal_id: _goal, ...joining } = base
       return { ok: true, payload: {
         ...joining, amount_vnd: amt, notes: form.note || null,
@@ -410,19 +410,54 @@ export interface BookCandidateRow {
   interest_rate: number | null
 }
 
-export interface TopUpBook { id: string; name: string; rate: number | null; expiryDate: string | null }
+type TopUpBookStatus = 'open' | 'locked' | 'matured'
 
-// The books a deposit entered on `date` toward `goalId` ('' = unallocated) can
-// join: the ANCHOR of a live accumulating book in that goal that has not handed
-// over and whose maturity / lock window still takes a top-up on that date — the
-// same rules the POST route enforces, so every option listed is one that saves.
-export function pickTopUpBooks(rows: BookCandidateRow[], goalId: string, date: string): TopUpBook[] {
+export interface TopUpBook {
+  id: string
+  name: string
+  rate: number | null
+  expiryDate: string | null
+  lockDays: number | null
+  status: TopUpBookStatus
+  /** Locked / matured only: days left to maturity on the entered date. */
+  daysRemaining?: number
+}
+
+// The live books of `goalId` ('' = unallocated) a deposit entered on `date` could
+// go into: the ANCHOR of each accumulating book that has not handed over. One the
+// bank refuses on that date (matured, or inside its lock window — the rules the
+// POST route enforces) is kept and marked, not dropped: a book that vanishes
+// without a word reads as a bug, and its way out is a successor book.
+export function listTopUpBooks(rows: BookCandidateRow[], goalId: string, date: string): TopUpBook[] {
   return rows
     .filter((r) =>
       r.asset_type === 'bank' && r.transaction_type === 'investment' &&
       r.deposit_group_id != null && r.deposit_group_id === r.transaction_id &&
       !r.successor_deposit_tx_id &&
-      (r.goal_id ?? '') === goalId &&
-      classifyAccumulatingTopUp({ topUpDate: date, expiryDate: r.expiry_date, lockDays: r.top_up_lock_days }).status === 'allowed')
-    .map((r) => ({ id: r.transaction_id, name: r.notes ?? '', rate: r.interest_rate, expiryDate: r.expiry_date }))
+      (r.goal_id ?? '') === goalId)
+    .map((r) => {
+      const book = { id: r.transaction_id, name: r.notes ?? '', rate: r.interest_rate, expiryDate: r.expiry_date, lockDays: r.top_up_lock_days }
+      const e = classifyAccumulatingTopUp({ topUpDate: date, expiryDate: r.expiry_date, lockDays: r.top_up_lock_days })
+      if (e.status === 'allowed') return { ...book, status: 'open' as const }
+      return { ...book, status: e.status === 'matured' ? 'matured' as const : 'locked' as const, daysRemaining: e.daysRemaining }
+    })
+}
+
+// What "Deposit into" starts on. Money must not land in a book the user did not
+// pick, so a choice is made for them only when there is one place it can go: the
+// only open book, or a new one when no book is open. Otherwise '' — choose.
+export function defaultBookChoice(books: TopUpBook[]): string {
+  const open = books.filter((b) => b.status === 'open')
+  if (open.length === 1) return open[0].id
+  return open.length === 0 ? 'new' : ''
+}
+
+// A bank deposit of the plan month, goal and amount of a recurring saving counts
+// as that saving (lib/finance realizedRecurringContributions, lib/planning
+// buildByGoal). The name of the one this amount would count as, so the sheet can
+// say it before saving rather than the line silently turning "Saved" after.
+export function matchingRecurring(pending: Array<{ name: string; amount: number }> | undefined, amount: string): string | null {
+  const amt = Number(amount.replace(/\./g, ''))
+  if (!pending || !(amt > 0)) return null
+  return pending.find((r) => r.amount === amt)?.name ?? null
 }

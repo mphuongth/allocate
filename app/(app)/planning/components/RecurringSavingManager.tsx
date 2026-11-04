@@ -232,7 +232,7 @@ export default function RecurringSavingManager({ goals, onChange, onToast, varia
           // The link means different things per target: a term deposit folds this
           // recurring in at maturity; a book gets topped up by it each month.
           const hint = selected?.kind === 'book'
-            ? (isVI ? 'Mỗi tháng, nút “Đã gửi” sẽ nạp khoản này vào sổ tích luỹ đó.' : 'Each month, “Saved” tops this amount into that accumulating book.')
+            ? (isVI ? 'Mỗi tháng, nút “Ghi nhận” sẽ nạp khoản này vào sổ tích luỹ đó.' : 'Each month, “Record” tops this amount into that accumulating book.')
             : selected?.kind === 'term'
               ? (isVI ? 'Khi sổ này đáo hạn, khoản định kỳ sẽ được gộp đúng vào sổ đó.' : 'When that deposit matures, this recurring is the one folded into it.')
               : (isVI ? 'Sổ kỳ hạn: gộp khi đáo hạn. Sổ tích luỹ: nạp thêm mỗi tháng.' : 'Term deposit: folded in at maturity. Accumulating book: topped up monthly.')

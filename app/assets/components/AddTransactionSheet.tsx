@@ -8,8 +8,9 @@ import { toast } from 'sonner'
 import DialogShell from '@/components/ui/DialogShell'
 import PendingButton from '@/components/ui/PendingButton'
 import { todayIso } from '@/lib/dates'
-import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload, pickTopUpBooks, type TxForm, type BookCandidateRow } from './addTransactionModel'
-import { BuyFundFields, BuyBankFields, BuyGoldFields, SellForm } from './addTransactionForms'
+import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload, listTopUpBooks, defaultBookChoice, matchingRecurring, type TxForm, type BookCandidateRow, type TopUpBook } from './addTransactionModel'
+import { BuyFundFields, BuyBankFields, BuyGoldFields, SellForm, DepositTargetPicker } from './addTransactionForms'
+import SuccessorBookSheet, { type SuccessorTarget } from './SuccessorBookSheet'
 
 export interface Fund { id: string; name: string; nav: number; code: string | null; fund_type?: string; is_dca?: boolean; dca_goal_id?: string | null }
 interface Goal { goal_id: string; goal_name: string; completed_at?: string | null }
@@ -123,7 +124,8 @@ export interface PrefillTransaction {
 interface Props {
   open: boolean
   onClose: () => void
-  onSaved?: () => void
+  /** A bank deposit says where it went, so the opener's toast can name the book. */
+  onSaved?: (summary?: DepositSummary) => void
   /**
    * The row being edited turned out to be gone: this sheet's opener is holding a
    * list that is out of date and needs to reload it. Distinct from `onSaved` —
@@ -133,7 +135,16 @@ interface Props {
   desktop?: boolean
   existing?: EditableTransaction | null
   prefill?: PrefillTransaction | null
+  /** Opened to add money (the Plan page's "Add more" / "Record"): no Sell/Withdraw. */
+  depositOnly?: boolean
+  /**
+   * The goal's recurring savings not yet recorded this month. A bank deposit of
+   * one's amount counts as it (lib/finance, lib/planning) — said before saving.
+   */
+  pendingRecurring?: Array<{ name: string; amount: number }>
 }
+
+export interface DepositSummary { amount: number; bookName: string | null }
 
 const inputStyle: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
@@ -161,7 +172,7 @@ type AssetType = typeof ASSET_TYPES[number]['v']
 // wrappers: only ever one of them is on screen.
 const TITLE_ID = 'add-transaction-title'
 
-export default function AddTransactionSheet({ open, onClose, onSaved, onStale, desktop, existing, prefill }: Props) {
+export default function AddTransactionSheet({ open, onClose, onSaved, onStale, desktop, existing, prefill, depositOnly, pendingRecurring }: Props) {
   const t = useTranslations('addTx')
   const tc = useTranslations('common')
   const isVI = useLocale() === 'vi'
@@ -200,9 +211,15 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
   const [rate, setRate] = useState('')
   const [maturity, setMaturity] = useState('')
   const [topUpLockDays, setTopUpLockDays] = useState('')
-  // Accumulating only: the existing book this deposit joins ('' = start a new one).
-  const [topUpBookId, setTopUpBookId] = useState('')
+  // The user's own pick for "Deposit into": a book's anchor id or 'new' ('' =
+  // not picked). Until they pick, the target follows defaultBookChoice.
+  const [bookPick, setBookPick] = useState('')
   const [bookRows, setBookRows] = useState<BookCandidateRow[]>([])
+  // The goal the loaded rows belong to — the books are ready only for that goal.
+  const [booksGoal, setBooksGoal] = useState<string | null>(null)
+  const [booksError, setBooksError] = useState(false)
+  const [booksReload, setBooksReload] = useState(0)
+  const [successor, setSuccessor] = useState<SuccessorTarget | null>(null)
   // Where a term deposit's money goes at maturity when not renewed. Defaults to
   // the fund whose DCA feeds the deposit's goal — the money was parked from
   // that DCA — until the user picks for themselves (or an edit loads a stored
@@ -331,25 +348,53 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     setTargetFundId(dca?.id ?? '')
   }, [open, existing, targetTouched, assetType, depositType, goalId, funds])
 
-  // An accumulating deposit can join a book the goal already has (#782). Only the
+  // A bank deposit can go into a book the goal already has (#782). Only the
   // chosen goal's bank rows are fetched — a book's anchor is its oldest row, so a
   // page of the newest rows across every goal would lose it as tranches pile up.
+  const asksTarget = open && !existing && dir === 'buy' && assetType === 'bank'
   useEffect(() => {
-    if (!open || existing || dir !== 'buy' || assetType !== 'bank' || depositType !== 'accumulating') return
+    if (!asksTarget) return
     let cancelled = false
+    setBooksError(false)
     const scope = goalId ? `goal_id=${encodeURIComponent(goalId)}` : 'unassigned=true'
     fetch(`/api/v1/investment-transactions?asset_type=bank&limit=1000&${scope}`)
-      .then((r) => (r.ok ? r.json() : { transactions: [] }))
-      .then((d) => { if (!cancelled) setBookRows(Array.isArray(d?.transactions) ? d.transactions : []) })
-      .catch(() => { if (!cancelled) setBookRows([]) })
+      .then((r) => { if (!r.ok) throw new Error('load failed'); return r.json() })
+      .then((d) => {
+        if (cancelled) return
+        setBookRows(Array.isArray(d?.transactions) ? d.transactions : [])
+        setBooksGoal(goalId)
+      })
+      .catch(() => { if (!cancelled) setBooksError(true) })
     return () => { cancelled = true }
-  }, [open, existing, dir, assetType, depositType, goalId])
+  }, [asksTarget, goalId, booksReload])
+  const booksLoading = asksTarget && !booksError && booksGoal !== goalId
 
-  const topUpBooks = useMemo(() => pickTopUpBooks(bookRows, goalId, date), [bookRows, goalId, date])
-  // A choice the goal or date has since ruled out is not a choice any more.
-  useEffect(() => {
-    if (topUpBookId && !topUpBooks.some((b) => b.id === topUpBookId)) setTopUpBookId('')
-  }, [topUpBooks, topUpBookId])
+  const books = useMemo(() => listTopUpBooks(bookRows, goalId, date), [bookRows, goalId, date])
+  // A pick the goal or date has since ruled out (no longer an open book) gives
+  // way to the default, like no pick at all.
+  const pickValid = bookPick === 'new' || books.some((b) => b.id === bookPick && b.status === 'open')
+  const bookChoice = booksLoading || booksError ? '' : pickValid ? bookPick : defaultBookChoice(books)
+  const chosenBook = books.find((b) => b.id === bookChoice) ?? null
+
+  // A different goal is a different set of books: a pick was for the old one.
+  useEffect(() => { setBookPick('') }, [goalId])
+  // A tranche's rate defaults to its book's. Picking a book fills it in at once;
+  // a book chosen by default lends its rate while the field is still empty —
+  // derived here, not set by an effect, so a save in the same instant cannot
+  // go out without it.
+  function pickTarget(choice: string) {
+    setBookPick(choice)
+    const b = books.find((x) => x.id === choice)
+    if (b?.rate != null) setRate(String(b.rate))
+  }
+  const effectiveRate = chosenBook && rate === '' && chosenBook.rate != null ? String(chosenBook.rate) : rate
+
+  function openSuccessor(b: TopUpBook) {
+    setSuccessor({
+      bookId: b.id, bookName: b.name, amount: Number(bankAmount.replace(/\./g, '')) || 0, date,
+      rate: b.rate, lockDays: b.lockDays, sourceExpiry: b.expiryDate,
+    })
+  }
 
   // Lazily load sellable holdings from the overview the first time the user
   // switches to "Sell" — most opens are buys, so we don't pay for it up front.
@@ -387,8 +432,11 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     setRate('')
     setMaturity('')
     setTopUpLockDays('')
-    setTopUpBookId('')
+    setBookPick('')
     setBookRows([])
+    setBooksGoal(null)
+    setBooksError(false)
+    setSuccessor(null)
     setTargetFundId('')
     setTargetTouched(false)
     setGoldProvider('PNJ')
@@ -446,7 +494,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     }
   }, [dir, assetType, holdingKey, sellNav])
 
-  async function submitTransaction(url: string, method: 'POST' | 'PUT', payload: Record<string, unknown>) {
+  async function submitTransaction(url: string, method: 'POST' | 'PUT', payload: Record<string, unknown>, summary?: DepositSummary) {
     setSaving(true)
     try {
       const res = await fetch(url, {
@@ -468,7 +516,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
       }
       if (!res.ok) { const d = await res.json(); setError(d.error ?? tc('error')); return }
       onClose()
-      onSaved?.()
+      onSaved?.(summary)
     } catch {
       setError(tc('error'))
     } finally {
@@ -481,7 +529,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     const form: TxForm = {
       assetType, date, goalId, note,
       fundId, amount, units, nav, selectedFundNav: selectedFund?.nav,
-      bankCode, selectedBankName, depositType, bankAmount, rate, maturity, topUpLockDays, topUpBookId, targetFundId,
+      bankCode, selectedBankName, depositType, bankAmount, rate: effectiveRate, maturity, topUpLockDays, topUpBookId: asksTarget && chosenBook ? chosenBook.id : '', targetFundId,
       goldProvider, goldUnit, goldQty, goldPrice,
     }
 
@@ -506,7 +554,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     // Buy / create a new investment (POST).
     const r = buildBuyPayload(form, prefill?.plan_id ?? null)
     if (!r.ok) { setError(t(r.errorKey)); return }
-    await submitTransaction('/api/v1/investment-transactions', 'POST', r.payload)
+    const summary = assetType === 'bank'
+      ? { amount: Number(bankAmount.replace(/\./g, '')), bookName: chosenBook ? (chosenBook.name || null) : null }
+      : undefined
+    await submitTransaction('/api/v1/investment-transactions', 'POST', r.payload, summary)
   }
 
   if (desktop ? !open : !mounted) return null
@@ -516,6 +567,12 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     bank:  { buy: t('deposit'),  sell: t('withdraw') },
     gold:  { buy: t('buy'),      sell: t('sell')     },
   }
+
+  // The bank form waits for "Deposit into": while the books load, after they
+  // failed, or while several are open and none is chosen, there is nothing to ask.
+  const bankFormReady = !booksLoading && !booksError && (bookChoice === 'new' || !!chosenBook)
+  const targetBlocked = asksTarget && !bankFormReady
+  const recurringMatch = asksTarget ? matchingRecurring(pendingRecurring, bankAmount) : null
 
   const formBody = (
         <div style={{ display: 'grid', gap: 16 }}>
@@ -552,7 +609,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
           </div>
 
           {/* Direction — hidden when editing (investments only) */}
-          {!existing && (
+          {!existing && !depositOnly && (
           <div>
             <label style={labelStyle}>{t('direction')}</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -622,26 +679,34 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
           )}
 
           {/* Bank-specific */}
-          {dir === 'buy' && assetType === 'bank' && (
+          {asksTarget && (books.length > 0 || booksLoading || booksError) && (
+            <DepositTargetPicker
+              books={books} choice={bookChoice} setChoice={pickTarget}
+              loading={booksLoading} error={booksError} onRetry={() => setBooksReload((n) => n + 1)}
+              onSuccessor={openSuccessor} labelStyle={labelStyle}
+            />
+          )}
+
+          {dir === 'buy' && assetType === 'bank' && (!asksTarget || bankFormReady) && (
             <BuyBankFields
               banks={banks} bankCode={bankCode} setBankCode={setBankCode}
               depositType={depositType} setDepositType={setDepositType}
               bankAmount={bankAmount} setBankAmount={setBankAmount}
-              rate={rate} setRate={setRate}
+              rate={effectiveRate} setRate={setRate}
               maturity={maturity} setMaturity={setMaturity} date={date}
               topUpLockDays={topUpLockDays} setTopUpLockDays={setTopUpLockDays}
               funds={funds} targetFundId={targetFundId}
               setTargetFundId={(v) => { setTargetFundId(v); setTargetTouched(true) }}
-              topUpBooks={topUpBooks} topUpBookId={topUpBookId}
-              setTopUpBookId={(id) => {
-                setTopUpBookId(id)
-                // A book's own rate is the sensible default for the tranche.
-                const b = topUpBooks.find((x) => x.id === id)
-                if (b?.rate != null) setRate(String(b.rate))
-              }}
+              joining={asksTarget && !!chosenBook}
               lockType={Boolean(existing?.deposit_group_id)}
               inputStyle={inputStyle} labelStyle={labelStyle}
             />
+          )}
+
+          {recurringMatch && (
+            <div data-testid="recurring-match" style={{ background: 'var(--c-navy-tint)', color: 'var(--c-navy)', borderRadius: 10, padding: '9px 12px', fontSize: 12, lineHeight: 1.45 }}>
+              {t('countsAsRecurring', { name: recurringMatch })}
+            </div>
           )}
 
           {/* Gold-specific */}
@@ -712,21 +777,30 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
               pending={saving}
               pendingLabel={tc('saving')}
               onClick={handleSave}
-              disabled={sellDisabled}
+              data-testid="addtx-submit"
+              disabled={sellDisabled || targetBlocked}
               style={{
                 flex: 2, padding: '12px 16px', borderRadius: 10,
                 background: dir === 'sell' ? 'var(--c-neg)' : 'var(--c-btn-primary)', border: 'none',
                 color: '#fff', fontSize: 14, fontWeight: 600,
-                cursor: (saving || sellDisabled) ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit', opacity: sellDisabled ? 0.7 : 1,
+                cursor: (saving || sellDisabled || targetBlocked) ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', opacity: (sellDisabled || targetBlocked) ? 0.7 : 1,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}
             >
               {dir === 'sell'
                 ? (assetType === 'bank' ? t('confirmWithdrawal') : t('confirmSale'))
-                : existing ? t('saveChanges') : tc('save')}
+                : existing ? t('saveChanges')
+                : asksTarget && bookChoice === '' && !booksLoading && !booksError ? t('chooseBook')
+                : asksTarget && chosenBook ? t('depositIntoBook', { name: chosenBook.name || t('topUpBookUnnamed') })
+                : tc('save')}
             </PendingButton>
           </div>
+          <SuccessorBookSheet
+            target={successor} isVi={isVI}
+            onClose={() => setSuccessor(null)}
+            onDone={() => { setSuccessor(null); onClose(); onSaved?.() }}
+          />
         </div>
   )
 

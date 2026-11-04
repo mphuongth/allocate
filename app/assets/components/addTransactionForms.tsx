@@ -99,12 +99,78 @@ export function BuyFundFields({
   )
 }
 
+// "Deposit into": which of the goal's books this money goes to, or a new one —
+// asked before anything about the kind of deposit, because that is the question
+// the user arrives with (#782). A book the bank will not take money into today is
+// listed, disabled, with the reason and its way out (a successor book), rather
+// than left to vanish. A failed load says so and offers nothing to pick: falling
+// back to "new book" would quietly open a duplicate of a book that exists.
+export function DepositTargetPicker({
+  books, choice, setChoice, loading, error, onRetry, onSuccessor, labelStyle,
+}: {
+  books: TopUpBook[]
+  choice: string
+  setChoice: (v: string) => void
+  loading: boolean
+  error: boolean
+  onRetry: () => void
+  onSuccessor: (book: TopUpBook) => void
+  labelStyle: React.CSSProperties
+}) {
+  const t = useTranslations('addTx')
+  const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, fontSize: 14, color: 'var(--c-ink)' }
+  return (
+    <div role="radiogroup" aria-labelledby="deposit-target-label">
+      <div id="deposit-target-label" style={labelStyle}>{t('depositInto')}</div>
+      {loading ? (
+        <div data-testid="books-loading" style={{ fontSize: 13, color: 'var(--c-muted)', minHeight: 44, display: 'flex', alignItems: 'center' }}>{t('loadingBooks')}</div>
+      ) : error ? (
+        <div data-testid="books-load-error" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 44, fontSize: 13, color: 'var(--c-neg)' }}>
+          {t('booksLoadError')}
+          <button type="button" data-testid="books-load-retry" onClick={onRetry}
+            style={{ minHeight: 44, padding: '0 12px', border: '1px solid var(--c-line)', borderRadius: 8, background: 'var(--c-card)', color: 'var(--c-navy)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {t('retry')}
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 2 }}>
+          {books.map((b) => {
+            const open = b.status === 'open'
+            return (
+              <div key={b.id}>
+                <label style={{ ...row, opacity: open ? 1 : 0.55, cursor: open ? 'pointer' : 'not-allowed' }}>
+                  <input type="radio" name="deposit-target" value={b.id} checked={choice === b.id} disabled={!open} onChange={() => setChoice(b.id)} />
+                  <span>{(b.name || t('topUpBookUnnamed')) + (b.expiryDate ? ` · ${t('bookMaturity', { date: b.expiryDate })}` : '')}</span>
+                </label>
+                {!open && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingLeft: 26, fontSize: 12, color: 'var(--c-muted)' }}>
+                    <span data-testid={`book-reason-${b.id}`}>
+                      {b.status === 'locked' ? t('bookLocked', { days: b.daysRemaining ?? 0 }) : t('bookMatured')}
+                    </span>
+                    <button type="button" data-testid={`book-successor-${b.id}`} onClick={() => onSuccessor(b)}
+                      style={{ minHeight: 44, padding: '0 4px', border: 'none', background: 'none', color: 'var(--c-navy)', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+                      {t('openSuccessor')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          <label style={{ ...row, cursor: 'pointer' }}>
+            <input type="radio" name="deposit-target" value="new" checked={choice === 'new'} onChange={() => setChoice('new')} />
+            <span>{t('newBook')}</span>
+          </label>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function BuyBankFields({
   banks, bankCode, setBankCode, depositType, setDepositType,
   bankAmount, setBankAmount, rate, setRate, maturity, setMaturity, topUpLockDays, setTopUpLockDays, date,
   funds = [], targetFundId = '', setTargetFundId,
-  topUpBooks = [], topUpBookId = '', setTopUpBookId,
-  lockType = false, inputStyle, labelStyle,
+  joining = false, lockType = false, inputStyle, labelStyle,
 }: {
   banks: Bank[]
   bankCode: string
@@ -124,10 +190,9 @@ export function BuyBankFields({
   funds?: Fund[]
   targetFundId?: string
   setTargetFundId?: (v: string) => void
-  /** Accumulating only: live books of the chosen goal this deposit can join. */
-  topUpBooks?: TopUpBook[]
-  topUpBookId?: string
-  setTopUpBookId?: (v: string) => void
+  /** Paying into an existing book: its bank, type, maturity and lock window are
+   *  the book's, so only the amount and the tranche's rate are asked. */
+  joining?: boolean
   /** Editing a book: the savings type and its lock window are fixed — the PUT
    *  has no way to group or ungroup a deposit, so offering the switch would
    *  promise a change that silently never happens. */
@@ -136,8 +201,8 @@ export function BuyBankFields({
   labelStyle: React.CSSProperties
 }) {
   const t = useTranslations('addTx')
-  // Joining a book: the bank, maturity and lock window are the book's, not asked again.
-  const joining = depositType === 'accumulating' && topUpBookId !== ''
+  // A tranche of a book always carries its own rate, whatever type the form last showed.
+  const asksRate = joining || depositType !== 'flex'
   return (
     <>
       {/* Structured bank (FK) — the deposit points at a real bank, and the
@@ -159,6 +224,7 @@ export function BuyBankFields({
         </select>
       </div>
       )}
+      {!joining && (
       <div>
         <label style={labelStyle}>{t('depositType')}</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
@@ -188,25 +254,8 @@ export function BuyBankFields({
           })}
         </div>
       </div>
-      {depositType === 'accumulating' && !lockType && topUpBooks.length > 0 && setTopUpBookId && (
-        <div>
-          <label htmlFor="top-up-book" style={labelStyle}>{t('topUpBook')}</label>
-          <select
-            id="top-up-book"
-            data-testid="top-up-book-select"
-            value={topUpBookId}
-            onChange={(e) => setTopUpBookId(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">{t('topUpBookNew')}</option>
-            {topUpBooks.map((b) => (
-              <option key={b.id} value={b.id}>{(b.name || t('topUpBookUnnamed')) + (b.expiryDate ? ` · ${b.expiryDate}` : '')}</option>
-            ))}
-          </select>
-          <div style={{ fontSize: 11, color: 'var(--c-muted)', marginTop: 4 }}>{t('topUpBookHint')}</div>
-        </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: depositType !== 'flex' ? '1.2fr 1fr' : '1fr', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: asksRate ? '1.2fr 1fr' : '1fr', gap: 10 }}>
         <div>
           <label style={labelStyle}>{t('principal')}</label>
           <input
@@ -218,7 +267,7 @@ export function BuyBankFields({
             style={inputStyle}
           />
         </div>
-        {depositType !== 'flex' && (
+        {asksRate && (
           <div>
             <label style={labelStyle}>{t('rate')}</label>
             <input
@@ -243,7 +292,7 @@ export function BuyBankFields({
           />
         </div>
       )}
-      {depositType === 'term' && setTargetFundId && (
+      {depositType === 'term' && !joining && setTargetFundId && (
         <div>
           <label htmlFor="target-fund" style={labelStyle}>{t('targetFund')}</label>
           <select

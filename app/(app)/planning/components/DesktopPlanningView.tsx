@@ -23,9 +23,9 @@ import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberM
 import { EditIcon, TrashIcon } from './planningIcons'
 import { DPlanRow, DGoalItemRow } from './desktopPlanningRows'
 import { DModal, PlanTable, THead, AllocationCard } from './desktopPlanningCards'
-import { type GoalItem } from '@/lib/planning'
+import { type GoalItem, type GoalRow } from '@/lib/planning'
 import { usePlanningDerivations } from '../usePlanningDerivations'
-import { usePlanningActions, buildBuyEdit, buildContributionPrefill } from '../usePlanningActions'
+import { usePlanningActions, buildBuyEdit, buildContributionPrefill, pendingRecurringOf, depositToast } from '../usePlanningActions'
 import { monthLabel as formatMonthLabel, goalProgress, fixedExpenseRow, insuranceRow, savedPercent } from '@/features/planning/planModel'
 import { saveIncome, deletePlan, saveOtherExpense } from '../planActions'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
@@ -113,6 +113,7 @@ export default function DesktopPlanningView({
   // Logging a contribution from a goal header, or recording a recurring bank
   // deposit, opens the same sheet in create mode (POST) pre-filled with the goal.
   const [prefillTx, setPrefillTx] = useState<PrefillTransaction | null>(null)
+  const [prefillPending, setPrefillPending] = useState<Array<{ name: string; amount: number }>>([])
   const [bookTopUp, setBookTopUp] = useState<BookTopUpTarget | null>(null)
   const [successor, setSuccessor] = useState<SuccessorTarget | null>(null)
 
@@ -187,14 +188,15 @@ export default function DesktopPlanningView({
   // Open the Add-Transaction sheet in create mode, pre-filled toward a goal.
   // Used by the goal-header "+" (log any contribution) and the recurring-bank
   // "Saved" pill (record this month's deposit at the planned amount).
-  function openContribution(g: { goalId: string; isUnallocated: boolean }, prefill?: Partial<PrefillTransaction>) {
+  function openContribution(g: GoalRow, prefill?: Partial<PrefillTransaction>) {
     setPrefillTx(buildContributionPrefill(g, plan?.id ?? null, prefill))
+    setPrefillPending(pendingRecurringOf(g))
   }
 
   // The recurring "Saved" pill: the shared probe decides between opening the
   // book top-up sheet, logging a standalone contribution, or (matured book) a
   // steer-to-maturity toast.
-  async function recordRecurring(g: { goalId: string; isUnallocated: boolean }, item: GoalItem) {
+  async function recordRecurring(g: GoalRow, item: GoalItem) {
     const result = await actions.probeRecurringRecord(item)
     if (result.kind === 'book-topup') setBookTopUp(result.target)
     else if (result.kind === 'successor') setSuccessor(result.target)
@@ -443,14 +445,15 @@ export default function DesktopPlanningView({
                             {g.contributed > 0 ? `${fmt(g.contributed)} ${isVI ? 'đã góp' : 'in'}` : (isVI ? 'Chưa góp' : 'Nothing yet')}
                           </div>
                         </td>
-                        <td style={{ padding: '10px 12px 10px 4px', textAlign: 'right', verticalAlign: 'top', width: 40 }}>
+                        <td style={{ padding: '10px 12px 10px 4px', textAlign: 'right', verticalAlign: 'top', width: 96 }}>
+                          {/* Words, not a bare "+": next to each line's "Record" it has to
+                              say it is a different thing — money beyond the plan (#782). */}
                           <button
                             onClick={() => openContribution(g)}
-                            aria-label={isVI ? 'Ghi nhận đóng góp' : 'Log contribution'}
-                            title={isVI ? 'Ghi nhận đóng góp' : 'Log contribution'}
-                            style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-pos)', display: 'flex', marginLeft: 'auto' }}
+                            title={isVI ? 'Gửi thêm một khoản vào mục tiêu này' : 'Add money to this goal beyond the plan'}
+                            style={{ padding: '4px 10px', border: '1px solid transparent', background: 'var(--c-pos-tint)', cursor: 'pointer', borderRadius: 7, color: 'var(--c-pos)', display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 'auto', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
                           >
-                            <Plus size={15} strokeWidth={2.4} />
+                            <Plus size={12} strokeWidth={2.4} />{isVI ? 'Gửi thêm' : 'Add more'}
                           </button>
                         </td>
                       </tr>
@@ -760,15 +763,17 @@ export default function DesktopPlanningView({
         open={!!buyEdit || !!prefillTx}
         existing={buyEdit}
         prefill={prefillTx}
+        depositOnly={!!prefillTx}
+        pendingRecurring={prefillPending}
         desktop
         onClose={() => { setBuyEdit(null); setPrefillTx(null) }}
         // The buy we were editing is gone: reload the plan so the list stops
         // offering a row the server no longer has (#721).
         onStale={() => { setBuyEdit(null); setPrefillTx(null); onRefresh() }}
-        onSaved={() => {
+        onSaved={(summary) => {
           const wasBuy = !!buyEdit
           setBuyEdit(null); setPrefillTx(null); onRefresh()
-          onToast(wasBuy ? (isVI ? 'Đã ghi nhận mua' : 'Buy recorded') : (isVI ? 'Đã ghi nhận đóng góp' : 'Contribution logged'))
+          onToast(wasBuy ? (isVI ? 'Đã ghi nhận mua' : 'Buy recorded') : depositToast(summary, isVI))
         }}
       />
 

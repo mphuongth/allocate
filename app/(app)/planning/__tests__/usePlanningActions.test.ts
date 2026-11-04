@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: toastErrorMock, success: vi.fn() }) }))
 
-import { usePlanningActions, buildBuyEdit, buildContributionPrefill } from '../usePlanningActions'
+import { usePlanningActions, buildBuyEdit, buildContributionPrefill, pendingRecurringOf, depositToast } from '../usePlanningActions'
 import type { GoalItem } from '@/lib/planning'
 import { addDaysIso, todayIso } from '@/lib/dates'
 
@@ -211,6 +211,37 @@ describe('usePlanningActions (#467 shared planning actions)', () => {
       expect(buildContributionPrefill({ goalId: 'g1', isUnallocated: false }, 'plan-1', { asset_type: 'bank', amount_vnd: 500 }))
         .toMatchObject({ goal_id: 'g1', plan_id: 'plan-1', asset_type: 'bank', amount_vnd: 500 })
       expect(buildContributionPrefill({ goalId: 'unalloc', isUnallocated: true }, null).goal_id).toBeNull()
+    })
+
+    // The toast names the book the money went into, not a generic "logged".
+    it('depositToast names the book when the deposit went into one', () => {
+      expect(depositToast({ amount: 3_000_000, bookName: 'PVcomBank' }, true)).toBe('Đã gửi ₫ 3.000.000 vào PVcomBank')
+      expect(depositToast({ amount: 3_000_000, bookName: 'PVcomBank' }, false)).toBe('Deposited ₫ 3.000.000 into PVcomBank')
+      expect(depositToast({ amount: 3_000_000, bookName: null }, true)).toBe('Đã ghi nhận đóng góp')
+      expect(depositToast(undefined, false)).toBe('Contribution logged')
+    })
+
+    // What the sheet warns a same-amount deposit would count as: the goal's
+    // recurring lines still waiting this month — not ones already in or skipped.
+    it('pendingRecurringOf lists only the recurring lines still to record', () => {
+      const items = [
+        { name: 'PV', type: 'bank' as const, amount: 3_000_000, isRecurring: true },
+        { name: 'Done', type: 'bank' as const, amount: 1_000_000, isRecurring: true, recorded: true },
+        { name: 'Skip', type: 'bank' as const, amount: 2_000_000, isRecurring: true, skipped: true },
+        { name: 'Fund', type: 'fund' as const, amount: 3_000_000 },
+      ]
+      expect(pendingRecurringOf({ items })).toEqual([{ name: 'PV', amount: 3_000_000 }])
+    })
+
+    // "Add more" on a goal whose plan is all bank savings opens on Bank, not the
+    // Fund default — one less tap for the common case (#782).
+    it('buildContributionPrefill opens on Bank when every line of the goal is a bank saving', () => {
+      const bank = { type: 'bank' as const }, fund = { type: 'fund' as const }
+      expect(buildContributionPrefill({ goalId: 'g1', isUnallocated: false, items: [bank, bank] }, null).asset_type).toBe('bank')
+      expect(buildContributionPrefill({ goalId: 'g1', isUnallocated: false, items: [bank, fund] }, null).asset_type).toBeUndefined()
+      expect(buildContributionPrefill({ goalId: 'g1', isUnallocated: false, items: [] }, null).asset_type).toBeUndefined()
+      // An explicit prefill still wins.
+      expect(buildContributionPrefill({ goalId: 'g1', isUnallocated: false, items: [bank] }, null, { asset_type: 'gold' }).asset_type).toBe('gold')
     })
   })
 })

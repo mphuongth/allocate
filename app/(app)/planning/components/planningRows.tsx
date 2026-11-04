@@ -68,14 +68,13 @@ export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecO
         </button>
         <button
           onClick={onLogContribution}
-          aria-label={isVI ? 'Ghi nhận đóng góp' : 'Log contribution'}
-          title={isVI ? 'Ghi nhận đóng góp vào mục tiêu' : 'Log a contribution to this goal'}
+          title={isVI ? 'Gửi thêm một khoản vào mục tiêu này' : 'Add money to this goal beyond the plan'}
           style={{ minWidth: 44, minHeight: 44, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
         >
-          {/* Tinted chip so it reads as a discrete "add money" action (not a bare
-              "+" that could be mistaken for "add goal"), matching the Saved/Buy pills. */}
-          <span style={{ width: 28, height: 28, borderRadius: 999, background: 'var(--c-pos-tint)', color: 'var(--c-pos)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Plus size={16} strokeWidth={2.4} />
+          {/* A tinted chip with words, not a bare "+": next to each line's
+              "Record" it has to say it is money beyond the plan (#782). */}
+          <span style={{ height: 28, padding: '0 10px', borderRadius: 999, background: 'var(--c-pos-tint)', color: 'var(--c-pos)', display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            <Plus size={13} strokeWidth={2.4} />{isVI ? 'Gửi thêm' : 'Add more'}
           </span>
         </button>
         <button
@@ -160,7 +159,7 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
             </span>
           ) : !skipped && (
             <button onClick={onRecordDeposit} aria-label={isVI ? 'Ghi nhận đã gửi' : 'Record deposit'} style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap' }}>
-              <Plus size={12} strokeWidth={2.4} />{isVI ? 'Đã gửi' : 'Saved'}
+              <Plus size={12} strokeWidth={2.4} />{isVI ? 'Ghi nhận' : 'Record'}
             </button>
           )}
           <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Saving actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

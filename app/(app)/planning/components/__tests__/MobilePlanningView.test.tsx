@@ -523,12 +523,12 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
 
   it('renders a Log contribution "+" on the goal header', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
-    expect(screen.getByRole('button', { name: /Log contribution/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Add more/i })).toBeInTheDocument()
   })
 
   it('gives the Log contribution "+" a ≥44px touch target', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
-    const btn = screen.getByRole('button', { name: /Log contribution/i })
+    const btn = screen.getByRole('button', { name: /Add more/i })
     expect(btn).toHaveStyle({ minWidth: '44px', minHeight: '44px' })
   })
 
@@ -542,11 +542,22 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
     vi.stubGlobal('fetch', fetchMock)
     try {
       render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
-      await userEvent.click(screen.getByRole('button', { name: /Log contribution/i }))
+      await userEvent.click(screen.getByRole('button', { name: /Add more/i }))
       expect(await screen.findByText('Gold')).toBeInTheDocument()
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  it('labels the pending action "Record", not the done state\'s "Saved"', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    await userEvent.click(screen.getByText('Retirement'))
+    expect(screen.getByRole('button', { name: /Record deposit/i })).toHaveTextContent(/^Record$/)
+  })
+
+  it('says "Add more" in words on the goal header', () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    expect(screen.getByRole('button', { name: /Add more/i })).toHaveTextContent('Add more')
   })
 
   it('shows a Saved/deposit action on a recurring bank saving', async () => {
