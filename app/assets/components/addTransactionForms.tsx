@@ -10,7 +10,7 @@ import { formatIntVN, parseIntVN, formatDecimalVN, parseDecimalVN } from '@/lib/
 import LoadError from './LoadError'
 import type { Fund, Bank, Holding } from './AddTransactionSheet'
 import type { SellPreview, AssetType, TopUpBook } from './addTransactionModel'
-import { bankReceivedPrefill } from './addTransactionModel'
+import { bankReceivedPrefill, displayIsoDate } from './addTransactionModel'
 
 const GOLD_PROVIDERS = ['PNJ', 'DOJI', 'SJC', 'Bảo Tín']
 
@@ -140,7 +140,7 @@ export function DepositTargetPicker({
               <div key={b.id}>
                 <label style={{ ...row, opacity: open ? 1 : 0.55, cursor: open ? 'pointer' : 'not-allowed' }}>
                   <input type="radio" name="deposit-target" value={b.id} checked={choice === b.id} disabled={!open} onChange={() => setChoice(b.id)} />
-                  <span>{(b.name || t('topUpBookUnnamed')) + (b.expiryDate ? ` · ${t('bookMaturity', { date: b.expiryDate })}` : '')}</span>
+                  <span>{(b.name || t('topUpBookUnnamed')) + (b.expiryDate ? ` · ${t('bookMaturity', { date: displayIsoDate(b.expiryDate) })}` : '')}</span>
                 </label>
                 {!open && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingLeft: 26, fontSize: 12, color: 'var(--c-muted)' }}>

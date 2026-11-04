@@ -461,3 +461,10 @@ export function matchingRecurring(pending: Array<{ name: string; amount: number 
   if (!pending || !(amt > 0)) return null
   return pending.find((r) => r.amount === amt)?.name ?? null
 }
+
+// A plain ISO date (YYYY-MM-DD) as the user writes it, dd/mm/yyyy — read off the
+// string, never through Date, so no timezone can move it a day.
+export function displayIsoDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  computeFundPricing, computeSellPreview, bankReceivedPrefill, buildBuyPayload, buildEditPayload, buildSellPayload, listTopUpBooks, defaultBookChoice, matchingRecurring,
+  computeFundPricing, computeSellPreview, bankReceivedPrefill, buildBuyPayload, buildEditPayload, buildSellPayload, listTopUpBooks, defaultBookChoice, matchingRecurring, displayIsoDate,
   type PreviewHolding, type TxForm,
 } from '../addTransactionModel'
 
@@ -450,5 +450,16 @@ describe('matchingRecurring', () => {
     expect(matchingRecurring(pending, '3.500.000')).toBeNull()
     expect(matchingRecurring(pending, '')).toBeNull()
     expect(matchingRecurring(undefined, '3.000.000')).toBeNull()
+  })
+})
+
+// A book's maturity is shown the way the user writes dates (dd/mm/yyyy), read
+// straight off the plain date — no Date object, so no timezone can shift the day.
+describe('displayIsoDate', () => {
+  it('turns a plain ISO date into dd/mm/yyyy', () => {
+    expect(displayIsoDate('2027-03-04')).toBe('04/03/2027')
+  })
+  it('leaves anything that is not a plain date alone', () => {
+    expect(displayIsoDate('soon')).toBe('soon')
   })
 })

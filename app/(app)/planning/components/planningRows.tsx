@@ -67,17 +67,6 @@ export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecO
           </span>
         </button>
         <button
-          onClick={onLogContribution}
-          title={isVI ? 'Gửi thêm một khoản vào mục tiêu này' : 'Add money to this goal beyond the plan'}
-          style={{ minWidth: 44, minHeight: 44, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-        >
-          {/* A tinted chip with words, not a bare "+": next to each line's
-              "Record" it has to say it is money beyond the plan (#782). */}
-          <span style={{ height: 28, padding: '0 10px', borderRadius: 999, background: 'var(--c-pos-tint)', color: 'var(--c-pos)', display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
-            <Plus size={13} strokeWidth={2.4} />{isVI ? 'Gửi thêm' : 'Add more'}
-          </span>
-        </button>
-        <button
           onClick={() => setOpen((o) => !o)}
           aria-label={isVI ? 'Mở/đóng mục tiêu' : 'Toggle goal'}
           style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', color: 'var(--c-muted)', padding: 0, flexShrink: 0 }}
@@ -102,6 +91,21 @@ export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecO
           onDcaUnpark={() => onDcaUnpark(item)}
         />
       ))}
+      {/* "Add more" ends the opened goal, under its lines' "Record" pills — the
+          header has no room for words on a phone (it cut the goal name to "T…"
+          and pushed out the progress bar), and a bare "+" read as one more way
+          to record the plan rather than money beyond it (#782). */}
+      {open && (
+        <button
+          onClick={onLogContribution}
+          style={{ width: '100%', minHeight: 44, padding: '0 14px 0 56px', border: 'none', borderTop: '1px solid var(--c-line)', background: 'var(--c-card)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--c-pos)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', textAlign: 'left' }}
+        >
+          <Plus size={14} strokeWidth={2.4} style={{ flexShrink: 0 }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {isVI ? `Gửi thêm vào ${entry.goalName}` : `Add more to ${entry.goalName}`}
+          </span>
+        </button>
+      )}
     </div>
   )
 }
