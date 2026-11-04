@@ -67,18 +67,6 @@ export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecO
           </span>
         </button>
         <button
-          onClick={onLogContribution}
-          aria-label={isVI ? 'Ghi nhận đóng góp' : 'Log contribution'}
-          title={isVI ? 'Ghi nhận đóng góp vào mục tiêu' : 'Log a contribution to this goal'}
-          style={{ minWidth: 44, minHeight: 44, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-        >
-          {/* Tinted chip so it reads as a discrete "add money" action (not a bare
-              "+" that could be mistaken for "add goal"), matching the Saved/Buy pills. */}
-          <span style={{ width: 28, height: 28, borderRadius: 999, background: 'var(--c-pos-tint)', color: 'var(--c-pos)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Plus size={16} strokeWidth={2.4} />
-          </span>
-        </button>
-        <button
           onClick={() => setOpen((o) => !o)}
           aria-label={isVI ? 'Mở/đóng mục tiêu' : 'Toggle goal'}
           style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', color: 'var(--c-muted)', padding: 0, flexShrink: 0 }}
@@ -103,6 +91,21 @@ export function GoalAllocationRow({ entry, isVI, onRecSkip, onRecRestore, onRecO
           onDcaUnpark={() => onDcaUnpark(item)}
         />
       ))}
+      {/* "Add more" ends the opened goal, under its lines' "Record" pills — the
+          header has no room for words on a phone (it cut the goal name to "T…"
+          and pushed out the progress bar), and a bare "+" read as one more way
+          to record the plan rather than money beyond it (#782). */}
+      {open && (
+        <button
+          onClick={onLogContribution}
+          style={{ width: '100%', minHeight: 44, padding: '0 14px 0 56px', border: 'none', borderTop: '1px solid var(--c-line)', background: 'var(--c-card)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: 'var(--c-pos)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', textAlign: 'left' }}
+        >
+          <Plus size={14} strokeWidth={2.4} style={{ flexShrink: 0 }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {isVI ? `Gửi thêm vào ${entry.goalName}` : `Add more to ${entry.goalName}`}
+          </span>
+        </button>
+      )}
     </div>
   )
 }
@@ -160,7 +163,7 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
             </span>
           ) : !skipped && (
             <button onClick={onRecordDeposit} aria-label={isVI ? 'Ghi nhận đã gửi' : 'Record deposit'} style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap' }}>
-              <Plus size={12} strokeWidth={2.4} />{isVI ? 'Đã gửi' : 'Saved'}
+              <Plus size={12} strokeWidth={2.4} />{isVI ? 'Ghi nhận' : 'Record'}
             </button>
           )}
           <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Saving actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

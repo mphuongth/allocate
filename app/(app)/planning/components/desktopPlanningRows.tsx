@@ -140,7 +140,7 @@ export function DGoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit
             ) : !skipped && (
               <button onClick={onRecordDeposit} aria-label={isVI ? 'Ghi nhận đã gửi' : 'Record deposit'} title={isVI ? 'Ghi nhận đã gửi — số tiền, ngày' : 'Record deposit — amount, date'}
                 style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-                <Plus size={12} strokeWidth={2.4} />{isVI ? 'Đã gửi' : 'Saved'}
+                <Plus size={12} strokeWidth={2.4} />{isVI ? 'Ghi nhận' : 'Record'}
               </button>
             )}
             <button ref={btnRef} onClick={() => open ? setOpen(false) : openMenu()} aria-label="Saving actions" aria-haspopup="menu" aria-expanded={open} style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex' }}>

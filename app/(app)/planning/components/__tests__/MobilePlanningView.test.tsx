@@ -521,15 +521,20 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
     expect(screen.queryByTestId('plan-link-lost-rs1')).not.toBeInTheDocument()
   })
 
-  it('renders a Log contribution "+" on the goal header', () => {
+  // On a phone the goal header has no room for a worded button: it squeezed the
+  // goal name to "T…" and pushed out the progress bar (#785 review, 360–390px).
+  // "Add more" lives at the end of the opened goal, under its "Record" pills.
+  it('keeps the goal header free of "Add more" — the name and progress need the width', () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
-    expect(screen.getByRole('button', { name: /Log contribution/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Add more/i })).not.toBeInTheDocument()
   })
 
-  it('gives the Log contribution "+" a ≥44px touch target', () => {
+  it('ends an opened goal with a full-width "Add more to <goal>" row with a ≥44px touch target', async () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
-    const btn = screen.getByRole('button', { name: /Log contribution/i })
-    expect(btn).toHaveStyle({ minWidth: '44px', minHeight: '44px' })
+    await userEvent.click(screen.getByText('Retirement'))
+    const btn = screen.getByRole('button', { name: /Add more/i })
+    expect(btn).toHaveTextContent('Add more to Retirement')
+    expect(btn).toHaveStyle({ width: '100%', minHeight: '44px' })
   })
 
   it('opens the Add-Transaction sheet when the goal "+" is clicked', async () => {
@@ -542,11 +547,18 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
     vi.stubGlobal('fetch', fetchMock)
     try {
       render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
-      await userEvent.click(screen.getByRole('button', { name: /Log contribution/i }))
+      await userEvent.click(screen.getByText('Retirement'))
+      await userEvent.click(screen.getByRole('button', { name: /Add more/i }))
       expect(await screen.findByText('Gold')).toBeInTheDocument()
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  it('labels the pending action "Record", not the done state\'s "Saved"', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    await userEvent.click(screen.getByText('Retirement'))
+    expect(screen.getByRole('button', { name: /Record deposit/i })).toHaveTextContent(/^Record$/)
   })
 
   it('shows a Saved/deposit action on a recurring bank saving', async () => {

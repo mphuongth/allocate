@@ -1,7 +1,8 @@
 import { toast } from 'sonner'
 import { todayIso } from '@/lib/dates'
 import type { GoalItem, GoalRow } from '@/lib/planning'
-import type { EditableTransaction, PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
+import type { DepositSummary, EditableTransaction, PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
+import { fmt } from '@/lib/formatters'
 import type { BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
 import type { SuccessorTarget } from '@/app/assets/components/SuccessorBookSheet'
 import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
@@ -42,16 +43,37 @@ export function buildBuyEdit(
 // Build the create-mode Add-Transaction prefill for logging a contribution toward
 // a goal (or Unallocated). Pure.
 export function buildContributionPrefill(
-  entry: Pick<GoalRow, 'goalId' | 'isUnallocated'>,
+  entry: Pick<GoalRow, 'goalId' | 'isUnallocated'> & { items?: ReadonlyArray<Pick<GoalItem, 'type'>> },
   planId: string | null,
   prefill?: Partial<PrefillTransaction>,
 ): PrefillTransaction {
+  // A goal planned entirely as bank savings opens on Bank instead of the Fund
+  // default — adding more to it is almost always another deposit.
+  const allBank = !!entry.items?.length && entry.items.every((i) => i.type === 'bank')
   return {
     goal_id: entry.isUnallocated ? null : entry.goalId,
     plan_id: planId,
     investment_date: todayIso(),
+    ...(allBank ? { asset_type: 'bank' as const } : {}),
     ...prefill,
   }
+}
+
+// The goal's recurring savings still to record this month. A bank deposit of one
+// of these amounts counts as that saving, so the deposit sheet says so up front.
+export function pendingRecurringOf(entry: { items: ReadonlyArray<Pick<GoalItem, 'name' | 'amount' | 'isRecurring' | 'recorded' | 'skipped'>> }) {
+  return entry.items
+    .filter((i) => i.isRecurring && !i.recorded && !i.skipped)
+    .map((i) => ({ name: i.name, amount: i.amount }))
+}
+
+// What the Plan page says after a contribution is saved: where a bank deposit
+// went when it joined a book, the plain confirmation otherwise.
+export function depositToast(summary: DepositSummary | undefined, isVI: boolean): string {
+  if (summary?.bookName) {
+    return isVI ? `Đã gửi ${fmt(summary.amount)} vào ${summary.bookName}` : `Deposited ${fmt(summary.amount)} into ${summary.bookName}`
+  }
+  return isVI ? 'Đã ghi nhận đóng góp' : 'Contribution logged'
 }
 
 export interface PlanningActionsCtx {

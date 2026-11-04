@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  computeFundPricing, computeSellPreview, bankReceivedPrefill, buildBuyPayload, buildEditPayload, buildSellPayload, pickTopUpBooks,
+  computeFundPricing, computeSellPreview, bankReceivedPrefill, buildBuyPayload, buildEditPayload, buildSellPayload, listTopUpBooks, defaultBookChoice, matchingRecurring, displayIsoDate,
   type PreviewHolding, type TxForm,
 } from '../addTransactionModel'
 
@@ -357,67 +357,109 @@ describe('buildSellPayload', () => {
   })
 })
 
-// A deposit made from the Plan page's goal "+" used to be able to start a book but
-// never join one (#782): the only way in was the Assets goal detail. A top-up
-// carries the book's id and nothing the book already owns (goal, bank, maturity).
+// Depositing into a bank from the Plan page asks "which book?" before "what kind
+// of deposit?" (#782): a live book of the goal can be joined, and a top-up carries
+// the book's id and nothing the book already owns (goal, bank, maturity).
 describe('buildBuyPayload — topping up an existing book', () => {
   it('sends tops_up_deposit_id and leaves the book-level fields to the server', () => {
     const p = ok(buildBuyPayload(form({
-      assetType: 'bank', depositType: 'accumulating', topUpBookId: 'book-1', bankAmount: '3.000.000', rate: '5,5'.replace(',', '.'),
-      goalId: 'g1', bankCode: 'VCB', selectedBankName: 'Vietcombank', maturity: '2027-01-01', topUpLockDays: '30',
+      assetType: 'bank', depositType: 'term', topUpBookId: 'book-1', bankAmount: '3.000.000', rate: '5.5',
+      goalId: 'g1', bankCode: 'VCB', selectedBankName: 'Vietcombank', maturity: '2027-01-01', topUpLockDays: '30', targetFundId: 'f1',
     }), 'plan-9'))
     expect(p).toMatchObject({ tops_up_deposit_id: 'book-1', asset_type: 'bank', transaction_type: 'investment', amount_vnd: 3_000_000, interest_rate: 5.5, plan_id: 'plan-9' })
-    expect(p).not.toHaveProperty('accumulating')
-    expect(p).not.toHaveProperty('expiry_date')
-    expect(p).not.toHaveProperty('bank_code')
-    expect(p).not.toHaveProperty('top_up_lock_days')
-    expect(p).not.toHaveProperty('goal_id')
+    for (const k of ['accumulating', 'expiry_date', 'bank_code', 'top_up_lock_days', 'goal_id', 'target_fund_id']) {
+      expect(p).not.toHaveProperty(k)
+    }
   })
 
   it('still requires an amount', () => {
-    expect(buildBuyPayload(form({ assetType: 'bank', depositType: 'accumulating', topUpBookId: 'book-1' }), null)).toEqual({ ok: false, errorKey: 'amountRequired' })
+    expect(buildBuyPayload(form({ assetType: 'bank', topUpBookId: 'book-1' }), null)).toEqual({ ok: false, errorKey: 'amountRequired' })
   })
 
-  it('ignores a stale book id once the deposit is no longer an accumulating one', () => {
-    const p = ok(buildBuyPayload(form({ assetType: 'bank', depositType: 'term', topUpBookId: 'book-1', bankAmount: '1000000' }), null))
+  it('opens a new deposit when no book is chosen', () => {
+    const p = ok(buildBuyPayload(form({ assetType: 'bank', depositType: 'accumulating', topUpBookId: '', bankAmount: '1000000' }), null))
     expect(p).not.toHaveProperty('tops_up_deposit_id')
+    expect(p).toMatchObject({ accumulating: true })
   })
 })
 
-describe('pickTopUpBooks', () => {
+describe('listTopUpBooks', () => {
   const row = (over: Record<string, unknown>) => ({
     transaction_id: 'b1', goal_id: 'g1', asset_type: 'bank', transaction_type: 'investment',
     deposit_group_id: 'b1', successor_deposit_tx_id: null, expiry_date: '2027-06-01', top_up_lock_days: null,
     notes: 'Y Tế', interest_rate: 5, ...over,
   })
 
-  it('offers the live book anchors of the goal', () => {
-    const books = pickTopUpBooks([row({})], 'g1', '2026-11-04')
-    expect(books).toEqual([{ id: 'b1', name: 'Y Tế', rate: 5, expiryDate: '2027-06-01' }])
+  it('lists a live book anchor of the goal as open', () => {
+    expect(listTopUpBooks([row({})], 'g1', '2026-11-04')).toEqual([
+      { id: 'b1', name: 'Y Tế', rate: 5, expiryDate: '2027-06-01', lockDays: null, status: 'open' },
+    ])
   })
 
-  it('drops tranches, plain term deposits, withdrawals, other goals and handed-over books', () => {
+  it('keeps a book that refuses the entered date, saying why, instead of hiding it', () => {
+    const books = listTopUpBooks([
+      row({ transaction_id: 'l', deposit_group_id: 'l', expiry_date: '2026-11-20', top_up_lock_days: 30 }),
+      row({ transaction_id: 'm', deposit_group_id: 'm', expiry_date: '2026-11-04' }),
+    ], 'g1', '2026-11-04')
+    expect(books.map((b) => [b.id, b.status, b.daysRemaining])).toEqual([['l', 'locked', 16], ['m', 'matured', 0]])
+  })
+
+  it('drops what is not a book of this goal that could ever take money', () => {
     const rows = [
       row({ transaction_id: 't2', deposit_group_id: 'b1' }),                // tranche
       row({ transaction_id: 't3', deposit_group_id: null }),                // term deposit
       row({ transaction_id: 't4', deposit_group_id: 't4', transaction_type: 'withdrawal' }),
       row({ transaction_id: 't5', deposit_group_id: 't5', goal_id: 'g2' }), // other goal
-      row({ transaction_id: 't6', deposit_group_id: 't6', successor_deposit_tx_id: 'x' }),
+      row({ transaction_id: 't6', deposit_group_id: 't6', successor_deposit_tx_id: 'x' }), // handed over
       row({ transaction_id: 't7', deposit_group_id: 't7', asset_type: 'fund' }),
     ]
-    expect(pickTopUpBooks(rows, 'g1', '2026-11-04')).toEqual([])
-  })
-
-  it('drops a book that would refuse the entered date (matured, or inside its lock window)', () => {
-    const rows = [
-      row({ transaction_id: 'm', deposit_group_id: 'm', expiry_date: '2026-11-04' }),
-      row({ transaction_id: 'l', deposit_group_id: 'l', expiry_date: '2026-11-20', top_up_lock_days: 30 }),
-    ]
-    expect(pickTopUpBooks(rows, 'g1', '2026-11-04')).toEqual([])
+    expect(listTopUpBooks(rows, 'g1', '2026-11-04')).toEqual([])
   })
 
   it('treats no goal as the unallocated bucket', () => {
-    expect(pickTopUpBooks([row({ goal_id: null })], '', '2026-11-04')).toHaveLength(1)
-    expect(pickTopUpBooks([row({ goal_id: 'g1' })], '', '2026-11-04')).toHaveLength(0)
+    expect(listTopUpBooks([row({ goal_id: null })], '', '2026-11-04')).toHaveLength(1)
+    expect(listTopUpBooks([row({ goal_id: 'g1' })], '', '2026-11-04')).toHaveLength(0)
+  })
+})
+
+// Money must not land in a book the user did not pick: a choice is made for them
+// only when there is exactly one place it can go.
+describe('defaultBookChoice', () => {
+  const b = (id: string, status: 'open' | 'locked' | 'matured') => ({ id, name: id, rate: null, expiryDate: null, lockDays: null, status })
+  it('picks the only open book', () => {
+    expect(defaultBookChoice([b('a', 'open'), b('x', 'locked')])).toBe('a')
+  })
+  it('picks a new book when no book can take money', () => {
+    expect(defaultBookChoice([])).toBe('new')
+    expect(defaultBookChoice([b('x', 'locked'), b('y', 'matured')])).toBe('new')
+  })
+  it('leaves the choice to the user when several books are open', () => {
+    expect(defaultBookChoice([b('a', 'open'), b('c', 'open')])).toBe('')
+  })
+})
+
+// A bank deposit of the same month, goal and amount counts as a recurring saving
+// (lib/finance, lib/planning). The sheet says so before saving instead of the
+// line silently flipping to "Saved" afterwards.
+describe('matchingRecurring', () => {
+  const pending = [{ name: 'PVcomBank', amount: 3_000_000 }, { name: 'VCB', amount: 5_000_000 }]
+  it('names the pending recurring the amount would count as', () => {
+    expect(matchingRecurring(pending, '3.000.000')).toBe('PVcomBank')
+  })
+  it('is null when nothing matches or there is no amount', () => {
+    expect(matchingRecurring(pending, '3.500.000')).toBeNull()
+    expect(matchingRecurring(pending, '')).toBeNull()
+    expect(matchingRecurring(undefined, '3.000.000')).toBeNull()
+  })
+})
+
+// A book's maturity is shown the way the user writes dates (dd/mm/yyyy), read
+// straight off the plain date — no Date object, so no timezone can shift the day.
+describe('displayIsoDate', () => {
+  it('turns a plain ISO date into dd/mm/yyyy', () => {
+    expect(displayIsoDate('2027-03-04')).toBe('04/03/2027')
+  })
+  it('leaves anything that is not a plain date alone', () => {
+    expect(displayIsoDate('soon')).toBe('soon')
   })
 })

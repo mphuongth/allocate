@@ -18,7 +18,7 @@ import { NoPlanState, PlanErrorState, SalaryCard, AllocationSummaryCard, FixedEx
 import { Sheet, SalarySheet, DeletePlanSheet, OtherExpenseSheet, SimpleOverrideSheet } from './planningSheets'
 import { type GoalRow, type GoalItem } from '@/lib/planning'
 import { usePlanningDerivations } from '../usePlanningDerivations'
-import { usePlanningActions, buildBuyEdit, buildContributionPrefill } from '../usePlanningActions'
+import { usePlanningActions, buildBuyEdit, buildContributionPrefill, pendingRecurringOf, depositToast } from '../usePlanningActions'
 import { monthLabel as formatMonthLabel, fixedExpenseRow, insuranceRow, savedPercent } from '@/features/planning/planModel'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import { MobilePlanningSkeleton } from './PlanningSkeleton'
@@ -81,6 +81,7 @@ export default function MobilePlanningView({
   // planned row (PUT) rather than adding a duplicate contribution.
   const [buyEdit, setBuyEdit] = useState<EditableTransaction | null>(null)
   const [prefillTx, setPrefillTx] = useState<PrefillTransaction | null>(null)
+  const [prefillPending, setPrefillPending] = useState<Array<{ name: string; amount: number }>>([])
   const [bookTopUp, setBookTopUp] = useState<BookTopUpTarget | null>(null)
   const [successor, setSuccessor] = useState<SuccessorTarget | null>(null)
   const [showAddInsurance, setShowAddInsurance] = useState(false)
@@ -128,6 +129,7 @@ export default function MobilePlanningView({
   // pill (record this month's deposit at the planned amount).
   function openContribution(entry: GoalRow, prefill?: Partial<PrefillTransaction>) {
     setPrefillTx(buildContributionPrefill(entry, plan?.id ?? null, prefill))
+    setPrefillPending(pendingRecurringOf(entry))
   }
 
   // The recurring "Saved" pill: the shared probe decides between the book top-up
@@ -502,14 +504,16 @@ export default function MobilePlanningView({
         open={!!buyEdit || !!prefillTx}
         existing={buyEdit}
         prefill={prefillTx}
+        depositOnly={!!prefillTx}
+        pendingRecurring={prefillPending}
         onClose={() => { setBuyEdit(null); setPrefillTx(null) }}
         // The buy we were editing is gone: reload the plan so the list stops
         // offering a row the server no longer has (#721).
         onStale={() => { setBuyEdit(null); setPrefillTx(null); onRefresh() }}
-        onSaved={() => {
+        onSaved={(summary) => {
           const wasBuy = !!buyEdit
           setBuyEdit(null); setPrefillTx(null)
-          onToast(wasBuy ? (isVI ? 'Đã ghi nhận mua' : 'Buy recorded') : (isVI ? 'Đã ghi nhận đóng góp' : 'Contribution logged'))
+          onToast(wasBuy ? (isVI ? 'Đã ghi nhận mua' : 'Buy recorded') : depositToast(summary, isVI))
           onRefresh()
         }}
       />
