@@ -108,9 +108,11 @@ test('a locked book hands over to a successor, which absorbs it at maturity', as
   const line = desktop.getByTestId(`plan-recurring-${saving.saving_id}`)
   await expect(line).toBeVisible({ timeout: 10_000 })
 
-  // "Saved" reads the linked book before deciding what to open. A is inside its
-  // lock window, so the answer is a new book rather than a top-up sheet.
+  // "Record" opens the deposit sheet on the goal's books (#782). A is inside its
+  // lock window: it is listed but cannot be chosen, and offers its successor —
+  // which carries this month along.
   await line.getByRole('button', { name: /Record deposit|Ghi nhận đã gửi/i }).click()
+  await page.getByTestId(`book-successor-${bookA.transaction_id}`).click()
   const sheet = page.getByTestId('successor-modal')
   await expect(sheet).toBeVisible({ timeout: 10_000 })
 

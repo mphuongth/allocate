@@ -299,18 +299,22 @@ describe('DesktopPlanningView — recurring bank "Saved" deposit', () => {
     expect(screen.queryByText(/₫ 4000000/)).not.toBeInTheDocument()
   })
 
-  it('opens the Add-Transaction sheet when Saved is clicked', async () => {
+  // "Record" opens the same deposit sheet as "Add more", told which recurring it
+  // records — it no longer reads the linked book first to pick a different sheet.
+  it('opens the deposit sheet in record mode for that recurring, without probing its book', async () => {
     const fetchMock = vi.fn((url: string) =>
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve(String(url).includes('savings-goals') ? { goals: [] } : []),
+        json: () => Promise.resolve(String(url).includes('savings-goals') ? { goals: [] } : String(url).includes('investment-transactions') ? { transactions: [] } : []),
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
     try {
       render(<DesktopPlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
       await userEvent.click(screen.getByRole('button', { name: /Record deposit/i }))
-      expect(await screen.findByText('Gold')).toBeInTheDocument()
+      expect(await screen.findByTestId('record-context')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'withdraw' })).not.toBeInTheDocument()
+      expect(fetchMock.mock.calls.some((c) => /\/investment-transactions\/[^?]/.test(String(c[0])))).toBe(false)
     } finally {
       vi.unstubAllGlobals()
     }

@@ -8,9 +8,8 @@ import FixedExpenseManager from './FixedExpenseManager'
 import SavingsChallengeCard from '@/components/challenge/SavingsChallengeCard'
 import RecurringSavingManager from './RecurringSavingManager'
 import AddTransactionSheet, { type EditableTransaction, type PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
-import RecurringBookTopUpSheet, { type BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
 import { useParkDca } from './useParkDca'
-import SuccessorBookSheet, { type SuccessorTarget } from '@/app/assets/components/SuccessorBookSheet'
+import type { RecordContext } from '@/app/assets/components/addTransactionModel'
 import AddInsuranceMemberModal from '@/app/assets/components/AddInsuranceMemberModal'
 import { EditIcon } from './planningIcons'
 import { GoalAllocationRow, PlanLineItem } from './planningRows'
@@ -18,7 +17,7 @@ import { NoPlanState, PlanErrorState, SalaryCard, AllocationSummaryCard, FixedEx
 import { Sheet, SalarySheet, DeletePlanSheet, OtherExpenseSheet, SimpleOverrideSheet } from './planningSheets'
 import { type GoalRow, type GoalItem } from '@/lib/planning'
 import { usePlanningDerivations } from '../usePlanningDerivations'
-import { usePlanningActions, buildBuyEdit, buildContributionPrefill, pendingRecurringOf, depositToast } from '../usePlanningActions'
+import { usePlanningActions, buildBuyEdit, buildContributionPrefill, pendingRecurringOf, depositToast, buildRecordContext } from '../usePlanningActions'
 import { monthLabel as formatMonthLabel, fixedExpenseRow, insuranceRow, savedPercent } from '@/features/planning/planModel'
 import { relationshipLabel } from '@/app/assets/components/insuranceShared'
 import { MobilePlanningSkeleton } from './PlanningSkeleton'
@@ -82,8 +81,8 @@ export default function MobilePlanningView({
   const [buyEdit, setBuyEdit] = useState<EditableTransaction | null>(null)
   const [prefillTx, setPrefillTx] = useState<PrefillTransaction | null>(null)
   const [prefillPending, setPrefillPending] = useState<Array<{ name: string; amount: number }>>([])
-  const [bookTopUp, setBookTopUp] = useState<BookTopUpTarget | null>(null)
-  const [successor, setSuccessor] = useState<SuccessorTarget | null>(null)
+  // Set when the sheet was opened by a recurring line's "Record".
+  const [recordCtx, setRecordCtx] = useState<RecordContext | null>(null)
   const [showAddInsurance, setShowAddInsurance] = useState(false)
   const [overrideTarget, setOverrideTarget] = useState<{ type: 'fe' | 'ins' | 'rec'; id: string; name: string; defaultAmount: number } | null>(null)
 
@@ -107,7 +106,7 @@ export default function MobilePlanningView({
   // ─── Skip/restore handlers ─────────────────────────────────────────────────
   // Shared with the desktop view via usePlanningActions so both surfaces stay
   // in lock-step (#467).
-  const actions = usePlanningActions({ plan, month, year, isVI, onRefresh, onToast })
+  const actions = usePlanningActions({ plan, isVI, onRefresh, onToast })
   const park = useParkDca({ planId: plan?.id, isVI, variant: 'sheet', onRefresh, onToast, unparkDca: actions.unparkDca })
   const handleSkipFE = actions.skipFixedExpense
   const handleRestoreFE = actions.restoreFixedExpense
@@ -127,18 +126,17 @@ export default function MobilePlanningView({
   // Open the Add-Transaction sheet in create mode, pre-filled toward a goal —
   // the goal-header "+" (log any contribution) and the recurring-bank "Saved"
   // pill (record this month's deposit at the planned amount).
-  function openContribution(entry: GoalRow, prefill?: Partial<PrefillTransaction>) {
+  function openContribution(entry: GoalRow, prefill?: Partial<PrefillTransaction>, record: RecordContext | null = null) {
     setPrefillTx(buildContributionPrefill(entry, plan?.id ?? null, prefill))
     setPrefillPending(pendingRecurringOf(entry))
+    setRecordCtx(record)
   }
 
-  // The recurring "Saved" pill: the shared probe decides between the book top-up
-  // sheet, a standalone contribution, or a matured-book steer.
-  async function recordRecurring(entry: GoalRow, item: GoalItem) {
-    const result = await actions.probeRecurringRecord(item)
-    if (result.kind === 'book-topup') setBookTopUp(result.target)
-    else if (result.kind === 'successor') setSuccessor(result.target)
-    else if (result.kind === 'contribution') openContribution(entry, { asset_type: 'bank', amount_vnd: item.amount })
+  // A recurring line's "Record": the same deposit sheet, told which saving and
+  // month it records — it starts on the linked book and says whether the line
+  // will count (#782).
+  function recordRecurring(entry: GoalRow, item: GoalItem) {
+    openContribution(entry, { asset_type: 'bank', amount_vnd: item.amount }, buildRecordContext(item, month, year, plan?.id ?? null))
   }
 
   function openBuy(item: GoalItem) {
@@ -506,6 +504,7 @@ export default function MobilePlanningView({
         prefill={prefillTx}
         depositOnly={!!prefillTx}
         pendingRecurring={prefillPending}
+        record={recordCtx}
         onClose={() => { setBuyEdit(null); setPrefillTx(null) }}
         // The buy we were editing is gone: reload the plan so the list stops
         // offering a row the server no longer has (#721).
@@ -518,19 +517,7 @@ export default function MobilePlanningView({
         }}
       />
 
-      <RecurringBookTopUpSheet
-        target={bookTopUp}
-        isVi={isVI}
-        onClose={() => setBookTopUp(null)}
-        onDone={() => { onToast(isVI ? 'Đã nạp vào sổ' : 'Topped up book'); onRefresh() }}
-      />
       {park.dialogs}
-      <SuccessorBookSheet
-        target={successor}
-        isVi={isVI}
-        onClose={() => setSuccessor(null)}
-        onDone={() => { onToast(isVI ? 'Đã mở sổ kế nhiệm' : 'Successor book opened'); onRefresh() }}
-      />
 
       <AddInsuranceMemberModal
         open={showAddInsurance}

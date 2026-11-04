@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  computeFundPricing, computeSellPreview, bankReceivedPrefill, buildBuyPayload, buildEditPayload, buildSellPayload, listTopUpBooks, defaultBookChoice, matchingRecurring, displayIsoDate,
+  computeFundPricing, computeSellPreview, bankReceivedPrefill, buildBuyPayload, buildEditPayload, buildSellPayload, listTopUpBooks, defaultBookChoice, matchingRecurring, displayIsoDate, buildRecordTopUp, recordDefaultChoice, recordCounts,
   type PreviewHolding, type TxForm,
 } from '../addTransactionModel'
 
@@ -461,5 +461,56 @@ describe('displayIsoDate', () => {
   })
   it('leaves anything that is not a plain date alone', () => {
     expect(displayIsoDate('soon')).toBe('soon')
+  })
+})
+
+// "Record" on a recurring line opens the same "Deposit into" sheet (#782). Paying
+// into the book the recurring is linked to keeps going through the recurring's
+// top-up endpoint, which adds the tranche AND files the month's fulfillment in
+// one RPC — the double-count guard. Any other target is an ordinary deposit.
+describe('recording a recurring saving', () => {
+  const rec = { savingId: 's1', name: 'PVcomBank', amount: 3_000_000, ym: '2026-11', planId: 'plan-1', linkedBookId: 'b1' }
+  const book = (id: string, status: 'open' | 'locked' | 'matured') => ({ id, name: id, rate: 5, expiryDate: null, lockDays: null, status })
+
+  describe('buildRecordTopUp', () => {
+    it('sends the linked book through the recurring top-up endpoint, month and plan included', () => {
+      expect(buildRecordTopUp(rec, 'b1', { bankAmount: '3.000.000', rate: '5.5', date: '2026-11-04' })).toEqual({
+        ok: true,
+        url: '/api/v1/recurring-savings/s1/topup',
+        payload: { book_id: 'b1', amount_vnd: 3_000_000, interest_rate: 5.5, investment_date: '2026-11-04', ym: '2026-11', plan_id: 'plan-1' },
+      })
+    })
+    it('needs an amount and the tranche\'s rate — the endpoint refuses a tranche without one', () => {
+      expect(buildRecordTopUp(rec, 'b1', { bankAmount: '', rate: '5', date: '2026-11-04' })).toEqual({ ok: false, errorKey: 'amountRequired' })
+      expect(buildRecordTopUp(rec, 'b1', { bankAmount: '3000000', rate: '', date: '2026-11-04' })).toEqual({ ok: false, errorKey: 'rateRequired' })
+    })
+    it('is not for any other target, nor for an unlinked recurring', () => {
+      expect(buildRecordTopUp(rec, 'b2', { bankAmount: '3000000', rate: '5', date: '2026-11-04' })).toBeNull()
+      expect(buildRecordTopUp(rec, 'new', { bankAmount: '3000000', rate: '5', date: '2026-11-04' })).toBeNull()
+      expect(buildRecordTopUp({ ...rec, linkedBookId: null }, 'b1', { bankAmount: '3000000', rate: '5', date: '2026-11-04' })).toBeNull()
+    })
+  })
+
+  describe('recordDefaultChoice', () => {
+    it('starts on the linked book when it can take money, whatever else is open', () => {
+      expect(recordDefaultChoice([book('b2', 'open'), book('b1', 'open')], 'b1')).toBe('b1')
+    })
+    it('chooses nothing when the linked book refuses today — the user decides, its successor is offered', () => {
+      expect(recordDefaultChoice([book('b1', 'locked'), book('b2', 'open')], 'b1')).toBe('')
+    })
+    it('falls back to the usual default when the recurring is unlinked or its book is gone', () => {
+      expect(recordDefaultChoice([book('b2', 'open')], null)).toBe('b2')
+      expect(recordDefaultChoice([book('b2', 'open')], 'gone')).toBe('b2')
+    })
+  })
+
+  describe('recordCounts', () => {
+    it('counts a top-up of the linked book, at any amount', () => {
+      expect(recordCounts(rec, 'b1', '2.500.000')).toBe(true)
+    })
+    it('counts any other deposit only at the planned amount (the month + goal + amount rule)', () => {
+      expect(recordCounts(rec, 'new', '3.000.000')).toBe(true)
+      expect(recordCounts(rec, 'b2', '2.500.000')).toBe(false)
+    })
   })
 })

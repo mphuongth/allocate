@@ -3,9 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: toastErrorMock, success: vi.fn() }) }))
 
-import { usePlanningActions, buildBuyEdit, buildContributionPrefill, pendingRecurringOf, depositToast } from '../usePlanningActions'
+import { usePlanningActions, buildBuyEdit, buildContributionPrefill, pendingRecurringOf, depositToast, buildRecordContext } from '../usePlanningActions'
 import type { GoalItem } from '@/lib/planning'
-import { addDaysIso, todayIso } from '@/lib/dates'
 
 // usePlanningActions uses no React hooks internally — it returns plain async
 // functions — so it can be exercised directly. It's the single implementation
@@ -19,7 +18,7 @@ function setup(overrides: Partial<Parameters<typeof usePlanningActions>[0]> = {}
   // usePlanningActions has no React-hook internals — it returns plain async
   // functions — so it's safe to call outside a component in this test.
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const actions = usePlanningActions({ plan, month: 6, year: 2026, isVI: false, onRefresh, onToast, ...overrides })
+  const actions = usePlanningActions({ plan, isVI: false, onRefresh, onToast, ...overrides })
   return { actions, onRefresh, onToast }
 }
 
@@ -144,57 +143,6 @@ describe('usePlanningActions (#467 shared planning actions)', () => {
     })
   })
 
-  describe('probeRecurringRecord', () => {
-    const item = { recurringId: 'r1', linkedDepositTxId: 'tx1', name: 'Save', amount: 1_000_000 } as GoalItem
-
-    it('returns a book top-up target for a live accumulating book', async () => {
-      setup()
-      mockFetch(() => ({ ok: true, body: { transaction_id: 'tx1', deposit_group_id: 'tx1', expiry_date: '2999-01-01', interest_rate: 6, notes: 'My book' } }))
-      const { actions } = setup()
-      const r = await actions.probeRecurringRecord(item)
-      expect(r.kind).toBe('book-topup')
-      if (r.kind === 'book-topup') {
-        expect(r.target.bookId).toBe('tx1')
-        expect(r.target.savingId).toBe('r1')
-        expect(r.target.ym).toBe('2026-06')
-      }
-    })
-
-    // #638 Phase 2: a book that cannot take this month is not a dead end — the
-    // month goes into the successor, prefilled from what the plan already knows.
-    it('steers a matured book to a successor, carrying the month with it', async () => {
-      const { actions } = setup()
-      mockFetch(() => ({ ok: true, body: { transaction_id: 'tx1', deposit_group_id: 'tx1', expiry_date: '2000-01-01', interest_rate: 6, notes: 'My book' } }))
-      const r = await actions.probeRecurringRecord(item)
-      expect(r.kind).toBe('successor')
-      if (r.kind === 'successor') {
-        expect(r.target).toMatchObject({ bookId: 'tx1', bookName: 'My book', amount: 1_000_000, savingId: 'r1', ym: '2026-06' })
-      }
-    })
-
-    it('steers a book inside its lock window the same way', async () => {
-      const { actions } = setup()
-      mockFetch(() => ({ ok: true, body: { transaction_id: 'tx1', deposit_group_id: 'tx1', expiry_date: addDaysIso(todayIso(), 10), top_up_lock_days: 30, interest_rate: 6 } }))
-      const r = await actions.probeRecurringRecord(item)
-      expect(r.kind).toBe('successor')
-      if (r.kind === 'successor') expect(r.target.lockDays).toBe(30)
-    })
-
-    it('a book that already handed over sends the user to the successor instead', async () => {
-      const { actions, onToast } = setup()
-      mockFetch(() => ({ ok: true, body: { transaction_id: 'tx1', deposit_group_id: 'tx1', expiry_date: '2000-01-01', successor_deposit_tx_id: 'tx2' } }))
-      const r = await actions.probeRecurringRecord(item)
-      expect(r.kind).toBe('matured')
-      expect(onToast).toHaveBeenCalled()
-    })
-
-    it('falls back to a standalone contribution when there is no linked book', async () => {
-      const { actions } = setup()
-      const r = await actions.probeRecurringRecord({ recurringId: 'r1', name: 'Save', amount: 1 } as GoalItem)
-      expect(r.kind).toBe('contribution')
-    })
-  })
-
   describe('pure builders', () => {
     it('buildBuyEdit maps an investment row to an editable fund transaction', () => {
       const inv = { transaction_id: 't1', investment_date: '2026-06-01', amount_vnd: 2_000_000, unit_price: 20_000, units: 100, fund_id: 'f1', goal_id: 'g1' }
@@ -211,6 +159,14 @@ describe('usePlanningActions (#467 shared planning actions)', () => {
       expect(buildContributionPrefill({ goalId: 'g1', isUnallocated: false }, 'plan-1', { asset_type: 'bank', amount_vnd: 500 }))
         .toMatchObject({ goal_id: 'g1', plan_id: 'plan-1', asset_type: 'bank', amount_vnd: 500 })
       expect(buildContributionPrefill({ goalId: 'unalloc', isUnallocated: true }, null).goal_id).toBeNull()
+    })
+
+    // What "Record" hands the deposit sheet: which recurring, for which month and
+    // plan, and the book it is linked to (if any).
+    it('buildRecordContext describes the recurring line for its plan month', () => {
+      const item = { recurringId: 's1', name: 'PVcomBank', amount: 3_000_000, linkedDepositTxId: 'b1' } as GoalItem
+      expect(buildRecordContext(item, 3, 2026, 'plan-1')).toEqual({ savingId: 's1', name: 'PVcomBank', amount: 3_000_000, ym: '2026-03', planId: 'plan-1', linkedBookId: 'b1' })
+      expect(buildRecordContext({ ...item, linkedDepositTxId: null }, 11, 2026, null).linkedBookId).toBeNull()
     })
 
     // The toast names the book the money went into, not a generic "logged".

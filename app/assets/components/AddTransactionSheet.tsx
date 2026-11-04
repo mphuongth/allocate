@@ -8,7 +8,8 @@ import { toast } from 'sonner'
 import DialogShell from '@/components/ui/DialogShell'
 import PendingButton from '@/components/ui/PendingButton'
 import { todayIso } from '@/lib/dates'
-import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload, listTopUpBooks, defaultBookChoice, matchingRecurring, type TxForm, type BookCandidateRow, type TopUpBook } from './addTransactionModel'
+import { formatIntVN } from '@/lib/numberFormat'
+import { computeFundPricing, computeSellPreview, buildBuyPayload, buildEditPayload, buildSellPayload, listTopUpBooks, defaultBookChoice, matchingRecurring, buildRecordTopUp, recordDefaultChoice, recordCounts, type RecordContext, type TxForm, type BookCandidateRow, type TopUpBook } from './addTransactionModel'
 import { BuyFundFields, BuyBankFields, BuyGoldFields, SellForm, DepositTargetPicker } from './addTransactionForms'
 import SuccessorBookSheet, { type SuccessorTarget } from './SuccessorBookSheet'
 
@@ -142,6 +143,13 @@ interface Props {
    * one's amount counts as it (lib/finance, lib/planning) — said before saving.
    */
   pendingRecurring?: Array<{ name: string; amount: number }>
+  /**
+   * "Record" on a recurring line: the same sheet, told which saving it records.
+   * Its linked book is the starting target and is paid through the recurring's
+   * top-up endpoint (which files the month); the sheet says whether the line
+   * will count before saving.
+   */
+  record?: RecordContext | null
 }
 
 export interface DepositSummary { amount: number; bookName: string | null }
@@ -172,7 +180,7 @@ type AssetType = typeof ASSET_TYPES[number]['v']
 // wrappers: only ever one of them is on screen.
 const TITLE_ID = 'add-transaction-title'
 
-export default function AddTransactionSheet({ open, onClose, onSaved, onStale, desktop, existing, prefill, depositOnly, pendingRecurring }: Props) {
+export default function AddTransactionSheet({ open, onClose, onSaved, onStale, desktop, existing, prefill, depositOnly, pendingRecurring, record }: Props) {
   const t = useTranslations('addTx')
   const tc = useTranslations('common')
   const isVI = useLocale() === 'vi'
@@ -373,7 +381,10 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
   // A pick the goal or date has since ruled out (no longer an open book) gives
   // way to the default, like no pick at all.
   const pickValid = bookPick === 'new' || books.some((b) => b.id === bookPick && b.status === 'open')
-  const bookChoice = booksLoading || booksError ? '' : pickValid ? bookPick : defaultBookChoice(books)
+  const bookChoice = booksLoading || booksError ? ''
+    : pickValid ? bookPick
+    : record ? recordDefaultChoice(books, record.linkedBookId)
+    : defaultBookChoice(books)
   const chosenBook = books.find((b) => b.id === bookChoice) ?? null
 
   // A different goal is a different set of books: a pick was for the old one.
@@ -393,6 +404,9 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
     setSuccessor({
       bookId: b.id, bookName: b.name, amount: Number(bankAmount.replace(/\./g, '')) || 0, date,
       rate: b.rate, lockDays: b.lockDays, sourceExpiry: b.expiryDate,
+      // Recording the month of the recurring linked to this book: the successor
+      // takes the month along (files the fulfillment, moves the link).
+      ...(record && record.linkedBookId === b.id ? { savingId: record.savingId, ym: record.ym, planId: record.planId } : {}),
     })
   }
 
@@ -551,6 +565,16 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
       return
     }
 
+    // Recording a recurring into its linked book: the recurring's own top-up.
+    if (record && asksTarget) {
+      const rt = buildRecordTopUp(record, bookChoice, { bankAmount, rate: effectiveRate, date })
+      if (rt) {
+        if (!rt.ok) { setError(t(rt.errorKey)); return }
+        await submitTransaction(rt.url, 'POST', rt.payload, { amount: Number(bankAmount.replace(/\./g, '')), bookName: chosenBook ? (chosenBook.name || null) : null })
+        return
+      }
+    }
+
     // Buy / create a new investment (POST).
     const r = buildBuyPayload(form, prefill?.plan_id ?? null)
     if (!r.ok) { setError(t(r.errorKey)); return }
@@ -572,13 +596,25 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
   // failed, or while several are open and none is chosen, there is nothing to ask.
   const bankFormReady = !booksLoading && !booksError && (bookChoice === 'new' || !!chosenBook)
   const targetBlocked = asksTarget && !bankFormReady
-  const recurringMatch = asksTarget ? matchingRecurring(pendingRecurring, bankAmount) : null
+  // Recording says whether THIS line will count; adding more says which line a
+  // same-amount deposit would count as.
+  const recurringMatch = asksTarget && !record ? matchingRecurring(pendingRecurring, bankAmount) : null
+  const recordWillCount = record && asksTarget && bankFormReady ? recordCounts(record, bookChoice, bankAmount) : null
+  const title = existing ? t('editTitle') : record ? t('recordTitle') : t('title')
 
   const formBody = (
         <div style={{ display: 'grid', gap: 16 }}>
           {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--c-neg, #dc2626)' }}>{error}</p>}
 
-          {/* Asset type */}
+          {record && (
+            <div data-testid="record-context" style={{ background: 'var(--c-card-2)', borderRadius: 10, padding: '9px 12px', fontSize: 13, color: 'var(--c-ink)' }}>
+              {t('recordContext', { name: record.name, amount: formatIntVN(String(record.amount)), month: `${record.ym.slice(5)}/${record.ym.slice(0, 4)}` })}
+            </div>
+          )}
+
+          {/* Asset type — not asked when recording a recurring: it is a bank
+              deposit toward its own goal, so neither may change. */}
+          {!record && (
           <div>
             <label style={labelStyle}>{t('assetType')}</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
@@ -607,6 +643,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
               })}
             </div>
           </div>
+          )}
 
           {/* Direction — hidden when editing (investments only) */}
           {!existing && !depositOnly && (
@@ -646,7 +683,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
 
           {/* Goal — attribution applies to Buy/Deposit; for Sell the source
               holding determines the goal (mobile design). */}
-          {dir === 'buy' && (
+          {dir === 'buy' && !record && (
             <div>
               <label style={labelStyle}>{t('goal')}</label>
               <select
@@ -701,6 +738,17 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
               lockType={Boolean(existing?.deposit_group_id)}
               inputStyle={inputStyle} labelStyle={labelStyle}
             />
+          )}
+
+          {recordWillCount != null && record && (
+            <div
+              data-testid={recordWillCount ? 'record-counts' : 'record-wont-count'}
+              style={{ background: recordWillCount ? 'var(--c-pos-tint)' : 'var(--c-warn-tint, #fef3c7)', color: recordWillCount ? 'var(--c-pos)' : 'var(--c-warn, #92400e)', borderRadius: 10, padding: '9px 12px', fontSize: 12, lineHeight: 1.45 }}
+            >
+              {recordWillCount
+                ? t('recordCounts', { name: record.name })
+                : t('recordWontCount', { name: record.name, amount: formatIntVN(String(record.amount)) })}
+            </div>
           )}
 
           {recurringMatch && (
@@ -822,7 +870,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
         }}
       >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid var(--c-line)', flexShrink: 0 }}>
-            <h3 id={TITLE_ID} style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{existing ? t('editTitle') : t('title')}</h3>
+            <h3 id={TITLE_ID} style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{title}</h3>
             <button onClick={onClose} style={{ ...iconHit, border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', color: 'var(--c-muted)' }} aria-label="Close"><X size={18} /></button>
           </div>
           <div style={{ flex: 1, padding: '18px 20px', overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain' }}>
@@ -858,7 +906,7 @@ export default function AddTransactionSheet({ open, onClose, onSaved, onStale, d
         {/* Header — pinned, sits outside the scrollable body so the title stays put */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 20px', flexShrink: 0 }}>
           <h3 id={TITLE_ID} style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--c-ink)' }}>
-            {existing ? t('editTitle') : t('title')}
+            {title}
           </h3>
           <button
             onClick={onClose}
