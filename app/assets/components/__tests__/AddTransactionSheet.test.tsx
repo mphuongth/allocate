@@ -954,3 +954,101 @@ describe('AddTransactionSheet — "Deposit into": an existing book or a new one 
     expect(screen.queryByRole('button', { name: 'withdraw' })).not.toBeInTheDocument()
   })
 })
+
+describe('AddTransactionSheet — "Record" a recurring saving in the same sheet (#782)', () => {
+  const anchor = (id: string, over: Record<string, unknown> = {}) => ({
+    transaction_id: id, goal_id: 'g1', asset_type: 'bank', transaction_type: 'investment',
+    deposit_group_id: id, successor_deposit_tx_id: null, expiry_date: '2099-01-01', top_up_lock_days: null,
+    notes: `Book ${id}`, interest_rate: 5, investment_date: '2026-01-01', ...over,
+  })
+  const fetchWith = (books: unknown[]) => vi.fn((url: string, _init?: RequestInit) => {
+    const u = String(url)
+    if (u.includes('/savings-goals')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ goals: [{ goal_id: 'g1', goal_name: 'Y Tế' }] }) })
+    if (u.includes('/investment-transactions?')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ transactions: books }) })
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+  })
+  const prefill = { asset_type: 'bank' as const, goal_id: 'g1', amount_vnd: 3_000_000, investment_date: '2026-11-04', plan_id: 'plan-1' }
+  const record = { savingId: 's1', name: 'PVcomBank', amount: 3_000_000, ym: '2026-11', planId: 'plan-1', linkedBookId: 'b1' }
+  const postTo = (m: ReturnType<typeof fetchWith>) => {
+    const c = m.mock.calls.find((x) => (x[1] as RequestInit)?.method === 'POST')
+    return c ? { url: String(c[0]), body: JSON.parse(String((c[1] as RequestInit).body)) } : undefined
+  }
+  const choice = (name: RegExp | string) => screen.getByRole('radio', { name })
+
+  it('says which recurring it records, starts on the linked book, and files the month through the recurring\'s top-up', async () => {
+    const m = fetchWith([anchor('b2'), anchor('b1')])
+    vi.stubGlobal('fetch', m)
+    const onSaved = vi.fn()
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={onSaved} prefill={prefill} depositOnly record={record} />)
+
+    expect(screen.getByRole('dialog', { name: 'recordTitle' })).toBeInTheDocument()
+    expect(screen.getByTestId('record-context')).toBeInTheDocument()
+    await waitFor(() => expect(choice(/Book b1/)).toBeChecked())
+    expect(screen.getByTestId('record-counts')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('addtx-submit'))
+    await waitFor(() => expect(postTo(m)).toBeTruthy())
+    expect(postTo(m)).toEqual({
+      url: '/api/v1/recurring-savings/s1/topup',
+      body: { book_id: 'b1', amount_vnd: 3_000_000, interest_rate: 5, investment_date: '2026-11-04', ym: '2026-11', plan_id: 'plan-1' },
+    })
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith({ amount: 3_000_000, bookName: 'Book b1' }))
+  })
+
+  // A recurring saving is a bank deposit toward its own goal: recording it into
+  // a fund, gold or another goal could only file the month in the wrong place.
+  it('asks neither the asset type nor the goal when recording a recurring', async () => {
+    vi.stubGlobal('fetch', fetchWith([anchor('b1')]))
+    render(<AddTransactionSheet open onClose={vi.fn()} prefill={prefill} depositOnly record={record} />)
+    await waitFor(() => expect(choice(/Book b1/)).toBeChecked())
+    expect(screen.queryByText('Gold')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('addtx-goal-select')).not.toBeInTheDocument()
+  })
+
+  it('records into another book as an ordinary top-up, and warns when the amount means the line will not count', async () => {
+    const m = fetchWith([anchor('b2'), anchor('b1')])
+    vi.stubGlobal('fetch', m)
+    render(<AddTransactionSheet open onClose={vi.fn()} onSaved={vi.fn()} prefill={prefill} depositOnly record={record} />)
+
+    await waitFor(() => expect(choice(/Book b1/)).toBeChecked())
+    fireEvent.click(choice(/Book b2/))
+    fireEvent.change(screen.getByPlaceholderText('10.000.000'), { target: { value: '2500000' } })
+    expect(screen.getByTestId('record-wont-count')).toBeInTheDocument()
+    expect(screen.queryByTestId('recurring-match')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('addtx-submit'))
+    await waitFor(() => expect(postTo(m)).toBeTruthy())
+    expect(postTo(m)!.url).toBe('/api/v1/investment-transactions')
+    expect(postTo(m)!.body).toMatchObject({ tops_up_deposit_id: 'b2', amount_vnd: 2_500_000 })
+  })
+
+  it('will not file a tranche without its rate', async () => {
+    const m = fetchWith([anchor('b1', { interest_rate: null })])
+    vi.stubGlobal('fetch', m)
+    render(<AddTransactionSheet open onClose={vi.fn()} prefill={prefill} depositOnly record={record} />)
+
+    await waitFor(() => expect(choice(/Book b1/)).toBeChecked())
+    fireEvent.click(screen.getByTestId('addtx-submit'))
+    expect(await screen.findByText('rateRequired')).toBeInTheDocument()
+    expect(postTo(m)).toBeUndefined()
+  })
+
+  it('leaves the choice open when the linked book refuses today, and its successor takes the month along', async () => {
+    const m = fetchWith([anchor('b1', { expiry_date: '2026-11-20', top_up_lock_days: 30 }), anchor('b2')])
+    vi.stubGlobal('fetch', m)
+    render(<AddTransactionSheet open onClose={vi.fn()} prefill={prefill} depositOnly record={record} />)
+
+    await waitFor(() => expect(choice(/Book b1/)).toBeDisabled())
+    expect(choice(/Book b2/)).not.toBeChecked()
+    expect(screen.getByTestId('addtx-submit')).toBeDisabled()
+
+    fireEvent.click(screen.getByTestId('book-successor-b1'))
+    const sheet = await screen.findByTestId('successor-modal')
+    fireEvent.change(within(sheet).getByTestId('successor-expiry'), { target: { value: '2027-06-01' } })
+    fireEvent.change(within(sheet).getByTestId('successor-rate'), { target: { value: '4,2' } })
+    fireEvent.click(within(sheet).getByTestId('successor-submit'))
+    await waitFor(() => expect(postTo(m)).toBeTruthy())
+    expect(postTo(m)!.url).toBe('/api/v1/investment-transactions/b1/successor')
+    expect(postTo(m)!.body).toMatchObject({ saving_id: 's1', ym: '2026-11', plan_id: 'plan-1', amount_vnd: 3_000_000 })
+  })
+})

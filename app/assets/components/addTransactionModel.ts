@@ -468,3 +468,51 @@ export function displayIsoDate(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
 }
+
+/** "Record" on a recurring line: which saving, for which plan month, linked where. */
+export interface RecordContext {
+  savingId: string
+  name: string
+  amount: number
+  ym: string
+  planId: string | null
+  linkedBookId: string | null
+}
+
+// Paying the month into the book the recurring is linked to goes through the
+// recurring's own top-up endpoint, which adds the tranche AND files the month's
+// fulfillment in one RPC — so the month counts once, at whatever amount. Null
+// for any other target: that is an ordinary deposit (buildBuyPayload).
+export function buildRecordTopUp(
+  rec: RecordContext,
+  chosen: string,
+  form: { bankAmount: string; rate: string; date: string },
+): { ok: true; url: string; payload: Record<string, unknown> } | { ok: false; errorKey: string } | null {
+  if (!rec.linkedBookId || chosen !== rec.linkedBookId) return null
+  const amt = Number(form.bankAmount.replace(/\./g, ''))
+  if (!amt) return { ok: false, errorKey: 'amountRequired' }
+  // The endpoint refuses a tranche without its own rate (a book values each on it).
+  if (form.rate === '') return { ok: false, errorKey: 'rateRequired' }
+  return {
+    ok: true,
+    url: `/api/v1/recurring-savings/${rec.savingId}/topup`,
+    payload: { book_id: rec.linkedBookId, amount_vnd: amt, interest_rate: Number(form.rate), investment_date: form.date, ym: rec.ym, plan_id: rec.planId },
+  }
+}
+
+// Where "Record" starts: the linked book when it takes money today. When it does
+// not, nothing — another open book would quietly move the month out of the book
+// the plan names; the user sees why, and the successor that carries the month.
+export function recordDefaultChoice(books: TopUpBook[], linkedBookId: string | null): string {
+  const linked = linkedBookId ? books.find((b) => b.id === linkedBookId) : undefined
+  if (linked) return linked.status === 'open' ? linked.id : ''
+  return defaultBookChoice(books)
+}
+
+// Whether saving this marks the recurring line done this month: a top-up of its
+// linked book always does (a fulfillment is filed); any other deposit only at the
+// planned amount (the month + goal + amount rule in lib/finance, lib/planning).
+export function recordCounts(rec: RecordContext, chosen: string, amount: string): boolean {
+  if (rec.linkedBookId && chosen === rec.linkedBookId) return true
+  return Number(amount.replace(/\./g, '')) === rec.amount
+}

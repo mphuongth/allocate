@@ -3,18 +3,10 @@ import { todayIso } from '@/lib/dates'
 import type { GoalItem, GoalRow } from '@/lib/planning'
 import type { DepositSummary, EditableTransaction, PrefillTransaction } from '@/app/assets/components/AddTransactionSheet'
 import { fmt } from '@/lib/formatters'
-import type { BookTopUpTarget } from '@/app/assets/components/RecurringBookTopUpSheet'
-import type { SuccessorTarget } from '@/app/assets/components/SuccessorBookSheet'
-import { classifyAccumulatingTopUp } from '@/lib/accumulatingTopUp'
+import type { RecordContext } from '@/app/assets/components/addTransactionModel'
 import type { MonthlyPlan, FixedExpense, InsuranceMember, FundInvestment } from '@/features/planning/contracts'
 
 export type OverrideType = 'fe' | 'rec' | 'ins'
-
-export type RecordRecurringResult =
-  | { kind: 'matured' }
-  | { kind: 'book-topup'; target: BookTopUpTarget }
-  | { kind: 'successor'; target: SuccessorTarget }
-  | { kind: 'contribution' }
 
 // Build the Add-Transaction edit payload for recording a planned DCA buy. Pure —
 // no state, so both views share it and drive their own editor state.
@@ -76,18 +68,29 @@ export function depositToast(summary: DepositSummary | undefined, isVI: boolean)
   return isVI ? 'Đã ghi nhận đóng góp' : 'Contribution logged'
 }
 
+// What "Record" on a recurring line hands the deposit sheet: the saving, the plan
+// month it records, and the book it is linked to. The sheet decides from the
+// goal's books what can be paid into — no separate read of the linked book.
+export function buildRecordContext(item: GoalItem, month: number, year: number, planId: string | null): RecordContext {
+  return {
+    savingId: item.recurringId ?? '',
+    name: item.name,
+    amount: item.amount,
+    ym: `${year}-${String(month).padStart(2, '0')}`,
+    planId,
+    linkedBookId: item.linkedDepositTxId ?? null,
+  }
+}
+
 export interface PlanningActionsCtx {
   plan: MonthlyPlan | null
-  month: number
-  year: number
   isVI: boolean
   onRefresh: () => void
   onToast: (msg: string) => void
 }
 
 // The single implementation of the planning page's plan-mutation actions —
-// skip/restore for each line type, override writes, and the record-recurring
-// probe. Previously copy-pasted (and subtly diverged) across the mobile and
+// skip/restore for each line type and override writes. Previously copy-pasted (and subtly diverged) across the mobile and
 // desktop views; now both call this so a fix lands on both surfaces (#467).
 //
 // Reconciled divergences vs the old duplicated handlers:
@@ -96,7 +99,7 @@ export interface PlanningActionsCtx {
 //  - restoring an insurance member also clears any per-plan insurance override
 //    (desktop behaviour; mobile used to leave a stale override behind).
 export function usePlanningActions(ctx: PlanningActionsCtx) {
-  const { plan, month, year, isVI, onRefresh, onToast } = ctx
+  const { plan, isVI, onRefresh, onToast } = ctx
   const failMsg = isVI ? 'Có lỗi, vui lòng thử lại' : 'Something went wrong — please try again'
 
   function fail() { toast.error(failMsg) }
@@ -226,64 +229,11 @@ export function usePlanningActions(ctx: PlanningActionsCtx) {
     return true
   }
 
-  // The recurring "Saved" pill: if the recurring is linked to an accumulating
-  // book, it must open the top-up sheet (tranche + fulfillment) — unless the book
-  // has matured, in which case steer the user to handle maturity first. Otherwise
-  // log a standalone contribution. Returns what the caller should open.
-  async function probeRecurringRecord(item: GoalItem): Promise<RecordRecurringResult> {
-    if (item.linkedDepositTxId && item.recurringId && plan) {
-      try {
-        const res = await fetch(`/api/v1/investment-transactions/${item.linkedDepositTxId}`)
-        if (res.ok) {
-          const dep = await res.json()
-          const isBookAnchor = dep.deposit_group_id && dep.deposit_group_id === dep.transaction_id
-          if (isBookAnchor) {
-            const date = todayIso()
-            // A book that will not take this month's contribution is not a dead
-            // end: the answer is the successor book, prefilled with the month
-            // that could not go in (#638). A book that already has one is simply
-            // done — the contribution belongs to whatever it was replaced by.
-            const eligibility = classifyAccumulatingTopUp({ topUpDate: date, expiryDate: dep.expiry_date ?? null, lockDays: dep.top_up_lock_days ?? null })
-            if (eligibility.status !== 'allowed') {
-              if (dep.successor_deposit_tx_id) {
-                onToast(isVI ? 'Sổ này đã có sổ kế nhiệm — hãy ghi khoản này vào sổ đó.' : 'This book already has a successor — record this into that one.')
-                return { kind: 'matured' }
-              }
-              return {
-                kind: 'successor',
-                target: {
-                  bookId: dep.transaction_id,
-                  bookName: dep.notes || (isVI ? 'Sổ ngân hàng' : 'Bank deposit'),
-                  amount: item.amount, date, rate: dep.interest_rate ?? null,
-                  lockDays: dep.top_up_lock_days ?? null,
-                  sourceExpiry: dep.expiry_date ?? null,
-                  savingId: item.recurringId,
-                  ym: `${year}-${String(month).padStart(2, '0')}`,
-                  planId: plan.id,
-                },
-              }
-            }
-            return {
-              kind: 'book-topup',
-              target: {
-                savingId: item.recurringId, bookId: dep.transaction_id,
-                bookName: dep.notes || (isVI ? 'Sổ ngân hàng' : 'Bank deposit'),
-                ym: `${year}-${String(month).padStart(2, '0')}`, planId: plan.id,
-                amount: item.amount, rate: dep.interest_rate ?? null,
-              },
-            }
-          }
-        }
-      } catch { /* fall through to the standard contribution */ }
-    }
-    return { kind: 'contribution' }
-  }
-
   return {
     skipFixedExpense, restoreFixedExpense,
     skipInsurance, restoreInsurance,
     skipRecurring, restoreRecurring,
     skipDca, restoreDca, unparkDca,
-    saveOverride, probeRecurringRecord,
+    saveOverride,
   }
 }
