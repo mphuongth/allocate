@@ -135,104 +135,113 @@ function GoalItemRow({ item, isVI, onSkip, onRestore, onOverride, onEdit, onReco
     setMenuOpen(true)
   }
 
+  // The line's actions, on its second line: a recurring's "Record" (or "Saved")
+  // and menu, or a DCA fund's "Buy" / "Bought" / "Parked" / "Restore" and menu.
+  const actions = item.isRecurring ? (
+    <>
+      {recorded ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-pos)', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
+          <Check size={13} />{isVI ? 'Đã gửi' : 'Saved'}
+        </span>
+      ) : !skipped && (
+        <button onClick={onRecordDeposit} aria-label={isVI ? 'Ghi nhận đã gửi' : 'Record deposit'} style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap' }}>
+          <Plus size={12} strokeWidth={2.4} />{isVI ? 'Ghi nhận' : 'Record'}
+        </button>
+      )}
+      <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Saving actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <MoreHorizontal size={14} />
+      </button>
+      {menuOpen && (
+        <>
+          <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+          <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+            {skipped ? (
+              <MenuItem icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore(); setMenuOpen(false) }} noBorder />
+            ) : (
+              <>
+                <MenuItem icon={<Plus size={13} />} label={isVI ? 'Ghi nhận đã gửi tháng này' : 'Record deposit this month'} onClick={() => { onRecordDeposit(); setMenuOpen(false) }} />
+                <MenuItem icon={<TrendingUp size={13} />} label={isVI ? 'Tiết kiệm thêm tháng này' : 'Save more this month'} onClick={() => { onOverride(); setMenuOpen(false) }} />
+                <MenuItem icon={<EditIcon size={13} />} label={isVI ? 'Sửa kế hoạch định kỳ' : 'Edit recurring plan'} onClick={() => { onEdit(); setMenuOpen(false) }} />
+                {item.overridden && <MenuItem icon={<RefreshCw size={13} />} label={isVI ? 'Khôi phục mặc định' : 'Restore default'} onClick={() => { onRestore(); setMenuOpen(false) }} />}
+                <MenuItem icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onSkip(); setMenuOpen(false) }} danger noBorder />
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  ) : item.isFundDca && item.parkedIn ? (
+    <>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-navy)', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
+        <PiggyBank size={13} />{isVI ? 'Đã gửi TK' : 'Parked'}
+      </span>
+      <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Parked DCA actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <MoreHorizontal size={14} />
+      </button>
+      {menuOpen && (
+        <>
+          <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+          <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+            <MenuItem icon={<X size={13} />} label={isVI ? 'Huỷ gửi tiết kiệm (xoá sổ)' : 'Undo — delete the deposit'} onClick={() => { onDcaUnpark(); setMenuOpen(false) }} danger noBorder />
+          </div>
+        </>
+      )}
+    </>
+  ) : item.isFundDca && skipped ? (
+    <button onClick={onDcaRestore} aria-label="Restore DCA" style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+      <Check size={12} />{isVI ? 'Khôi phục' : 'Restore'}
+    </button>
+  ) : item.isFundDca && recorded ? (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-pos)', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
+      <Check size={13} />{isVI ? 'Đã mua' : 'Bought'}
+    </span>
+  ) : item.isFundDca ? (
+    <>
+      <button onClick={onRecordBuy} aria-label={isVI ? 'Ghi nhận mua' : 'Record buy'} style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap' }}>
+        <Plus size={12} strokeWidth={2.4} />{isVI ? 'Mua' : 'Buy'}
+      </button>
+      <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="DCA actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <MoreHorizontal size={14} />
+      </button>
+      {menuOpen && (
+        <>
+          <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
+          <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
+            <MenuItem icon={<Plus size={13} />} label={isVI ? 'Ghi nhận mua tháng này' : 'Record buy this month'} onClick={() => { onRecordBuy(); setMenuOpen(false) }} />
+            <MenuItem icon={<PiggyBank size={13} />} label={isVI ? 'Gửi tiết kiệm thay' : 'Park in a deposit instead'} onClick={() => { onDcaPark(); setMenuOpen(false) }} />
+            <MenuItem icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onDcaSkip(); setMenuOpen(false) }} danger noBorder />
+          </div>
+        </>
+      )}
+    </>
+  ) : null
+
   return (
     <div style={{
-      padding: '8px 14px 8px 56px', display: 'flex', alignItems: 'center', gap: 8,
+      padding: '8px 14px 8px 56px',
       borderTop: '1px solid var(--c-line)', background: 'var(--c-card)', opacity: skipped ? 0.55 : 1,
     }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)', textDecoration: skipped ? 'line-through' : 'none' }}>
+      {/* Two lines, neither of which wraps: the name with its amount, then the
+          sublabel with the actions. One row of all five cut the name to "P…"
+          and wrapped the sublabel word by word on a 360–390px phone. */}
+      <div data-row="head" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--c-ink)', textDecoration: skipped ? 'line-through' : 'none' }}>
           {item.name}
         </div>
-        <div style={{ fontSize: 10, color: item.overridden ? 'var(--c-navy)' : recorded ? 'var(--c-pos)' : 'var(--c-muted)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: 'var(--c-muted)', whiteSpace: 'nowrap', flexShrink: 0, textDecoration: skipped ? 'line-through' : 'none' }}>
+          {fmt(item.amount)}
+        </span>
+      </div>
+      <div data-row="foot" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 10, color: item.overridden ? 'var(--c-navy)' : recorded ? 'var(--c-pos)' : 'var(--c-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {sublabel}
           {item.isDCA && (
-            <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', fontWeight: 600 }}>DCA</span>
+            <span style={{ marginLeft: 4, fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--c-navy-tint)', color: 'var(--c-navy)', fontWeight: 600 }}>DCA</span>
           )}
-          <LinkLostBadge item={item} isVI={isVI} />
+          {item.linkLost && <span style={{ marginLeft: 4 }}><LinkLostBadge item={item} isVI={isVI} /></span>}
         </div>
+        {actions}
       </div>
-      <span style={{ fontSize: 12, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: 'var(--c-muted)', textDecoration: skipped ? 'line-through' : 'none' }}>
-        {fmt(item.amount)}
-      </span>
-      {item.isRecurring ? (
-        <>
-          {recorded ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-pos)', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
-              <Check size={13} />{isVI ? 'Đã gửi' : 'Saved'}
-            </span>
-          ) : !skipped && (
-            <button onClick={onRecordDeposit} aria-label={isVI ? 'Ghi nhận đã gửi' : 'Record deposit'} style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap' }}>
-              <Plus size={12} strokeWidth={2.4} />{isVI ? 'Ghi nhận' : 'Record'}
-            </button>
-          )}
-          <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Saving actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <MoreHorizontal size={14} />
-          </button>
-          {menuOpen && (
-            <>
-              <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
-              <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
-                {skipped ? (
-                  <MenuItem icon={<Check size={13} />} label={isVI ? 'Bao gồm tháng này' : 'Include this month'} onClick={() => { onRestore(); setMenuOpen(false) }} noBorder />
-                ) : (
-                  <>
-                    <MenuItem icon={<Plus size={13} />} label={isVI ? 'Ghi nhận đã gửi tháng này' : 'Record deposit this month'} onClick={() => { onRecordDeposit(); setMenuOpen(false) }} />
-                    <MenuItem icon={<TrendingUp size={13} />} label={isVI ? 'Tiết kiệm thêm tháng này' : 'Save more this month'} onClick={() => { onOverride(); setMenuOpen(false) }} />
-                    <MenuItem icon={<EditIcon size={13} />} label={isVI ? 'Sửa kế hoạch định kỳ' : 'Edit recurring plan'} onClick={() => { onEdit(); setMenuOpen(false) }} />
-                    {item.overridden && <MenuItem icon={<RefreshCw size={13} />} label={isVI ? 'Khôi phục mặc định' : 'Restore default'} onClick={() => { onRestore(); setMenuOpen(false) }} />}
-                    <MenuItem icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onSkip(); setMenuOpen(false) }} danger noBorder />
-                  </>
-                )}
-              </div>
-            </>
-          )}
-        </>
-      ) : item.isFundDca && item.parkedIn ? (
-        <>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-navy)', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
-            <PiggyBank size={13} />{isVI ? 'Đã gửi TK' : 'Parked'}
-          </span>
-          <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="Parked DCA actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <MoreHorizontal size={14} />
-          </button>
-          {menuOpen && (
-            <>
-              <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
-              <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
-                <MenuItem icon={<X size={13} />} label={isVI ? 'Huỷ gửi tiết kiệm (xoá sổ)' : 'Undo — delete the deposit'} onClick={() => { onDcaUnpark(); setMenuOpen(false) }} danger noBorder />
-              </div>
-            </>
-          )}
-        </>
-      ) : item.isFundDca && skipped ? (
-        <button onClick={onDcaRestore} aria-label="Restore DCA" style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-muted)', background: 'transparent', border: '1px solid var(--c-line)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          <Check size={12} />{isVI ? 'Khôi phục' : 'Restore'}
-        </button>
-      ) : item.isFundDca && recorded ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--c-pos)', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
-          <Check size={13} />{isVI ? 'Đã mua' : 'Bought'}
-        </span>
-      ) : item.isFundDca ? (
-        <>
-          <button onClick={onRecordBuy} aria-label={isVI ? 'Ghi nhận mua' : 'Record buy'} style={{ padding: '4px 9px', fontSize: 11, fontWeight: 600, color: 'var(--c-pos)', background: 'var(--c-pos-tint)', border: '1px solid transparent', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0, whiteSpace: 'nowrap' }}>
-            <Plus size={12} strokeWidth={2.4} />{isVI ? 'Mua' : 'Buy'}
-          </button>
-          <button ref={btnRef} onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())} aria-label="DCA actions" aria-haspopup="menu" aria-expanded={menuOpen} style={{ minWidth: 44, minHeight: 44, border: 'none', background: 'transparent', cursor: 'pointer', borderRadius: 6, color: 'var(--c-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <MoreHorizontal size={14} />
-          </button>
-          {menuOpen && (
-            <>
-              <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 5 }} />
-              <div role="menu" style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 6, background: 'var(--c-card)', border: '1px solid var(--c-line)', borderRadius: 8, boxShadow: '0 6px 20px rgba(15,23,42,0.12)', minWidth: 200, overflow: 'hidden' }}>
-                <MenuItem icon={<Plus size={13} />} label={isVI ? 'Ghi nhận mua tháng này' : 'Record buy this month'} onClick={() => { onRecordBuy(); setMenuOpen(false) }} />
-                <MenuItem icon={<PiggyBank size={13} />} label={isVI ? 'Gửi tiết kiệm thay' : 'Park in a deposit instead'} onClick={() => { onDcaPark(); setMenuOpen(false) }} />
-                <MenuItem icon={<X size={13} />} label={isVI ? 'Bỏ qua tháng này' : 'Skip this month'} onClick={() => { onDcaSkip(); setMenuOpen(false) }} danger noBorder />
-              </div>
-            </>
-          )}
-        </>
-      ) : null}
     </div>
   )
 }

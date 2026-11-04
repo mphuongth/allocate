@@ -555,6 +555,32 @@ describe('MobilePlanningView — recurring savings in By goal', () => {
     }
   })
 
+  // On a 360–390px phone the line put name, sublabel, amount, "Record" and "⋯"
+  // in one row: the name was cut to "P…" and the sublabel wrapped word by word.
+  // The name and amount now share the first line, the sublabel and actions the
+  // second, and neither line ever wraps.
+  it('gives a recurring line\'s name the first line with its amount, and the actions the second', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    await userEvent.click(screen.getByText('Retirement'))
+    const name = screen.getByText('VCB Savings')
+    const head = name.closest('[data-row="head"]') as HTMLElement
+    expect(head).not.toBeNull()
+    expect(within(head).getByText(/2[.,]?000[.,]?000/)).toBeInTheDocument()
+    expect(within(head).queryByRole('button', { name: /Record deposit/i })).not.toBeInTheDocument()
+    const foot = screen.getByRole('button', { name: /Record deposit/i }).closest('[data-row="foot"]') as HTMLElement
+    expect(foot).not.toBeNull()
+    expect(within(foot).getByRole('button', { name: 'Saving actions' })).toBeInTheDocument()
+  })
+
+  it('keeps a recurring line\'s name and sublabel on one line each, cut with "…"', async () => {
+    render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
+    await userEvent.click(screen.getByText('Retirement'))
+    const name = screen.getByText('VCB Savings')
+    expect(name).toHaveStyle({ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' })
+    const sublabel = (screen.getByRole('button', { name: /Record deposit/i }).closest('[data-row="foot"]') as HTMLElement).firstElementChild as HTMLElement
+    expect(sublabel).toHaveStyle({ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', minWidth: '0' })
+  })
+
   it('labels the pending action "Record", not the done state\'s "Saved"', async () => {
     render(<MobilePlanningView {...defaultProps} plan={basePlan} recurringSavings={recurringSavings} />)
     await userEvent.click(screen.getByText('Retirement'))
