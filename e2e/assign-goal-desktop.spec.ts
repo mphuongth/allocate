@@ -80,7 +80,9 @@ test.describe('Desktop assign-to-goal two-step modal (PR #199)', () => {
     const sheet = page.getByTestId('action-sheet')
     await expect(sheet.locator('h3').filter({ hasText: /assign to goal|gán vào mục tiêu/i })).toBeVisible({ timeout: 5_000 })
 
-    await sheet.getByRole('button', { name: /back|quay lại/i }).click()
+    // Anchored: the goal row's name ("E2E Back Button Goal …") also contains "back",
+    // so an unanchored match is a strict-mode violation once the goal list has loaded.
+    await sheet.getByRole('button', { name: /^(back|quay lại)$/i }).click()
 
     await expect(sheet.locator('h3').filter({ hasText: /options|tùy chọn/i })).toBeVisible({ timeout: 5_000 })
   })
