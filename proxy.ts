@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { buildContentSecurityPolicy, localSupabaseConnectExtra } from '@/lib/csp'
 import { safeNextPath } from '@/lib/nextPath'
+import { getSessionUser } from '@/lib/sessionUser'
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -64,9 +65,19 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Verified from the token's signature, not by asking Supabase Auth — this runs
+  // ahead of every page, and that round-trip took seconds whenever the Auth
+  // service had sat idle. An expired token is still refreshed on the way (that
+  // one does go to Auth, once an hour) and the new cookie lands via setAll above.
+  //
+  // The two doors are the exception, and do ask Auth. A session ended elsewhere
+  // leaves a token that verifies until it expires; the session-ended dialog
+  // sends its holder here, and believing the signature would bounce them back
+  // into an app whose every API call 401s. These pages are visited rarely
+  // enough that the round-trip costs nothing that matters.
+  const user = isAuthEntry
+    ? (await supabase.auth.getUser()).data.user
+    : await getSessionUser(supabase)
 
   if (isAuthEntry) {
     // Signed out: the form is exactly what they came for.

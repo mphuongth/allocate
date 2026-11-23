@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
+import { getSessionUser } from '@/lib/sessionUser'
 import DashboardClient from '@/app/assets/DashboardClient'
 import { getTranslations } from 'next-intl/server'
 import type { Metadata } from 'next'
@@ -11,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getSessionUser(supabase)
   if (!user) redirect('/auth/login')
   return <DashboardClient userId={user.id} />
 }
