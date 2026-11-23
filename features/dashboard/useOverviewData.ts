@@ -48,10 +48,12 @@ export interface OverviewState {
  * to spread across five effects and eight useState calls.
  *
  * Cache-first: a fresh cached snapshot paints immediately with no request.
- * `force` skips the cache. A load with data already on screen refreshes
- * silently — the full skeleton only ever appears on first paint.
+ * `force` skips that shortcut and always asks the server. Either way, a
+ * snapshot too old to trust still paints while the request is in flight, so
+ * the full skeleton only appears when there is no snapshot at all; a load with
+ * data already on screen refreshes silently.
  *
- * The three PWA-only behaviors (bust a >30s-old cache on launch, refetch when
+ * The three PWA-only behaviors (refetch on launch when the last fetch is >30s old, refetch when
  * foregrounded after >30s, pull-to-refresh) are no-ops in a browser tab.
  *
  * @param errorText Localised fallback message for a load that fails with no
@@ -79,8 +81,22 @@ export function useOverviewData(userId: string, errorText: string): OverviewStat
       setLoading(false)
       return
     }
-    // Only show the skeleton on initial load — if data is already visible,
-    // refresh silently with the number-refresh pulse instead.
+    // Nothing on screen yet, and a request is about to start: paint the last
+    // snapshot first, however old. The first load after the app has sat idle is
+    // the slowest one there is (measured at 5–10 s on production against ~0.2 s
+    // warm), and yesterday's figures under the refresh pulse beat a skeleton for
+    // that long. Whether to refetch is still decided above and by `force` — this
+    // only changes what is shown while the answer is on its way.
+    if (!hasDataRef.current) {
+      const lastSnapshot = getCachedOverview(userId, { allowStale: true })
+      if (lastSnapshot) {
+        setData(lastSnapshot)
+        hasDataRef.current = true
+        setLoading(false)
+      }
+    }
+    // The skeleton is for a first load with no snapshot at all — once data is
+    // visible, refresh silently with the number-refresh pulse instead.
     if (!hasDataRef.current) setLoading(true)
     else setRefreshing(true)
     setError('')
