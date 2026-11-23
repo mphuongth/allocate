@@ -120,6 +120,11 @@ export function useSettingsController({ initials, displayName }: {
       toast.error(t('saveFailed'))
       return false
     }
+    // The server-rendered shell reads the name from the signed access token
+    // (lib/sessionUser), which updateUser leaves untouched — mint a new one so
+    // the next full load shows the new name. Best effort: the name is already
+    // stored, and a failure here only delays the shell until the hourly refresh.
+    try { await supabase.auth.refreshSession() } catch { /* see above */ }
     setLocalDisplayName(name)
     // Without this push the sidebar avatar/name stays stale until a refresh.
     setUserName(name)

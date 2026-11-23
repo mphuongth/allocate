@@ -9,9 +9,10 @@ import { useSettingsController } from '../useSettingsController'
 // Testing the shared controller is what proves both viewports now behave the
 // same, since what remains in each view is modals vs sheets.
 
-const { signOutMock, updateUserMock, setUserNameMock, toastErrorMock, setThemeMock, refreshMock, pushMock } = vi.hoisted(() => ({
+const { signOutMock, updateUserMock, refreshSessionMock, setUserNameMock, toastErrorMock, setThemeMock, refreshMock, pushMock } = vi.hoisted(() => ({
   signOutMock: vi.fn().mockResolvedValue({ error: null }),
   updateUserMock: vi.fn().mockResolvedValue({ data: { user: {} }, error: null }),
+  refreshSessionMock: vi.fn().mockResolvedValue({ data: { session: {} }, error: null }),
   setUserNameMock: vi.fn(),
   toastErrorMock: vi.fn(),
   setThemeMock: vi.fn(),
@@ -39,7 +40,7 @@ vi.mock('@/components/layout/ThemeProvider', () => ({
 }))
 
 vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: () => ({ auth: { signOut: signOutMock, updateUser: updateUserMock } }),
+  createBrowserClient: () => ({ auth: { signOut: signOutMock, updateUser: updateUserMock, refreshSession: refreshSessionMock } }),
 }))
 
 const { markSelfSignOutMock, cancelSelfSignOutMock } = vi.hoisted(() => ({
@@ -122,6 +123,40 @@ describe('useSettingsController — profile', () => {
     expect(setUserNameMock).toHaveBeenCalledWith('Minh Phuong')
     expect(result.current.displayName).toBe('Minh Phuong')
     expect(result.current.initials).toBe('MP')
+  })
+
+  // The server-rendered shell reads the name from the signed access token
+  // (lib/sessionUser), and updateUser leaves that token as it was. Without a
+  // new one the next full load would show the old name until the hourly refresh.
+  it('mints a new session after saving, so the server sees the new name', async () => {
+    refreshSessionMock.mockClear()
+    const { result } = await mounted()
+
+    await act(async () => { await result.current.saveProfile('Minh Phuong') })
+
+    expect(refreshSessionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('still reports the save as done when minting the new session fails', async () => {
+    // The name is stored; only the shell's copy lags. That is not a failed save.
+    refreshSessionMock.mockRejectedValueOnce(new Error('network down'))
+    const { result } = await mounted()
+
+    let ok: boolean | undefined
+    await act(async () => { ok = await result.current.saveProfile('Minh Phuong') })
+
+    expect(ok).toBe(true)
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('does not mint a new session for a save that failed', async () => {
+    refreshSessionMock.mockClear()
+    updateUserMock.mockResolvedValueOnce({ data: { user: null }, error: { message: 'nope' } })
+    const { result } = await mounted()
+
+    await act(async () => { await result.current.saveProfile('Broken') })
+
+    expect(refreshSessionMock).not.toHaveBeenCalled()
   })
 
   it('reports failure and leaves the name untouched when the update errors', async () => {

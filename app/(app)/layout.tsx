@@ -1,17 +1,18 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
+import { getSessionUser } from '@/lib/sessionUser'
 import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout'
 import AddTransactionOverlay from './AddTransactionOverlay'
 import { buildCacheOwnerScript } from '@/lib/clientCache'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // Read from the signed token (lib/sessionUser) — the proxy has already let
+  // this request through on the same check, and asking Supabase Auth again here
+  // only added a network round-trip ahead of the first byte of HTML.
+  const user = await getSessionUser(supabase)
   if (!user) redirect('/auth/login')
-
-  const meta = user.user_metadata ?? {}
-  const displayName = (meta.display_name || meta.full_name) as string | undefined
   // Per-request CSP nonce set by middleware; undefined in dev, where React omits
   // the attribute and the inline script runs unrestricted.
   const nonce = (await headers()).get('x-nonce') ?? undefined
@@ -26,8 +27,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <script nonce={nonce} dangerouslySetInnerHTML={{ __html: buildCacheOwnerScript(user.id) }} />
       <AuthenticatedLayout
         userId={user.id}
-        email={user.email ?? ''}
-        displayName={displayName}
+        email={user.email}
+        displayName={user.displayName}
         overlays={<AddTransactionOverlay />}
       >
         {children}
