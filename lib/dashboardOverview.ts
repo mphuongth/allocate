@@ -15,6 +15,7 @@ import { buildWithdrawalMaps } from '@/lib/withdrawalProgress'
 import { heldForMergeContributions } from '@/lib/heldForMerge'
 import { valueNonFundHolding } from '@/lib/depositValuation'
 import { persistSnapshot, shouldWriteSnapshot } from '@/lib/snapshots'
+import { createServerTiming, type ServerTiming } from '@/lib/serverTiming'
 import { todayIso } from '@/lib/dates'
 import { isUnitEstimateDue } from '@/lib/depositMove'
 
@@ -100,6 +101,9 @@ function buildNonFund(
 export async function buildDashboardOverview(
   supabase: SupabaseServerClient,
   userId: string,
+  // Each awaited step is recorded here so the route can report where a slow
+  // load spent its time. Callers that don't report it (the PDF route) omit it.
+  timing: ServerTiming = createServerTiming(),
 ): Promise<OverviewResult> {
   // The business day (Asia/Ho_Chi_Minh, see lib/dates) — used both to read the
   // existing snapshot below and to upsert it at the end. Derived in that zone,
@@ -113,7 +117,7 @@ export async function buildDashboardOverview(
   // fresh fetch returns a different value (issue #402).
   const valuationAsOf = new Date(today).getTime()
 
-  const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes, recSavingsRes, goldPriceRes, snapshotRes] = await Promise.all([
+  const [plansRes, goalsRes, txRes, insuranceRes, insuranceSavingsRes, recSavingsRes, goldPriceRes, snapshotRes] = await timing.measure('reads', () => Promise.all([
     supabase.from('monthly_plans').select('id, month, year').eq('user_id', userId),
     supabase
       .from('savings_goals')
@@ -148,12 +152,12 @@ export async function buildDashboardOverview(
       .eq('user_id', userId)
       .eq('snapshot_date', today)
       .maybeSingle(),
-  ])
+  ]))
 
   const plans = (plansRes.data ?? []) as { id: string; month: number; year: number }[]
   const planIds = plans.map((p) => p.id)
 
-  const [insExclusionsRes, insOverridesRes, recOverridesRes, recFulfillmentsRes] = await Promise.all([
+  const [insExclusionsRes, insOverridesRes, recOverridesRes, recFulfillmentsRes] = await timing.measure('plan-reads', () => Promise.all([
     planIds.length > 0
       ? supabase.from('plan_excluded_insurance_members').select('plan_id, member_id').in('plan_id', planIds)
       : Promise.resolve({ data: [], error: null }),
@@ -166,7 +170,7 @@ export async function buildDashboardOverview(
     // Months a recurring saving was settled by a maturity-combine renewal — used
     // to suppress its synthesized contribution (the amount lives in the deposit).
     supabase.from('recurring_saving_fulfillments').select('recurring_saving_id, ym').eq('user_id', userId),
-  ])
+  ]))
 
   // Every source below feeds the net-worth / contribution totals. A silent
   // failure here doesn't just understate the dashboard — because the computed
@@ -644,12 +648,12 @@ export async function buildDashboardOverview(
   // before the row lands — but it never fails the response: history is secondary
   // to the numbers on screen, so a broken write is logged, not surfaced (#592).
   if (shouldWriteSnapshot(snapshotRes.data, totalAssets)) {
-    const written = await persistSnapshot(() =>
+    const written = await timing.measure('snapshot', () => persistSnapshot(() =>
       supabase.from('net_worth_snapshots').upsert(
         { user_id: userId, snapshot_date: today, total_assets: Math.round(totalAssets) },
         { onConflict: 'user_id,snapshot_date' }
       )
-    )
+    ))
     if (!written.ok) {
       // Context only — never the balance itself.
       console.error('[dashboardOverview] net-worth snapshot write failed', {

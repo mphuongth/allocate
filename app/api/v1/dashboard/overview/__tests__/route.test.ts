@@ -463,3 +463,45 @@ describe('GET /api/v1/dashboard/overview — snapshot persistence is awaited (#5
     expect(errorSpy).not.toHaveBeenCalled()
   })
 })
+
+describe('GET /api/v1/dashboard/overview — reports where the time went', () => {
+  // After the app sat idle, this route took over 30 s with nothing to say which
+  // step was slow. Each awaited step is named in Server-Timing so the next slow
+  // load can be read off the response instead of guessed at.
+  const phases = (res: Response) =>
+    (res.headers.get('Server-Timing') ?? '').split(', ').map((entry) => entry.split(';')[0])
+
+  it('names the auth check, both read rounds and the snapshot write', async () => {
+    withOnePlan()
+    const res = await GET()
+
+    expect(res.status).toBe(200)
+    expect(phases(res)).toEqual(['auth', 'reads', 'plan-reads', 'snapshot', 'total'])
+  })
+
+  it('leaves the snapshot phase out when nothing was written', async () => {
+    // The stored total already matches, so no upsert runs — a phase that did
+    // not happen must not show up as a 0 ms one.
+    h.tables.net_worth_snapshots = { data: { total_assets: 0 }, error: null }
+    const res = await GET()
+
+    expect(h.upsertCalls).toHaveLength(0)
+    expect(phases(res)).toEqual(['auth', 'reads', 'plan-reads', 'total'])
+  })
+
+  it('still reports the timings on a failed load', async () => {
+    // A read that fails slowly is the case this exists for.
+    h.tables.savings_goals = { data: null, error: ERR }
+    const res = await GET()
+
+    expect(res.status).toBe(500)
+    expect(phases(res)).toEqual(['auth', 'reads', 'plan-reads', 'total'])
+  })
+
+  it('carries a duration on every phase', async () => {
+    const res = await GET()
+    for (const entry of (res.headers.get('Server-Timing') ?? '').split(', ')) {
+      expect(entry).toMatch(/^[a-z-]+;dur=\d+\.\d$/)
+    }
+  })
+})
